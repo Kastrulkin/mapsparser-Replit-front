@@ -2,7 +2,7 @@ import SeoMeta from "@/components/SeoMeta";
 import { contentCopy } from "@/content/contentCopy";
 import { useLocalizedArticles } from "@/content/useLocalizedArticles";
 import { useLanguage } from '@/i18n/LanguageContext.logic';
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Breadcrumbs,
 	FilterPills,
@@ -23,13 +23,13 @@ const ArticlesPage = () => {
   }, [copy.all]);
 
   const categoryLabels: Record<string, string> = language === "ru" ? { "Карты": "Клиенты из карт", "Отзывы": "Отзывы и репутация", "Финансы": "Средний чек и прибыль", "Бизнес": "Рутина и управление", "Клиенты": "Привлечение и удержание", "Кафе": "Задачи кафе" } : {};
-  const filteredArticles = useMemo(() => {
+  const filteredArticles = (() => {
     if (activeCategory === copy.all) {
       return articles;
     }
 
     return articles.filter((article) => (categoryLabels[article.category] || article.category) === activeCategory);
-  }, [activeCategory, articles, copy.all, language]);
+  })();
 
   const filters = [copy.all, ...Array.from(new Set(articles.map((article) => categoryLabels[article.category] || article.category)))];
 

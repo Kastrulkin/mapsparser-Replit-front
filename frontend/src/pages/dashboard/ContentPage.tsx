@@ -957,7 +957,7 @@ function ContentWorkspace() {
         return status === 'Нужно проверить' || status === 'Черновик' || getItemDateKey(item) >= today;
       })
       .sort((left, right) => getItemDateKey(left).localeCompare(getItemDateKey(right)))[0] || null;
-  }, [items, postsByItem]);
+  }, [items, postsByItem, currentPlan]);
   const reviewReadyPosts = useMemo(
     () => socialPosts.filter((post) => String(post.status || '') === 'needs_review'),
     [socialPosts],

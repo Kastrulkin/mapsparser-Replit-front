@@ -32,7 +32,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { InitialSetupChat, useInitialBusinessSetup } from '@/components/initial-setup/InitialBusinessSetup';
+import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
+import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
@@ -289,6 +290,11 @@ export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
+  const toolbar = language === 'ru'
+    ? { tasks: 'Задачи', menu: 'Меню Оператора', history: 'История обращений', help: 'Как пользоваться', input: 'Задача для Оператора' }
+    : language === 'el'
+      ? { tasks: 'Εργασίες', menu: 'Μενού χειριστή', history: 'Ιστορικό αιτημάτων', help: 'Οδηγίες χρήσης', input: 'Εργασία για τον χειριστή' }
+      : { tasks: 'Tasks', menu: 'Operator menu', history: 'Request history', help: 'How to use', input: 'Task for Operator' };
   const demoMode = Boolean(user?.demo_mode);
   const [setupRequested, setSetupRequested] = useState(false);
   const setupLink = workParams.get('setup') === '1';
@@ -859,9 +865,9 @@ export const OperatorPage = () => {
         <div className="flex items-center gap-2"><h1 className="text-xl font-semibold">{copy.title}</h1><span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Beta</span></div>
         <div className="flex items-center gap-1">
           <Sheet open={tasksOpen} onOpenChange={setTasksOpen}>
-            <SheetTrigger asChild><Button variant="ghost"><ListTodo aria-hidden="true" />Задачи</Button></SheetTrigger>
+            <SheetTrigger asChild><Button variant="ghost"><ListTodo aria-hidden="true" />{toolbar.tasks}</Button></SheetTrigger>
             <SheetContent className="flex w-full max-w-full flex-col sm:max-w-md">
-              <SheetHeader><SheetTitle>Задачи</SheetTitle><SheetDescription>Выберите поиск, чтобы продолжить работу в чате.</SheetDescription></SheetHeader>
+              <SheetHeader><SheetTitle>{toolbar.tasks}</SheetTitle><SheetDescription>Выберите поиск, чтобы продолжить работу в чате.</SheetDescription></SheetHeader>
               <div className="min-h-0 space-y-2 overflow-y-auto py-4">
                 <Button className="w-full justify-start" variant="ghost" onClick={() => { setSelectedSearchId(''); const next = new URLSearchParams(searchParams); next.delete('search_task_id'); setSearchParams(next, { replace: true }); setTasksOpen(false); }}>Без выбранного поиска</Button>
                 {!searchTasks.length && <p className="text-sm text-muted-foreground">Поисков пока нет. Опишите задачу в чате.</p>}
@@ -871,10 +877,10 @@ export const OperatorPage = () => {
               </div>
             </SheetContent>
           </Sheet>
-          <DropdownMenu><DropdownMenuTrigger asChild><Button ref={menuTriggerRef} size="icon" variant="ghost" aria-label="Меню Оператора"><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>Сообщить о проблеме</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>История обращений</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setHelpOpen(true)}>Как пользоваться</DropdownMenuItem>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button ref={menuTriggerRef} size="icon" variant="ghost" aria-label={toolbar.menu}><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>{copy.feedback.button}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>{toolbar.history}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setHelpOpen(true)}>{toolbar.help}</DropdownMenuItem>
           </DropdownMenuContent></DropdownMenu>
         </div>
       </header>
@@ -913,10 +919,10 @@ export const OperatorPage = () => {
               </div>
               <h2 className="mt-4 text-lg font-semibold text-slate-950">{copy.emptyTitle}</h2>
               <p className="mt-2 text-pretty text-sm leading-6 text-slate-600">
-                {"Опишите, что нужно сделать. Можно начать с примера."}
+                {copy.emptyDescription}
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {['Найди 3 компании для сотрудничества', 'Подготовь пост о наших услугах', 'Покажи отзывы без ответа'].map((command) => (
+                {copy.examples.map((command) => (
                   <button
                     key={command}
                     type="button"
@@ -1002,7 +1008,7 @@ export const OperatorPage = () => {
               disabled={demoMode || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
               aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               rows={1}
-              aria-label={setupMode ? "Сообщение для первичной настройки" : "Задача для Оператора"}
+              aria-label={setupMode ? "Сообщение для первичной настройки" : toolbar.input}
               className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
@@ -1084,7 +1090,7 @@ function OutreachTaskStatus({ businessId, initialTask, onContinue, onChange, onR
     document.addEventListener('visibilitychange', focusRefresh);
     window.addEventListener('focus', focusRefresh);
     return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
-  }, [businessId, initialTask.id, refreshVersion]);
+  }, [businessId, initialTask.id, initialTask.presentation?.active, refreshVersion]);
   return <div className="space-y-2">
     {onContinue ? <OutreachChatSummary name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} onContinue={onContinue} onChange={onChange} onDetails={() => setDetailsOpen(true)} /> : <OutreachGroupCard compact name={task.display_name || 'Выбранный поиск'} presentation={task.presentation} busy={actionBusy} onAction={async action => {
       if (actionInFlight.current) return;

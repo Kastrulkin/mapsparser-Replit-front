@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -87,8 +87,8 @@ describe('OperatorPage DOM ownership', () => {
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/operator/content/today', expect.objectContaining({
       params: expect.objectContaining({ scope_type: 'platform' }),
     })));
-    expect(await screen.findByText(/Клиент А — Улица, 1/)).toBeInTheDocument();
-    expect(screen.getByText(/публикация: needs_review · передача: передано сотруднику/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Клиент А — Улица, 1/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/публикация: needs_review · передача: передано сотруднику/).length).toBeGreaterThan(0);
     expect(api.post).not.toHaveBeenCalled();
   });
 
@@ -135,7 +135,7 @@ describe('OperatorPage DOM ownership', () => {
   it('keeps the chat page compact and highlights real business-setting blockers', async () => {
     vi.mocked(api.get).mockResolvedValue({ data: { conversation: null, messages: [{
       id: 'blocked-settings', role: 'operator', content: 'Для команды не хватает валюты бизнеса.',
-      result_json: { status: 'clarification_required', chat_response: 'Для команды не хватает валюты бизнеса.' },
+      result_json: { status: 'clarification_required', chat_response: 'Для команды не хватает валюты бизнеса.', result_ref: {href: '/dashboard/profile', label: 'Проверить данные бизнеса'} },
     }] } });
 
     render(
@@ -148,8 +148,8 @@ describe('OperatorPage DOM ownership', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Нужен следующий шаг');
-    expect(screen.getByRole('link', { name: 'Проверить данные бизнеса' })).toHaveAttribute('href', '/dashboard/profile');
+    expect(await screen.findByText('Нужно уточнение')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Проверить данные бизнеса' })).toHaveAttribute('href', '/dashboard/profile?business_id=demo-business');
     expect(screen.queryByText('Управление через чат — бета')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Город и валюта — в «Профиль и бизнес»' })).not.toBeInTheDocument();
   });
@@ -173,9 +173,9 @@ describe('OperatorPage DOM ownership', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Условия показаны')).toBeInTheDocument();
+    expect(await screen.findByText('Ожидает запуска')).toBeInTheDocument();
     expect(screen.getByText('Поиск ещё не начался')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Создать поручение' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Начать поиск' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Открыть поиск партнёров' })).not.toBeInTheDocument();
   });
 
@@ -197,12 +197,12 @@ describe('OperatorPage DOM ownership', () => {
         </Route></Routes></ErrorBoundary></LanguageProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Создать поручение' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Начать поиск' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/operator/chat', expect.objectContaining({
       message: 'Начни поиск по показанным условиям', conversation_id: 'conversation-1',
     })));
-    expect(await screen.findByText('Ожидает подтверждения или проверки')).toBeInTheDocument();
-    expect(screen.getByText(/Подходящих с контактом: 2 из 10/)).toBeInTheDocument();
+    expect(await screen.findByText('Ожидает подтверждения запуска')).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining('/approve'), expect.anything());
     expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeInTheDocument();
   });
 
@@ -221,20 +221,25 @@ describe('OperatorPage DOM ownership', () => {
   });
 
   it('shows an active search indicator from a saved task', async () => {
-    const task = { id: 'search-task', status: 'running', stage: 'Проверка контактов',
+    const task = { id: 'search-task', business_id: 'demo-business', display_name: 'Поиск компаний', status: 'running', stage: 'Проверка контактов', presentation: {
+      phase: 'companies', status: 'running', label: 'Поиск идёт', active: true,
+      metrics: { found: 3, eligible: 2, target: 10, needs_decision: 0, prepared: 0, queued: 0, sent: 0, replies: 0 },
+      expenses: { charged: 0 }, next_action: { kind: 'link', label: 'Результаты', href: '/dashboard/partnerships' },
+    },
       config: { target_count: 10, max_search_calls: 3 }, state: { search_calls: 1 }, report: { eligible: 2 } };
     vi.mocked(api.get).mockImplementation(async (url) => url === '/partnership/continuations'
       ? { data: { items: [task] } }
       : { data: { conversation: null, messages: [{ id: 'search-1', role: 'operator', content: 'Поиск запущен.',
         result_json: { status: 'completed', capability: 'partnerships.continue_outreach', task } }] } });
     render(
-      <MemoryRouter initialEntries={['/dashboard/operator']}>
+      <MemoryRouter initialEntries={['/dashboard/operator?search_task_id=search-task']}>
         <LanguageProvider><ErrorBoundary><Routes><Route element={<ContextRoute />}>
           <Route path="/dashboard/operator" element={<OperatorPage />} />
         </Route></Routes></ErrorBoundary></LanguageProvider>
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Поиск идёт')).toBeInTheDocument();
-    expect(screen.getByLabelText('Найдено 2 из 10')).toBeInTheDocument();
+    const summary = await screen.findByRole('region', { name: 'Текущая задача: Поиск компаний' });
+    expect(within(summary).getByRole('status')).toHaveTextContent('Поиск идёт');
+    expect(within(summary).getByText('Подходят').nextElementSibling).toHaveTextContent('2 / 10');
   });
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PartnershipsMobileModule } from './PartnershipsMobileModule';
 
@@ -16,6 +16,10 @@ it('opens the decoded MAX partner without preparing or sending anything', async 
     return Promise.resolve(new Response(JSON.stringify(payload),{status:200}));
   }));
   render(<PartnershipsMobileModule scope={{kind:'business',id:'business'}} onDiscuss={discuss} />);
+  const heading = await screen.findByRole('heading', { name: first.name });
+  const card = heading.closest('article');
+  if (!card) throw new Error('Missing focused partner card');
+  fireEvent.click(within(card).getByRole('button', { name: 'Изменить партнёра' }));
   const button = await screen.findByRole('button',{name:'Обсудить партнёра'});
   expect(screen.getByRole('button',{name:'Продолжить в боте MAX'})).toBeInTheDocument();
   fireEvent.click(button);
@@ -29,8 +33,17 @@ it('opens a new focused partner in the same business and keeps native preparatio
   ),{status:200}))));
   const discuss=vi.fn();
   const view=render(<PartnershipsMobileModule scope={{kind:'business',id:'business'}} focusItemId={first.id} onDiscuss={discuss} />);
+  const heading = await screen.findByRole('heading', { name: first.name });
+  const card = heading.closest('article');
+  if (!card) throw new Error('Missing focused partner card');
+  fireEvent.click(within(card).getByRole('button', { name: 'Изменить партнёра' }));
   await screen.findByRole('button',{name:'Обсудить партнёра'});
   await act(async () => view.rerender(<PartnershipsMobileModule scope={{kind:'business',id:'business'}} focusItemId={second.id} onDiscuss={discuss} />));
+  expect(screen.queryByRole('button', { name: 'Обсудить партнёра' })).not.toBeInTheDocument();
+  const nextHeading = await screen.findByRole('heading', { name: second.name });
+  const nextCard = nextHeading.closest('article');
+  if (!nextCard) throw new Error('Missing newly focused partner card');
+  fireEvent.click(within(nextCard).getByRole('button', { name: 'Изменить партнёра' }));
   fireEvent.click(await screen.findByRole('button',{name:'Обсудить партнёра'}));
   expect(discuss).toHaveBeenLastCalledWith(expect.objectContaining(second));
 });

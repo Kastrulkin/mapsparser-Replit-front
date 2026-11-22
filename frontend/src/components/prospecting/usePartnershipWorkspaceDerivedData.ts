@@ -14,7 +14,7 @@ export type PartnershipDerivedLead = {
   pilot_cohort?: string;
   parse_status?: string;
   deferred_until?: string;
-  search_payload_json?: Record<string, any> | null;
+  search_payload_json?: Record<string, unknown> | null;
   enrich_payload_json?: {
     provider?: string;
     found_fields?: string[];
@@ -45,7 +45,7 @@ export type PartnershipDerivedBatch = {
     delivery_status?: string;
     latest_outcome?: string | null;
     latest_human_outcome?: string | null;
-    [key: string]: any;
+    [key: string]: unknown;
   }>;
 };
 
@@ -54,7 +54,7 @@ export type PartnershipDerivedReaction = {
   lead_id: string;
   classified_outcome?: string | null;
   human_confirmed_outcome?: string | null;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 type SourceDescriptor = {
@@ -65,19 +65,19 @@ type SourceDescriptor = {
 type PartnershipDerivedArgs<TLead extends PartnershipDerivedLead> = {
   items: TLead[];
   selectedLeadId: string | null;
-  auditData: any;
+  auditData: { preview_meta?: { logo_url?: unknown; photo_urls?: unknown } } | null;
   leadView: string;
   leadBucket: 'active' | 'deferred';
   preferredSourceFilter: SourceDescriptor | null;
   lastGeoSearchLeadIds: string[];
-  ralphLoop: any;
+  ralphLoop: { source_performance?: SourceDescriptor[] } | null;
   batches: PartnershipDerivedBatch[];
   drafts: PartnershipDerivedDraft[];
   reactions: PartnershipDerivedReaction[];
   draftView: string;
   queueView: string;
   reactionView: string;
-  outcomes: any;
+  outcomes: { summary?: { positive_rate_pct?: number | string } } | null;
 };
 
 const ACTIVE_PIPELINE_STAGES = [

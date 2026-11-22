@@ -1,3 +1,5 @@
+import { researchDate } from './researchDate';
+
 export type SourceResearch = {
   purpose?: string;
   schema_version: number; title: string; reviewed_at: string; summary: string;
@@ -11,11 +13,6 @@ export type SourceResearch = {
   posts: { post_id: string; title: string; post_created_at: string; post_updated_at: string;
     scheduled_for: string; post_excerpt: string; theme: string; assessment: string; next_step: string }[];
 };
-
-export function researchDate(value: string) {
-  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value.replace(' ', 'T'));
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('ru-RU');
-}
 
 export function ContentSourceEvidence({ report, referenceId, ru }: { report: SourceResearch; referenceId: string; ru: boolean }) {
   const evidence = report.sources.find(source => source.reference_id === referenceId);

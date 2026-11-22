@@ -16,7 +16,7 @@ export type BlockAccess = {
   entitlement_source?: string;
 };
 
-export const targetForAccess = (access: BlockAccess, returnTo?: string): string | null => {
+const targetForAccess = (access: BlockAccess, returnTo?: string): string | null => {
  const target = safeWorkReturn(access.cta_target.url);
  const base = target || (access.status === 'payment_required' ? '/dashboard/profile?focus=subscription#subscription'
  : access.status === 'setup_required' ? '/dashboard/settings?focus=' + encodeURIComponent(access.cta_target.focus || 'integrations')

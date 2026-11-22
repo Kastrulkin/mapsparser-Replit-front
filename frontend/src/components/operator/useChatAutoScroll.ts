@@ -8,6 +8,7 @@ export function useChatAutoScroll(conversationKey: string | null | undefined, me
   const [readingHistory, setReadingHistory] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const previousCount = useRef(messageCount);
+  const previousConversation = useRef(conversationKey);
   const follow = useCallback(() => {
     const node = element.current;
     if (node && following.current) node.scrollTop = node.scrollHeight;
@@ -42,14 +43,15 @@ export function useChatAutoScroll(conversationKey: string | null | undefined, me
     follow();
   }, [follow]);
   useLayoutEffect(() => {
-    scrollToLatest();
-    previousCount.current = messageCount;
-  }, [conversationKey, scrollToLatest]);
-  useLayoutEffect(() => {
-    if (messageCount > previousCount.current && !following.current) setHasNewMessages(true);
+    if (previousConversation.current !== conversationKey) {
+      previousConversation.current = conversationKey;
+      scrollToLatest();
+    } else if (messageCount > previousCount.current && !following.current) {
+      setHasNewMessages(true);
+    }
     previousCount.current = messageCount;
     follow();
-  }, [messageCount, follow]);
+  }, [conversationKey, messageCount, follow, scrollToLatest]);
   useLayoutEffect(() => () => cleanup.current?.(), []);
   return { ref, readingHistory, hasNewMessages, scrollToLatest };
 }

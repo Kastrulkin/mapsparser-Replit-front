@@ -39,12 +39,12 @@ describe('TodayPage', () => {
     </Route></Routes></MemoryRouter>);
     const action = await screen.findByRole('button', { name: 'Открыть инфлюенсеров' });
     const titles = screen.getAllByRole('heading').map((heading) => heading.textContent);
-    expect(titles[1]).toBe(urgent ? 'Ответьте на отзыв' : 'Продолжите работу с инфлюенсерами');
+    expect(titles[1]).toBe('Ответьте на отзыв');
     fireEvent.click(action);
     expect(screen.getByText('/dashboard/influencers')).toBeInTheDocument();
   });
 
-  it('shows a concrete maps task instead of registration journey copy', async () => {
+  it('ignores an unbound registration direction from a different business', async () => {
     window.localStorage.setItem(LEAD_JOURNEY_STORAGE_KEY, 'maps');
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
 
@@ -53,19 +53,19 @@ describe('TodayPage', () => {
         <Routes>
           <Route element={<ContextRoute />}>
             <Route path="/dashboard/today" element={<TodayPage />} />
-            <Route path="/dashboard/card" element={<LocationProbe />} />
+            <Route path="/dashboard/progress" element={<LocationProbe />} /><Route path="/dashboard/content" element={<LocationProbe />} />
           </Route>
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Проверьте карточку на картах' })).toBeInTheDocument();
-    expect(screen.getByText(/Добавьте ссылку на карточку/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Подготовьте следующий материал' })).toBeInTheDocument();
+    expect(screen.queryByText('Проверьте карточку на картах')).not.toBeInTheDocument();
     expect(screen.queryByText('Вы выбрали до регистрации')).not.toBeInTheDocument();
     expect(screen.queryByText(/зафиксирует статус или результат/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Проверить карточку' }));
-    expect(screen.getByText('/dashboard/card')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Открыть контент' }));
+    expect(screen.getByText('/dashboard/content')).toBeInTheDocument();
   });
 
   it('keeps a loading state until the operational summary is available', async () => {
@@ -74,17 +74,18 @@ describe('TodayPage', () => {
     renderPage();
     expect(screen.getByText('Загружаем новые события и текущие задачи.')).toBeInTheDocument();
     resolveRequest({ active_work: [], changes_24h: [], completed_results: [] });
-    await screen.findByText('Сейчас у LocalOS нет активных задач.');
+    await screen.findByText('В доступных данных нет начатых задач.');
   });
 
   it('shows an evidence-led empty state without inventing changes or active work', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     renderPage();
-    expect(await screen.findByText('Сейчас у LocalOS нет активных задач.')).toBeInTheDocument();
-    expect(screen.queryByText('Что изменилось')).not.toBeInTheDocument();
+    expect(await screen.findByText('В доступных данных нет начатых задач.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Что изменилось' })).not.toBeInTheDocument();
     expect(screen.queryByText('Что LocalOS делает сейчас')).not.toBeInTheDocument();
     expect(screen.queryByText('1. Действие')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Открыть прогресс' })).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Нужно ваше решение' })).toBeInTheDocument();
   });
 
   it('uses a single-column-first responsive layout for narrow screens', async () => {
@@ -95,20 +96,20 @@ describe('TodayPage', () => {
     });
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByText('Что изменилось')).toBeInTheDocument());
-    expect(container.querySelector('.lg\\:grid-cols-2')).toBeInTheDocument();
+    expect(container.querySelector('.lg\\:grid-cols-2')).not.toBeInTheDocument();
   });
 
   it('keeps external changes separate from LocalOS results', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({
       active_work: [],
       changes_24h: [{ id: 'change-1', title: 'Получен новый отзыв' }],
-      completed_results: [{ id: 'result-1', title: 'Подготовлен черновик ответа' }],
+      completed_results: [{ id: 'result-1', title: 'Публикация подтверждена', status: 'published', screen: 'content', occurred_at: '2026-10-11T10:00:00Z' }],
     });
     renderPage();
 
     expect(await screen.findByText('Получен новый отзыв')).toBeInTheDocument();
-    expect(screen.getByText('Готово в LocalOS')).toBeInTheDocument();
-    expect(screen.getByText('Подготовлен черновик ответа')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Завершено' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Публикация подтверждена' })).toBeInTheDocument();
   });
 
   it('does not say there is no work while a primary decision is on screen', async () => {
@@ -119,6 +120,8 @@ describe('TodayPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Подтвердите черновик' })).toBeInTheDocument();
     expect(screen.queryByText('Сейчас у LocalOS нет активных задач.')).not.toBeInTheDocument();
+    expect(screen.getByText('Следующий шаг показан выше. Других записей в этом разделе нет.')).toBeInTheDocument();
+    expect(screen.queryByText('В доступных данных нет задач, ожидающих вашего решения.')).not.toBeInTheDocument();
   });
 
   it('shows the static decision heading and instruction in Spanish without rewriting API decision text', async () => {
@@ -175,7 +178,7 @@ describe('TodayPage', () => {
           message_code: 'today.automation.provider_failed',
         }],
         continue_work: [{ id: 'work-3', title: 'Моя работа', description: 'Выполняется запись в таблицу.', message_code: 'today.automation.provider_executing' }],
-        results: [{ id: 'result-4', title: 'Мой результат', description: 'Пользовательский текст без перевода', message_code: 'future.unknown' }],
+        results: [{ id: 'result-4', status: 'completed', occurred_at: '2026-10-11T10:00:00Z', screen: 'agents', title: 'Мой результат', description: 'Пользовательский текст без перевода', message_code: 'future.unknown' }],
       },
     });
     render(<MemoryRouter initialEntries={['/dashboard/today']}><Routes><Route element={<ContextRoute />}>
@@ -188,7 +191,7 @@ describe('TodayPage', () => {
     expect(screen.getByText('La escritura requiere atención. Abre el resultado para comprobar la causa.')).toBeInTheDocument();
     expect(screen.getByText('Se está escribiendo en la hoja.')).toBeInTheDocument();
     expect(screen.getByText('Пользовательский текст без перевода')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar' }));
     expect(screen.getByText(target)).toBeInTheDocument();
     expect(newAuth.makeRequest).toHaveBeenCalledTimes(1);
     expect(newAuth.makeRequest).toHaveBeenCalledWith('/operator/today?scope_type=business&scope_id=business-1', { method: 'GET' });
@@ -247,7 +250,7 @@ describe('TodayPage', () => {
 
     expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: button })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Открыть прогресс' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Открыть прогресс' })).toHaveLength(1);
   });
 
   it('opens the influencer workspace from its empty-priority action', async () => {
@@ -495,7 +498,7 @@ describe('TodayPage', () => {
   it('loads the neutral today endpoint for the selected network scope', async () => {
     vi.mocked(newAuth.makeRequest).mockResolvedValue({ active_work: [], changes_24h: [], completed_results: [] });
     render(<MemoryRouter><Routes><Route element={<NetworkContextRoute />}><Route index element={<TodayPage />} /></Route></Routes></MemoryRouter>);
-    await screen.findByText('Сейчас у LocalOS нет активных задач.');
+    await screen.findByText('В доступных данных нет начатых задач.');
     expect(vi.mocked(newAuth.makeRequest)).toHaveBeenCalledWith('/operator/today?scope_type=network&scope_id=network-1', { method: 'GET' });
   });
 
@@ -518,16 +521,15 @@ describe('TodayPage', () => {
     const { container } = renderPage();
 
     expect(await screen.findByText('Финансовая сводка ещё не загружена.')).toBeInTheDocument();
-    expect(screen.getByText('После загрузки здесь появятся выручка, расходы, средний чек и загрузка за выбранный период.')).toBeInTheDocument();
-    expect(screen.getByText('Данные за последние 8 недель')).toBeInTheDocument();
-    expect(screen.getByText('Данные за последние 8 недель').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText(/После загрузки здесь появятся выручка/).closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Данные для анализа')).toBeInTheDocument();
+    expect(screen.getByText('Данные для анализа').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('Сравнение показателей по неделям: загрузите сводку')).toBeInTheDocument();
-    expect(screen.getByText('Готово в LocalOS')).toBeInTheDocument();
-    expect(screen.getByText('Готово в LocalOS').closest('details')).not.toHaveAttribute('open');
-    expect(screen.getByText('Источник: история выполненных задач')).toBeInTheDocument();
-    expect(screen.getByText('Что обсуждают в ваших источниках')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Завершено' })).toBeInTheDocument();
+    expect(screen.queryByText('Контент-план создан')).not.toBeInTheDocument();
+    expect(screen.queryByText('Что обсуждают в ваших источниках')).not.toBeInTheDocument();
     expect(screen.getByText('Источник финансовых данных:', { exact: false })).toBeInTheDocument();
-    expect(screen.getByText('не указан', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Источник не указан', { exact: false })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/выбранного контура|ритм данных|финансовую картину|точки роста|доказательные рекомендации|пульс сообщества|путь роста/i);
   });
 });

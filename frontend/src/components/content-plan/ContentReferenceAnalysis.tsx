@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ExternalLink } from 'lucide-react';
-import { ContentSourceEvidence, researchDate, type SourceResearch } from './ContentSourceResearch';
+import { ContentSourceEvidence, type SourceResearch } from './ContentSourceResearch';
+import { researchDate } from './researchDate';
 import { Button } from '@/components/ui/button';
 
 export type EditorialReference = {

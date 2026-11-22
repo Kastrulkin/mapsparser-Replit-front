@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BusinessKnowledge,formatKnowledgeValue } from './BusinessKnowledge';
+import { BusinessKnowledge } from './BusinessKnowledge';
+import { formatKnowledgeValue } from './formatKnowledgeValue';
 import type { KnowledgeData, KnowledgeRecord } from './types';
 
 vi.mock('@/i18n/LanguageContext.logic',()=>({useLanguage:()=>({language:'ru'})}));

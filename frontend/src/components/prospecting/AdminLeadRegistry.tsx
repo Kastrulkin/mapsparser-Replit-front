@@ -1,3 +1,4 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -31,12 +32,9 @@ import { OutreachEmailSetup } from '../OutreachEmailSetup';
 import { OutreachLearningInsights } from './OutreachLearningInsights';
 import { OutreachSuppressionManager } from './OutreachSuppressionManager';
 import { OutreachMessageQueue } from './OutreachMessageQueue';
-import {
-  buildProjectedOutreachTouches,
-  defaultOutreachStartValue,
-  OutreachScheduleCalendar,
-  outreachStartIso,
-} from './OutreachScheduleCalendar';
+import { OutreachScheduleCalendar } from './OutreachScheduleCalendar';
+import { buildProjectedOutreachTouches, defaultOutreachStartValue, outreachStartIso } from './OutreachScheduleCalendar.logic';
+import { outreachDefaultsForWorkstream, workstreamLabel } from './AdminLeadRegistry.logic';
 import {
   OutreachTouchMessageEditor,
 } from './OutreachTouchMessageEditor';
@@ -512,21 +510,6 @@ interface OutreachCampaignSetupDraft {
   senderMode: SenderMode;
 }
 
-export const outreachDefaultsForWorkstream = (workstreamType?: string) => {
-  if (workstreamType === 'creator_collaboration') {
-    return {
-      senderMode: 'localos_for_partner' as SenderMode,
-      sequenceChannels: ['email'],
-      sequenceDays: [0],
-    };
-  }
-  return {
-    senderMode: (workstreamType === 'localos_sales' ? 'localos' : 'partner_business') as SenderMode,
-    sequenceChannels: ['telegram', 'email', 'max', 'vk'],
-    sequenceDays: [0, 3, 7, 12],
-  };
-};
-
 interface OutreachSenderAccountSummary {
   id: string;
   channel?: string;
@@ -800,16 +783,6 @@ const sourceLabel = (lead: LeadItem) => {
     return 'Найден LocalOS';
   }
   return 'Добавлен в работу';
-};
-
-export const workstreamLabel = (workstream: LeadWorkstream) => {
-  if (workstream.workstream_type === 'localos_sales') {
-    return 'Лид LocalOS';
-  }
-  if (workstream.workstream_type === 'creator_collaboration') {
-    return 'Автор LocalOS';
-  }
-  return `Лид-партнёр · ${workstream.client_business_name || 'клиент'}`;
 };
 
 const statusLabel = (workstream: LeadWorkstream) =>
@@ -1423,7 +1396,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     const workstreamId = String(selectedWorkstream?.id || '');
     return workstreamId ? `localos:outreach-campaign-setup:${workstreamId}` : '';
   }, [selectedWorkstream?.id]);
-  const persistOutreachCampaignSetup = (changes: Partial<OutreachCampaignSetupDraft>) => {
+  const persistOutreachCampaignSetup = useLatestCallback((changes: Partial<OutreachCampaignSetupDraft>) => {
     if (!outreachCampaignSetupStorageKey || !selectedWorkstream?.id) return;
     const draft: OutreachCampaignSetupDraft = {
       workstreamId: String(selectedWorkstream.id),
@@ -1436,7 +1409,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       senderMode: changes.senderMode || senderMode,
     };
     localStorage.setItem(outreachCampaignSetupStorageKey, JSON.stringify(draft));
-  };
+  });
   const outreachCalendarTouches = (outreachPreview?.touches || []).length > 0
     ? outreachPreview?.touches || []
     : campaignSetupDirty
@@ -1713,14 +1686,14 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     if (addedIndexes.length === 0) return;
     const nextSenders = { ...sequenceSenders, ...additions };
     setSequenceSenders(nextSenders);
-    if (savedOutreachCampaign) {
+    if (savedOutreachCampaign?.id) {
       persistOutreachCampaignSetup({ sequenceSenders: nextSenders });
       const steps = addedIndexes.map((index) => index + 1).join(', ');
       setCampaignSetupDirty(true);
       setOutreachPreview(null);
       setNotice(`LocalOS выбрал единственный готовый аккаунт для касаний ${steps}. Проверьте и сохраните изменения.`);
     }
-  }, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders]);
+  }, [savedOutreachCampaign?.id, selectedWorkstream?.id, senderAccounts, senderAccountsLoading, sequenceChannels, sequenceSenders, persistOutreachCampaignSetup]);
 
   useEffect(() => {
     if (!selectedLead?.id || !selectedWorkstream?.id) {
@@ -1754,7 +1727,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     };
   }, [selectedLead?.id, selectedWorkstream?.id, senderMode, contactIntelligence?.job?.id]);
 
-  useEffect(() => {
+  const resetSenderForm = useLatestCallback(() => {
     const profile = contactIntelligence?.sender_profile;
     const suggestions = contactIntelligence?.sender_profile_suggestions;
     if (profile) {
@@ -1795,9 +1768,10 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     setSenderPartnerTypes((suggestions?.desired_partner_types || []).join('\n'));
     setSenderDisqualifiers('');
     setSenderCtas('');
-  }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender]);
+  });
+  useEffect(() => { resetSenderForm(); }, [contactIntelligence?.sender_profile?.id, contactIntelligence?.sender_profile_suggestions, selectedWorkstream?.id, usesPlatformSender, resetSenderForm]);
 
-  useEffect(() => {
+  const resetWorkstreamForm = useLatestCallback(() => {
     const defaults = outreachDefaultsForWorkstream(selectedWorkstream?.workstream_type);
     setOutreachPreview(null);
     setSavedOutreachCampaign(null);
@@ -1819,7 +1793,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       selectedWorkstream?.research?.message_brief?.operator_approved_reason || '',
     ));
     setDataPreparationMessage('');
-  }, [selectedWorkstream?.id]);
+  });
+  useEffect(() => { resetWorkstreamForm(); }, [selectedWorkstream?.id, resetWorkstreamForm]);
 
   useEffect(() => {
     const workstreamId = String(selectedWorkstream?.id || '');
@@ -1952,7 +1927,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     return () => {
       active = false;
     };
-  }, [outreachCampaignSetupStorageKey, selectedWorkstream?.id]);
+  }, [outreachCampaignSetupStorageKey, selectedWorkstream?.id, selectedWorkstream?.workstream_type]);
 
   useEffect(() => {
     if (!outreachTouchEditsStorageKey) return;
@@ -2000,7 +1975,7 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
     } catch {
       localStorage.removeItem(outreachTouchEditsStorageKey);
     }
-  }, [outreachTouchEditsStorageKey, savedOutreachCampaign?.id, savedOutreachCampaign?.version]);
+  }, [outreachTouchEditsStorageKey, savedOutreachCampaign?.touches]);
 
   useEffect(() => {
     if (!hasTouchEdits) return undefined;

@@ -1,6 +1,7 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { PartnershipGroupLaunch } from './PartnershipGroupLaunch';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { newAuth } from '@/lib/auth_new';
 import { Button } from '@/components/ui/button';
@@ -17,14 +18,15 @@ export function PreparedPartnershipMessages({ businessId,searchTaskId,showMessag
   const inFlightEpoch=useRef<number|null>(null);
   const mounted=useRef(true),scope=useRef(businessId),epoch=useRef(0);if(scope.current!==businessId){scope.current=businessId;epoch.current++;}
   const request = (path: string, options?: RequestInit) => mobile ? fetch(`/api${path}`, { ...options, headers: mobileJsonHeaders() }).then(readMobileJson<{ items?: Prepared[]; jobs?: unknown[]; job?: { id?: string }; error?: string }>) : options ? newAuth.makeRequest(path, options) : newAuth.makeRequest(path);
-  const load=async (keepError=false) => {
+  const invalidate = useCallback(() => { epoch.current++; }, []);
+  const load=useLatestCallback(async (keepError=false) => {
     if(!mounted.current || inFlightEpoch.current===epoch.current)return;const current=businessId,version=epoch.current;inFlightEpoch.current=version;setLoading(true);
     try { const result=await request(`/partnership/prepared-messages?business_id=${encodeURIComponent(current)}${searchTaskId ? `&search_task_id=${encodeURIComponent(searchTaskId)}` : ''}`);if(!mounted.current || scope.current!==current || epoch.current!==version)return;setItems(result.items || []);onCountChange?.((result.items || []).reduce((total:number,item:Prepared)=>total+(item.hold_reason ? 0 : item.touches.length),0));setPendingJobs((result.jobs || []).length);if(!keepError)setError(''); }
     catch(issue) {if(scope.current===current && epoch.current===version)setError(issue instanceof Error?issue.message:'Не удалось загрузить касания. Повторите проверку.');}
     finally {if(inFlightEpoch.current===version)inFlightEpoch.current=null;if(scope.current===current && epoch.current===version)setLoading(false);}
-  };
-  useEffect(()=>{mounted.current=true;setItems([]);setPendingJobs(0);setSelected(null);setChecked(false);setError('');setNotice('');setGroup('');setFileItems([]);setFileName('');void load();return()=>{mounted.current=false;epoch.current++;};},[businessId,searchTaskId,mobile]);
-  useEffect(()=>{if(!pendingJobs)return;const timer=setInterval(()=>void load(true),5000);return()=>clearInterval(timer);},[businessId,searchTaskId,pendingJobs]);
+  });
+  useEffect(()=>{mounted.current=true;setItems([]);setPendingJobs(0);setSelected(null);setChecked(false);setError('');setNotice('');setGroup('');setFileItems([]);setFileName('');void load();return()=>{mounted.current=false;invalidate();};},[businessId,searchTaskId,mobile,load,invalidate]);
+  useEffect(()=>{if(!pendingJobs)return;const timer=setInterval(()=>void load(true),5000);return()=>clearInterval(timer);},[businessId,searchTaskId,pendingJobs,load]);
   useEffect(()=>{if(!showMessages){setSelected(null);setChecked(false);}},[showMessages]);
   const groups=Array.from(new Set(items.map(item=>item.policy_json.prepared_group || 'Подготовленные письма')));
   const activeGroup=group || groups[0];

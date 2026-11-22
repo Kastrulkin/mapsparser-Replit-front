@@ -26,6 +26,7 @@ it('allows clearing the editor, disables blank approval, and keeps edits on stal
   return response({items:[],batches:[],ready_drafts:[],reactions:[]});
  }));
  const user=userEvent.setup();render(<PartnershipsMobileModule scope={{kind:'business',id:'business'}}/>);
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: Клиника'});
  expect(screen.getByText('Эл. почта · Черновик')).toBeVisible();
@@ -40,6 +41,7 @@ it('allows clearing the editor, disables blank approval, and keeps edits on stal
 it('warns about a legal contact without replacing existing client data',async()=>{
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL)=>String(input).startsWith('/api/partnership/leads?')?response({items:[{id:'lead',name:'Клиника',email:'jur@example.test'}]}):response({items:[],drafts:[],batches:[],ready_drafts:[],reactions:[]})));
  const user=userEvent.setup();render(<PartnershipsMobileModule scope={{kind:'business',id:'business'}}/>);
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/Клиника/}));
  expect(await screen.findByRole('note')).toHaveTextContent('служебный или юридический адрес');

@@ -45,7 +45,8 @@ describe('AverageTicketPage demo mode', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Matris henüz oluşturulmadı')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ortalama sepet' })).toBeInTheDocument();
+    expect(screen.getByText('Kurgusal demo verileri · hiçbir şey kaydedilmez')).toBeInTheDocument();
     await waitFor(() => {
       expect(newAuth.makeRequest).not.toHaveBeenCalled();
       expect(toastSpy).not.toHaveBeenCalled();

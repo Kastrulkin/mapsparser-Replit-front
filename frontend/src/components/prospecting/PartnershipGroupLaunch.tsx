@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { newAuth } from '@/lib/auth_new';
@@ -20,7 +20,8 @@ export function PartnershipGroupLaunch({ businessId, collectionId, mobile = fals
   const [reviewed, setReviewed] = useState(false), [confirmed, setConfirmed] = useState(false), [receipt, setReceipt] = useState<Response['launch']>(undefined);
   const [firstOnly, setFirstOnly] = useState(true);
   const epoch = useRef(0);
-  useEffect(() => { epoch.current++; setOpened(false); setPreview(null); setSchedule(null); setError(''); setBusy(false); setConfirmation(false); setReviewed(false); setConfirmed(false); setReceipt(undefined); return () => { epoch.current++; }; }, [businessId, collectionId, mobile]);
+  const invalidate = useCallback(() => { epoch.current++; }, []);
+  useEffect(() => { epoch.current++; setOpened(false); setPreview(null); setSchedule(null); setError(''); setBusy(false); setConfirmation(false); setReviewed(false); setConfirmed(false); setReceipt(undefined); return invalidate; }, [businessId, collectionId, mobile, invalidate]);
   const request = (data: object) => {
     const path = `/partnership/collections/${encodeURIComponent(collectionId)}/launch`;
     const options = { method: 'POST', body: JSON.stringify({ business_id: businessId, ...data }) };

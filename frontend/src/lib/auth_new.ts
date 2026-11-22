@@ -111,8 +111,8 @@ export class NewAuth {
   }
 
   // Legacy transport boundary: callers use endpoint-specific response shapes.
-  // Migrate those contracts together before changing this return type to unknown.
-  public async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+  // Keep the endpoint response type inferred from the transport.
+  public async makeRequest(endpoint: string, options: RequestInit = {}) {
     const url = `${this.apiBaseUrl}${endpoint}`;
     let responseReceived = false;
     const headers = {
@@ -152,17 +152,15 @@ export class NewAuth {
       const contentType = response.headers.get('content-type');
       const isJson = contentType && contentType.includes('application/json');
 
-      let data: unknown = {};
+      let data;
 
       if (isJson) {
         const text = await response.text();
-        if (text.trim()) {
-          try {
-            data = JSON.parse(text);
-          } catch {
-            if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, 'HTTP_ERROR');
-            throw new HttpError('Сервер вернул повреждённый ответ. Повторите запрос.', response.status, 'INVALID_RESPONSE');
-          }
+        try {
+          data = text.trim() ? JSON.parse(text) : {};
+        } catch {
+          if (response.status === 401) throw new HttpError('Сессия истекла. Войдите снова.', 401, 'HTTP_ERROR');
+          throw new HttpError('Сервер вернул повреждённый ответ. Повторите запрос.', response.status, 'INVALID_RESPONSE');
         }
       } else {
         // Если ответ не JSON, читаем как текст

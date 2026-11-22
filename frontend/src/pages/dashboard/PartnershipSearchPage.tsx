@@ -744,7 +744,8 @@ export const PartnershipSearchPage: React.FC = () => {
   })), [searchTasks]);
   useEffect(() => { setCanonicalLetterCount(0); setCanonicalSendCount(undefined); }, [currentBusinessId, selectedSearchGroup]);
   const selectedTask = searchTasks.find((task) => selectedSearchGroup === `task:${task.id}`);
-  const selectedTaskLeadIds = selectedSearchGroup.startsWith('task:') ? new Set(selectedTask?.state?.lead_ids || []) : null;
+  const taskLeadIds = selectedTask?.state?.lead_ids;
+  const selectedTaskLeadIds = useMemo(() => selectedSearchGroup.startsWith('task:') ? new Set(taskLeadIds || []) : null, [selectedSearchGroup, taskLeadIds]);
   const legacyDrafts = unscopedDrafts.filter((draft) => !draft.learning_note_json?.campaign_id);
   const visibleDrafts = selectedTaskLeadIds ? legacyDrafts.filter((draft) => selectedTaskLeadIds.has(draft.lead_id)) : legacyDrafts;
   const visibleBatches = selectedTaskLeadIds ? unscopedBatches.map((batch) => ({

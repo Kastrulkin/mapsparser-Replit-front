@@ -28,7 +28,7 @@ describe('ChatsPage localization', () => {
       if (url.includes('/ai-agents')) {
         return new Response(JSON.stringify({
           success: true,
-          agents: [{ id: 'booking', name: 'Booking Agent', type: 'booking', description: null }],
+          agents: [{ id: 'booking', name: 'Studio Nord Booking', type: 'booking', description: null }],
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ success: true, conversations: [] }), {
@@ -39,7 +39,7 @@ describe('ChatsPage localization', () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it('renders chat navigation and empty states in German', async () => {
+  it('localizes the agent type and empty chat list in German', async () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/dashboard/chats']}>
         <LanguageProvider>
@@ -52,8 +52,8 @@ describe('ChatsPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('tab', { name: 'Gespräche' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Agent testen' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Kundentermine/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Gespräche: Kundentermine' })).toBeInTheDocument();
     expect(await screen.findByText('Keine aktiven Chats')).toBeInTheDocument();
     expect(screen.getByText('Wählen Sie einen Chat oder Testbereich aus')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);

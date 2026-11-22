@@ -1,3 +1,4 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { normalizeTourProgress, type TourProgress, type TourStatus } from './tourProgress';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, ExternalLink, Pause, Play, RotateCcw, Sparkles, X } from 'lucide-react';
@@ -322,7 +323,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
     window.setTimeout(() => setWelcomeTransitioning(false), prefersReducedMotion ? 0 : 650);
   };
 
-  const moveTo = async (nextIndex: number, nextCompletedSteps: string[], nextStatus: TourStatus = 'active') => {
+  const moveTo = useLatestCallback(async (nextIndex: number, nextCompletedSteps: string[], nextStatus: TourStatus = 'active') => {
     const boundedIndex = Math.max(0, Math.min(nextIndex, steps.length - 1));
     const nextStep = steps[boundedIndex];
     const saved = await persistProgressSafely(nextStatus, nextStep, nextCompletedSteps);
@@ -335,7 +336,7 @@ export function GuidedTourProvider({ user, children }: GuidedTourProviderProps) 
       void recordEvent('step_viewed', nextStep);
       showStep(nextStep);
     }
-  };
+  });
 
   const next = async () => {
     const nextCompleted = completedSteps.includes(currentStep.key)

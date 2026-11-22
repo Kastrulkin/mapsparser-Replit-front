@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { newAuth } from '@/lib/auth_new';
 import { mobileJsonHeaders, readMobileJson } from '@/lib/mobileDataClient';
@@ -11,15 +11,14 @@ export function PartnershipCollections({ collections, businessId, mobile = false
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
-  const epoch = useRef(0);
   useEffect(() => {
-    const version = ++epoch.current;
+    let active = true;
     setSelected(''); setLoaded(null); setError('');
     if (collections || !businessId) return;
     const path = `/partnership/results?scope_type=business&scope_id=${encodeURIComponent(businessId)}`;
     const request = mobile ? fetch(`/api${path}`, { headers: mobileJsonHeaders() }).then(readMobileJson<{ collections?: PartnershipCollection[] }>) : newAuth.makeRequest(path);
-    void request.then(data => { if (epoch.current === version) { setLoaded(data.collections || []); setSelected(data.collections?.[0]?.id || ''); } }).catch(issue => { if (epoch.current === version) setError(issue instanceof Error ? issue.message : 'Не удалось загрузить подборки.'); });
-    return () => { epoch.current++; };
+    void request.then(data => { if (active) { setLoaded(data.collections || []); setSelected(data.collections?.[0]?.id || ''); } }).catch(issue => { if (active) setError(issue instanceof Error ? issue.message : 'Не удалось загрузить подборки.'); });
+    return () => { active = false; };
   }, [collections, businessId, mobile, retry]);
   const items = collections || loaded;
   const current = items?.find(item => item.id === selected);

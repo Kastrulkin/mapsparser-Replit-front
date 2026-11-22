@@ -1,3 +1,4 @@
+import { useLatestCallback } from '@/hooks/useLatestCallback';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
@@ -56,7 +57,7 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
   const platform = platforms.find((item) => item.id === provider) || platforms[0];
   const currentStage = stages[stage];
   const card = objects(result.cards).find((item) => item.provider === provider);
-  const load = async () => {
+  const load = useLatestCallback(async () => {
     setLoading(true); setError('');
     try {
       const response = await api.get(endpoint);
@@ -65,8 +66,8 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
       setProgress(saved); setState(saved.platforms[provider] || defaults(result, provider)); setDirty(false);
     } catch (reason) { if (alive.current) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить прогресс.'); }
     finally { if (alive.current) setLoading(false); }
-  };
-  useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, [runId]); // Mounted with a run-specific key.
+  });
+  useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, [runId, load]); // Mounted with a run-specific key.
   const update = (next: PlatformState) => { setState(next); setDirty(true); setMessage(''); setError(''); };
   const save = async (): Promise<boolean> => {
     setBusy(true); setError(''); setMessage('');

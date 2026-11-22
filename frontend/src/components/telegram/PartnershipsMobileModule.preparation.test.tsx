@@ -19,6 +19,7 @@ function setup(existing=false,status='queued'){
 }
 it('opens an existing letter without queuing another generation',async()=>{
  const {calls,user}=setup(true);
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
  await user.click(await screen.findByRole('button',{name:'Открыть письмо'}));
@@ -27,6 +28,7 @@ it('opens an existing letter without queuing another generation',async()=>{
 });
 it.each(['queued','failed','needs_contact'])('shows %s preparation state inside the selected partner card',async status=>{
  const {calls,user}=setup(false,status);
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
  const card=screen.getByRole('dialog');
@@ -42,6 +44,7 @@ it.each(['queued','failed','needs_contact'])('shows %s preparation state inside 
 
 it('opens the result after a ready check without repeating generation',async()=>{
  const {calls,user}=setup(false,'ready');
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
  await user.click(screen.getByRole('button',{name:'Подготовить письмо'}));
@@ -57,6 +60,7 @@ it.each(['network','server'])('retains a draft with a clear %s error and no inte
   if(String(input).endsWith('/save'))return failure==='network'?Promise.reject(new TypeError('Failed to fetch')):response({error:'private SQL detail'},503);
   return original(input,init);
  }));
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: QA Партнёр'});
  await user.clear(field); await user.type(field,'Несохранённая правка');
@@ -68,6 +72,7 @@ it.each(['network','server'])('retains a draft with a clear %s error and no inte
 
 it('explains a provider limit without claiming a new letter is ready',async()=>{
  const {user}=setup(false,'limited');
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Кандидаты'}));
  await user.click(await screen.findByRole('button',{name:/QA Партнёр/}));
  await user.click(screen.getByRole('button',{name:'Подготовить письмо'}));
@@ -76,6 +81,7 @@ it('explains a provider limit without claiming a new letter is ready',async()=>{
 it('protects letter edits and review controls while a save response is pending',async()=>{
  const {user}=setup(true);const original=window.fetch;let finish:(value:Response)=>void=()=>{};
  vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/save')?new Promise<Response>(resolve=>{finish=resolve}):original(input,init)));
+ await user.click(await screen.findByRole('button',{name:'Изменить подборку'}));
  await user.click(await screen.findByRole('button',{name:'Письма'}));
  const field=await screen.findByRole('textbox',{name:'Текст письма: QA Партнёр'});
  await user.clear(field);await user.type(field,'Проверяемая версия');

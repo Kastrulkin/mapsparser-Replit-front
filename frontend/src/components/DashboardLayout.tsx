@@ -1,4 +1,5 @@
-import { PreparedCabinetPanel, usePreparedCabinet } from './PreparedCabinet';
+import { PreparedCabinetPanel } from './PreparedCabinet';
+import { usePreparedCabinet } from './usePreparedCabinet';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { workNavigationCopy } from '@/lib/workNavigation';

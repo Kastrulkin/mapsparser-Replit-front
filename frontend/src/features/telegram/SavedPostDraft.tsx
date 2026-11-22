@@ -12,16 +12,17 @@ export const SavedPostDraft = ({draftId,scope}:{draftId:string;scope?:MobileScop
   const [retry,setRetry]=useState(0);
   const [copied,setCopied]=useState(false);
   const [copyError,setCopyError]=useState('');
+  const scopeQuery = mobileScopeQuery(scope).toString();
   useEffect(()=>{
     const controller=new AbortController();
     const timer=window.setTimeout(()=>{setError('Не удалось загрузить черновик. Повторите попытку.');setLoading(false);controller.abort();},20000);
     setDraft(null);setError('');setCopyError('');setCopied(false);setLoading(true);
-    fetch(`/api/operator/mobile/content/drafts/${encodeURIComponent(draftId)}?${mobileScopeQuery(scope)}`,{headers:mobileAuthHeaders(),signal:controller.signal})
+    fetch(`/api/operator/mobile/content/drafts/${encodeURIComponent(draftId)}?${scopeQuery}`,{headers:mobileAuthHeaders(),signal:controller.signal})
       .then(readMobileJson<{draft:SavedDraft}>).then(result=>{if(!controller.signal.aborted)setDraft(result.draft);})
       .catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error && reason.name!=='AbortError'?reason.message:'Не удалось загрузить черновик. Повторите попытку.');})
       .finally(()=>{window.clearTimeout(timer);if(!controller.signal.aborted)setLoading(false);});
     return()=>{window.clearTimeout(timer);controller.abort();};
-  },[draftId,scope?.kind,scope?.id,retry]);
+  },[draftId,scopeQuery,retry]);
   if(loading&&!error)return <p role="status" className="text-sm text-muted-foreground">Открываю сохранённый черновик…</p>;
   if(error)return <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{error}</p><Button variant="outline" onClick={()=>setRetry(value=>value+1)}>Повторить загрузку</Button></div>;
   if(!draft)return null;

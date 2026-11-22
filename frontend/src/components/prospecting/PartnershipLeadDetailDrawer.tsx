@@ -113,6 +113,7 @@ export type MatchData = {
 
 export type AuditData = {
   services_preview?: unknown[];
+  preview_meta?: { logo_url?: unknown; photo_urls?: unknown };
 };
 
 type CohortOption = {

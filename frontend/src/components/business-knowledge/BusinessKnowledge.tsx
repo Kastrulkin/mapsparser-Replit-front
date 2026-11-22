@@ -1,3 +1,4 @@
+import { formatKnowledgeValue, formatPayload } from './formatKnowledgeValue';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, RefreshCw } from 'lucide-react';
@@ -17,18 +18,6 @@ const blank:KnowledgeData={enabled:true,name:'',can_edit:false,can_configure:fal
 type Editor = {kind:'field'|'value'|'rule'|'document'|'upload'|'template'|'archive'|'proposal'; record?:KnowledgeRecord};
 type ApiResult = {record?:KnowledgeRecord;duplicate?:boolean;error?:string;status?:string;approval?:{action_id:string;business_id:string};preview?:{before?:KnowledgeRecord;after?:KnowledgePayload}};
 class RequestFailure extends Error { constructor(message:string,public status:number){super(message);} }
-export function formatKnowledgeValue(record?:KnowledgeRecord|null,definition?:KnowledgeRecord):string {
-  return formatPayload(record?.payload_json,definition?.payload_json);
-}
-function formatPayload(p?:KnowledgePayload,definition?:KnowledgePayload):string {
-  if(!p||p.state==='unknown')return 'Не указано';
-  if(p.state==='not_applicable')return 'Не применяется';
-  if(typeof p.value==='boolean')return p.value?'Да':'Нет';
-  if(p.value===null||p.value===undefined)return 'Не указано';
-  const options=definition?.options;
-  const label=(id:string)=>options?.find(o=>o.id===id)?.label||id;
-  return Array.isArray(p.value)?p.value.map(label).join(', '):typeof p.value==='string'?label(p.value):String(p.value);
-}
 export function BusinessKnowledge({scope,headers=defaultHeaders,onBusinessChange,embedded=false,focusRecordId}: {scope:KnowledgeScope|null;headers?:()=>HeadersInit;onBusinessChange?:(id:string,requestedKind?:'business'|'network')=>void;embedded?:boolean;focusRecordId?:string}) {
   const location=useLocation();const navigate=useNavigate();const {language}=useLanguage();
   const identity=scope?scope.type+':'+scope.id:'';

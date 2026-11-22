@@ -27,7 +27,7 @@ export function ExternalDriveVideos({ businessId, itemId, onChanged }: { busines
       })
       .catch(caught => { if (!controller.signal.aborted && caught.message !== 'Нет доступа к импорту') setError(caught.message); });
     return () => controller.abort();
-  }, [businessId, itemId, refreshKey]);
+  }, [businessId, itemId, refreshKey, copy.actionFailed]);
   if (!data && !error) return null;
   const videos = [...(data?.videos || []), ...(data?.selected || []).filter(video => !data?.videos.some(candidate => candidate.id === video.id))];
   return <section className="space-y-3 rounded-lg border bg-card p-4">

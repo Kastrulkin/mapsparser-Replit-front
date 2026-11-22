@@ -39,6 +39,6 @@ describe('GrowthPathsPage Spanish localization', () => {
     expect(screen.getByRole('heading', { name: 'Descubre qué más ofrecer a cada cliente' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Quita de encima las tareas repetitivas' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Контент для карточек' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Puedes empezar')).toHaveLength(6);
+    expect(screen.getAllByText('Sin iniciar')).toHaveLength(6);
   });
 });

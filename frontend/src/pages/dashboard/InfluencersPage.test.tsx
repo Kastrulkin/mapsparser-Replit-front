@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LanguageProvider } from '@/i18n/LanguageContext';
 import { newAuth } from '@/lib/auth_new';
 import { loadJourneyActions } from '@/lib/leadJourney';
 import { InfluencersPage } from './InfluencersPage';
@@ -35,6 +36,7 @@ const workspace = {
 
 describe('InfluencersPage', () => {
   beforeEach(() => {
+    window.localStorage.setItem('language', 'ru');
     vi.clearAllMocks();
     vi.mocked(loadJourneyActions).mockResolvedValue([]);
     vi.mocked(newAuth.makeRequest).mockImplementation((path) => {
@@ -45,7 +47,7 @@ describe('InfluencersPage', () => {
 
   it('keeps creator discovery free and locks only personalized messages', async () => {
     const user = userEvent.setup();
-    render(<MemoryRouter initialEntries={['/dashboard/influencers']}><Routes><Route element={<Context />}><Route path="/dashboard/influencers" element={<InfluencersPage />} /></Route></Routes></MemoryRouter>);
+    render(<LanguageProvider><MemoryRouter initialEntries={['/dashboard/influencers']}><Routes><Route element={<Context />}><Route path="/dashboard/influencers" element={<InfluencersPage />} /></Route></Routes></MemoryRouter></LanguageProvider>);
 
     expect(await screen.findByRole('heading', { name: 'Анна про Петербург' })).toBeInTheDocument();
     expect(screen.getByText(/Публичный обзор салона/)).toBeInTheDocument();
@@ -54,11 +56,11 @@ describe('InfluencersPage', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Предложение' }));
     expect(await screen.findByText('Подготовка сообщений доступна после оплаты.')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
+    expect(screen.getByRole('link', { name: 'Выбрать тариф' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription&return_to=%2Fdashboard%2Finfluencers#subscription');
   });
 
   it('keeps every creator action at the mobile 40px touch-target minimum', async () => {
-    render(<MemoryRouter initialEntries={['/dashboard/influencers']}><Routes><Route element={<Context />}><Route path="/dashboard/influencers" element={<InfluencersPage />} /></Route></Routes></MemoryRouter>);
+    render(<LanguageProvider><MemoryRouter initialEntries={['/dashboard/influencers']}><Routes><Route element={<Context />}><Route path="/dashboard/influencers" element={<InfluencersPage />} /></Route></Routes></MemoryRouter></LanguageProvider>);
 
     await screen.findByRole('heading', { name: 'Анна про Петербург' });
     for (const control of [

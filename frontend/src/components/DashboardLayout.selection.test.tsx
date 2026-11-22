@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useOutletContext } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
-const auth=vi.hoisted(()=>({getCurrentUser:vi.fn(), makeRequest:vi.fn()}));
+const auth=vi.hoisted(()=>({getCurrentUser:vi.fn(), makeRequest:vi.fn().mockResolvedValue({}), getToken:()=>null}));
 vi.mock('../lib/auth_new', ()=>({newAuth:auth, HttpError:Error}));
 vi.mock('./DashboardHeader', ()=>({DashboardHeader:()=>null}));
 vi.mock('./DashboardSidebar', ()=>({DashboardSidebar:()=>null}));

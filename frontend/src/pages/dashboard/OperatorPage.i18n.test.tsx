@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,8 +40,9 @@ describe('OperatorPage localization', () => {
     expect(await screen.findByRole('heading', { name: 'Διαχείριση μέσω συνομιλίας' })).toBeInTheDocument();
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     expect(vi.mocked(api.get).mock.calls.some(([url]) => url === '/operator/summary')).toBe(false);
-    expect(screen.getByRole('button', { name: 'Αναφορά προβλήματος' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Μενού χειριστή' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('menuitem', { name: 'Αναφορά προβλήματος' })).toBeInTheDocument();
     expect(container.textContent).not.toContain('Telegram shows the same summary');
   });
 

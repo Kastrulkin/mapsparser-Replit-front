@@ -64,7 +64,7 @@ export function DemoAgentsPage() {
     if (stage !== 'running') return;
     const timer = window.setTimeout(() => { setStage('review'); setPreparedAt(new Date().toLocaleString(language)); setConfirmedAt(undefined); }, 650);
     return () => window.clearTimeout(timer);
-  }, [stage, selected]);
+  }, [stage, selected, language]);
   const run = () => { setDrafts(selected === 0 ? sample.reviewTexts : [selected === 1 ? sample.taskBody : sample.observationBody]); setStage('running'); };
 
   return <div className="space-y-5 pb-16" data-tour-target="agents-workspace">

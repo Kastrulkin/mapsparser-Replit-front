@@ -33,7 +33,7 @@ describe('GrowthPathsPage', () => {
     const headings = await screen.findAllByRole('heading', { level: 2 });
     expect(newAuth.makeRequest).toHaveBeenCalledWith('/growth-paths?business_id=business-1');
     expect(screen.getByRole('heading', { level: 1, name: 'Выберите направление' })).toBeVisible();
-    expect(screen.getByText(/с какой задачей хотите начать/)).toBeVisible();
+    expect(screen.getByText(/Выберите направление и подтвердите фокус/)).toBeVisible();
     expect(headings).toHaveLength(6);
     expect(headings[0]).toHaveTextContent('Найти местных блогеров');
     expect(screen.getByRole('heading', { name: 'Привести карточки в порядок' })).toBeVisible();
@@ -42,10 +42,10 @@ describe('GrowthPathsPage', () => {
     expect(screen.getByRole('heading', { name: 'Найти бизнесы для взаимных рекомендаций' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Снять с себя повторяющиеся задачи' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Понять, что ещё предложить клиенту' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Посмотреть задачи' })).toHaveAttribute('href', '/dashboard/agents');
+    expect(screen.getByRole('link', { name: 'Посмотреть задачи' })).toHaveAttribute('href', '/dashboard/agents?business_id=business-1');
     expect(screen.getByText('Получать темы и черновики из услуг, отзывов и событий бизнеса.')).toBeVisible();
-    expect(screen.getByText('Полный раздел доступен на подходящем тарифе.')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Посмотреть тарифы' })).toHaveAttribute('href', '/dashboard/profile?focus=subscription#subscription');
-    expect(screen.getByRole('link', { name: /Посмотреть авторов/ })).toHaveAttribute('href', '/dashboard/influencers?journey_action=action-1');
+    expect(screen.getByText('Полный черновик и календарь открываются на платном тарифе.')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Выбрать тариф' }).getAttribute('href')).toContain('/dashboard/profile?focus=subscription');
+    expect(screen.getByRole('link', { name: 'Открыть автора' })).toHaveAttribute('href', '/dashboard/influencers?journey_action=action-1&business_id=business-1');
   });
 });

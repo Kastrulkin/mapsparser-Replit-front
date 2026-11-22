@@ -35,11 +35,6 @@ export function HandoffPhotoPreview({ assetId }: { assetId: string }) {
   return image ? <img src={image} alt="Фото для передачи через бот" className="mt-2 h-40 w-full rounded-xl bg-slate-50 object-contain" /> : <p role="status" className="text-sm text-slate-500">Загружаем выбранное фото…</p>;
 }
 
-export function hasContentHandoff(details: AgentBlueprintDetails | null | undefined) {
-  const version = details?.candidate_version || details?.active_version;
-  return Array.isArray(version?.steps_json) && version.steps_json.some((step: unknown) => record(step).capability === 'content.publish_handoff');
-}
-
 export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSaved }: {
   blueprintId: string; details: AgentBlueprintDetails | null; onRunQueued: (id: string) => void; onSaved?: () => void;
 }) {
@@ -57,13 +52,14 @@ export function ContentHandoffProgram({ blueprintId, details, onRunQueued, onSav
   const runSnapshot = useRef('');
   const target = useRef(blueprintId);
   const artifact = record(saved?.compiled_artifact_json);
-  const [artifactHash, setArtifactHash] = useState(String(artifact.artifact_hash || ''));
+  const savedArtifactHash = String(artifact.artifact_hash || '');
+  const [artifactHash, setArtifactHash] = useState(savedArtifactHash);
   useEffect(() => {
     target.current = blueprintId;
     setVersionId(String(saved?.id || '')); setState(String(saved?.compiled_state || 'legacy'));
-    setArtifactHash(String(record(saved?.compiled_artifact_json).artifact_hash || ''));
+    setArtifactHash(savedArtifactHash);
     setPreview({}); setError(''); setBusy(''); setExampleAccepted(false); runKey.current = ''; runSnapshot.current = '';
-  }, [blueprintId, saved?.id]);
+  }, [blueprintId, saved?.id, saved?.compiled_state, savedArtifactHash]);
   useEffect(() => {
     let cancelled = false;
     setSuccessors([]); setReviewedPlan('');

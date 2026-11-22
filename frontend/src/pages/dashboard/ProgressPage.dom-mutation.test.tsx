@@ -111,6 +111,7 @@ describe('Progress page DOM ownership', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
 
+    fireEvent.click(screen.getByText('Выполненные этапы за всё время'));
     expect(await screen.findByText(/3 из 4/)).toBeInTheDocument();
     expect(screen.queryByText('Что-то пошло не так')).not.toBeInTheDocument();
   });

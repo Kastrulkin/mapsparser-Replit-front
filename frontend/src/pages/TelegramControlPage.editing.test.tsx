@@ -26,8 +26,10 @@ for (const platform of ['telegram','max']) it(platform + ': preserves the conten
   render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage/></LanguageContext.Provider>);
   await user.click(await screen.findByRole('button',{name:'Меню'}));
   await user.click(await screen.findByRole('button',{name:'Контент'}));
+  await user.click(await screen.findByRole('button',{name:'Изменить план'}));
   await user.click(await screen.findByRole('button',{name:'Редактировать текст'}));
-  await user.type(screen.getByRole('textbox',{name:'Текст публикации'}),' — несохранённая правка');
+  await user.click(screen.getByRole('textbox',{name:'Текст публикации'}));
+  await user.paste(' — несохранённая правка');
   await user.click(screen.getByRole('button',{name:'Меню'}));
   expect(screen.getByRole('textbox',{name:'Текст публикации'})).toHaveValue('Исходный текст — несохранённая правка');
   expect(screen.getByRole('alert')).toHaveTextContent('Сначала сохраните или отмените редактирование публикации');
