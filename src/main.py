@@ -140,6 +140,7 @@ from api.business_knowledge_api import business_knowledge_bp
 from api.average_ticket_api import average_ticket_bp
 from api.reports_api import reports_bp
 from api.operator_api import operator_bp
+from api.initial_business_setup_api import initial_setup_bp
 from api.auth_user_api import auth_user_bp
 from api.guided_tour_api import guided_tour_bp
 from api.superadmin_business_api import superadmin_business_bp
@@ -343,6 +344,7 @@ app.register_blueprint(work_journal_bp)
 app.register_blueprint(business_knowledge_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(operator_bp)
+app.register_blueprint(initial_setup_bp)
 app.register_blueprint(auth_user_bp)
 app.register_blueprint(guided_tour_bp)
 from api.max_api import max_bp

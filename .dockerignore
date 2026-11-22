@@ -45,6 +45,7 @@ tmp-google-docs-*
 
 # Фронтенд (в этом образе только backend/worker; при необходимости соберите отдельно)
 frontend/node_modules
+src/website_seo/node_modules
 frontend/dist
 frontend/public-dist
 

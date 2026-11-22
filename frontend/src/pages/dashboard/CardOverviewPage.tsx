@@ -1,5 +1,6 @@
 import type { Competitor, ManualCompetitor } from '@/components/dashboard/CardOverviewTabs';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
+import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
 import {
 	CardServiceAddForm,
 	CardServiceCatalogCompressionDialog,
@@ -1011,6 +1012,7 @@ export const CardOverviewPage = () => {
           </TabsList>
 
           <TabsContent value="competitors" className="space-y-6">
+            {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="competitors" />}
             <CompetitorsTab
               manualCompetitorUrl={manualCompetitorUrl}
               onManualCompetitorUrlChange={setManualCompetitorUrl}
@@ -1028,6 +1030,7 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
+            {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="services" />}
             {/* Rating Summary Card */}
             <DashboardSection title={pageCopy.rating} description={pageCopy.ratingDescription}>
                 <div className="flex justify-between items-start mb-5">
@@ -1374,6 +1377,7 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="keywords">
+            {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="keywords" />}
             <KeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>

@@ -1338,6 +1338,9 @@ def auth_set_password():
                 )
                 if payload is None:
                     return jsonify({"error": "Ссылка истекла или уже использована. Войдите или запросите новую ссылку у команды LocalOS."}), 400
+                from services import initial_business_setup
+                if initial_business_setup.allowed(payload['business_id']) and initial_business_setup.installed(conn.cursor()):
+                    payload['initial_setup'] = bool(initial_business_setup.load(conn.cursor(), payload['business_id']))
                 session_token = create_session(payload["id"], ip_address=ip_address, user_agent=user_agent, connection=conn)
                 if not session_token:
                     raise RuntimeError("Could not create owner session")

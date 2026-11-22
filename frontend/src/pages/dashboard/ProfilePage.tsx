@@ -24,7 +24,8 @@ import { cn } from '@/lib/utils';
 import type { BusinessRecord, DashboardOutletContext } from '@/types/business';
 import { AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock, Edit2, ExternalLink, FileSearch, Info, Mail, MapPin, Network, Phone, Plus, ShieldCheck, Trash2, User } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
+import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 
 type ProfileStatusItem = {
   label: string;
@@ -1015,6 +1016,7 @@ export const ProfilePage = () => {
         )}
       />
 
+      {!user?.demo_mode && <InitialSetupMenuResult businessId={effectiveBusinessId} section="profile" />}
       {error && (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-red-700">
           <AlertTriangle className="w-5 h-5 shrink-0" />

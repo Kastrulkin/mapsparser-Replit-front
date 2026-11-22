@@ -1489,6 +1489,17 @@ def auth_verify_email():
             },
             "journey_action": resumed_action,
         }
+        if not resumed_action:
+            from services import initial_business_setup
+            if initial_business_setup.enabled():
+                setup_db = DatabaseManager()
+                try:
+                    payload['initial_setup_business_id'] = initial_business_setup.verified_registration_business(
+                        setup_db.conn.cursor(), str(result['id']))
+                except Exception as setup_error:
+                    logger.warning('Initial setup after verification unavailable: %s', type(setup_error).__name__)
+                finally:
+                    setup_db.close()
         if not browser_cookie_auth_enabled():
             payload["token"] = session_token
         return issue_browser_session(jsonify(payload), session_token)

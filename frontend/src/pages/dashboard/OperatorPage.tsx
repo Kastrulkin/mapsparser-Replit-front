@@ -32,6 +32,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { InitialSetupChat, useInitialBusinessSetup } from '@/components/initial-setup/InitialBusinessSetup';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
@@ -289,6 +290,24 @@ export const OperatorPage = () => {
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
   const demoMode = Boolean(user?.demo_mode);
+  const [setupRequested, setSetupRequested] = useState(false);
+  const setupLink = workParams.get('setup') === '1';
+  const setupMode = !demoMode && Boolean(currentBusinessId) && (setupLink || setupRequested);
+  const setupTarget = workParams.get('business_id');
+  const setupBusinessId = setupTarget && setupTarget !== currentBusinessId ? null : currentBusinessId;
+  const initialSetup = useInitialBusinessSetup(setupBusinessId, setupMode);
+  useEffect(() => {
+    if (setupLink && setupBusinessId) setSetupRequested(true);
+  }, [setupLink, setupBusinessId]);
+  const exitInitialSetup = () => {
+    setSetupRequested(false);
+    setChatMessage('');
+    if (workParams.has('setup')) {
+      const next = new URLSearchParams(workParams);
+      next.delete('setup');
+      setSearchParams(next, { replace: true });
+    }
+  };
   const demoNotice = demoNavigationCopy(language).chatPreview;
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
   const activeBusiness = useRef(currentBusinessId);
@@ -317,15 +336,15 @@ export const OperatorPage = () => {
       setWorkspaceHeight(Math.max(160, (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0) - node.getBoundingClientRect().top - 12 - (window.matchMedia("(max-width: 767px)").matches ? 40 : 0)));
     };
     resize();
-    const observer = new ResizeObserver(resize);
-    if (workspaceRef.current?.parentElement) observer.observe(workspaceRef.current.parentElement);
-    observer.observe(document.body);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
+    if (workspaceRef.current?.parentElement) observer?.observe(workspaceRef.current.parentElement);
+    observer?.observe(document.body);
     const shellHeader = document.querySelector("header");
-    if (shellHeader) observer.observe(shellHeader);
+    if (shellHeader) observer?.observe(shellHeader);
     window.addEventListener("resize", resize);
     window.visualViewport?.addEventListener("resize", resize);
     window.visualViewport?.addEventListener("scroll", resize);
-    return () => { observer.disconnect(); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("scroll", resize); };
+    return () => { observer?.disconnect(); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("scroll", resize); };
   }, []);
   useLayoutEffect(() => {
     const input = chatInputRef.current;
@@ -507,6 +526,16 @@ export const OperatorPage = () => {
     const text = (overrideText || chatMessage).trim();
     const platformScope = controlScope?.kind === 'platform';
     if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
+    if (setupMode && !source) {
+      const ok = await initialSetup.send(initialSetup.state ? { action: 'message', message: text } : { action: 'start' });
+      if (ok && initialSetup.state) setChatMessage('');
+      return;
+    }
+    if (currentBusinessId && !source && /^(?:начать|начни|открой|продолжи)\s+(?:первичн\S*\s+)?настройк\S*(?:\s+компани\S*)?[.!]?$/i.test(text)) {
+      setSetupRequested(true);
+      setChatMessage('');
+      return;
+    }
     const asksAllClients = /всем\s+клиент|все\s+клиент|всем\s+бизнес|все\s+бизнес|по\s+всем\s+(компан|точк)|all\s+(clients|businesses)|every\s+client/i.test(text);
     const platformContentRequest = controlScope?.kind === 'platform' || (asksAllClients && user?.is_superadmin === true);
     if (platformContentRequest) {
@@ -853,12 +882,16 @@ export const OperatorPage = () => {
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }} className="max-h-[90dvh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>История обращений</DialogTitle><DialogDescription>Сохранённые команды, ответы и распознавание голоса.</DialogDescription></DialogHeader>{historyOpen && currentBusinessId && <OperatorRequestHistory key={currentBusinessId} initiallyOpen businessId={currentBusinessId} language={language} />}</DialogContent></Dialog>
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); menuTriggerRef.current?.focus(); }}><DialogHeader><DialogTitle>Как пользоваться</DialogTitle><DialogDescription>Напишите задачу обычным языком или запишите голосом.</DialogDescription></DialogHeader><p className="text-sm">Оператор покажет результат или уточнит недостающее. Для продолжения поиска выберите его в «Задачах». Отправка писем и другие внешние действия требуют подтверждения.</p></DialogContent></Dialog>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-        {currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onRefresh={refreshOutreachResults} onChange={() => setTasksOpen(true)} onContinue={command => {
+        {!setupMode && currentBusinessId && activeSearchTask?.id && <div className="shrink-0 border-b border-border px-3 py-2"><OutreachTaskStatus key={`${currentBusinessId}:${activeSearchTask.id}`} businessId={currentBusinessId} initialTask={activeSearchTask} onRefresh={refreshOutreachResults} onChange={() => setTasksOpen(true)} onContinue={command => {
           setSelectedSearchId(activeSearchTask.id);
           setChatMessage(command);
           chatInputRef.current?.focus();
         }} /></div>}
         <div ref={chatScroll.ref} data-testid="operator-message-list" className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-muted/30 px-3 py-4 [overflow-wrap:anywhere]">
+          {setupMode ? (setupBusinessId ?
+            <InitialSetupChat key={setupBusinessId} setup={initialSetup} isStaff={user?.is_superadmin === true} onExit={exitInitialSetup} /> :
+            <div className="space-y-2 p-4"><p role="status">Выберите кабинет из ссылки, чтобы открыть его настройку.</p>
+              <Button variant="ghost" onClick={exitInitialSetup}>Рабочий чат</Button></div>) : <>
           {historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
               <span>{historyError}</span>
@@ -953,6 +986,7 @@ export const OperatorPage = () => {
             </div>
           </div>}
           {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
+          </>}
         </div>
 
         {chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
@@ -965,10 +999,10 @@ export const OperatorPage = () => {
           <div className="flex min-w-0 items-end gap-2">
             <textarea
               ref={chatInputRef}
-              disabled={demoMode}
+              disabled={demoMode || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
               aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               rows={1}
-              aria-label="Задача для Оператора"
+              aria-label={setupMode ? "Сообщение для первичной настройки" : "Задача для Оператора"}
               className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
@@ -989,7 +1023,7 @@ export const OperatorPage = () => {
                       className="btn-iridescent h-12 w-12 p-0 sm:w-auto sm:px-4"
                       aria-label={copy.send}
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={demoMode || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
+                      disabled={demoMode || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim() || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       <span className="hidden sm:inline">{copy.send}</span>

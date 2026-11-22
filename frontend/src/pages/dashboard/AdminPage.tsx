@@ -1,6 +1,7 @@
 import { PreparedCabinetInvite } from '@/components/PreparedCabinetInvite';
 import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import type { DashboardOutletContext } from '@/types/business';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { ChevronDown, ChevronRight, Building2, Network, MapPin, User, Plus, Trash2, Ban, AlertTriangle, Bot, Settings, BarChart3, FileText, X, Search, ShieldCheck, KeyRound, CreditCard, CalendarDays, Radar, BookOpen, Download, Loader2, PlugZap, Activity, Link2 } from 'lucide-react';
@@ -729,6 +730,19 @@ export const AdminPage: React.FC = () => {
   });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const dashboard = useOutletContext<DashboardOutletContext | undefined>();
+  const [initialSetupAccess, setInitialSetupAccess] = useState<{ business_ids: string[]; lead_ids: string[] } | null>(null);
+  useEffect(() => {
+    let current = true;
+    void newAuth.makeRequest('/operator/initial-setup/availability').then(result => {
+      if (current && result?.available === true && Array.isArray(result.business_ids) && Array.isArray(result.lead_ids)) {
+        setInitialSetupAccess({ business_ids: result.business_ids, lead_ids: result.lead_ids });
+      }
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, []);
+  const canSetUpBusiness = (id: string) => Boolean(initialSetupAccess && (!initialSetupAccess.business_ids.length || initialSetupAccess.business_ids.includes(id)));
+  const openInitialSetup = (id: string) => navigate('/dashboard/operator?setup=1&business_id=' + encodeURIComponent(id));
 
   const loadUsers = useCallback(async () => {
     try {
@@ -1133,8 +1147,11 @@ export const AdminPage: React.FC = () => {
     });
   };
 
-  const handleCreateSuccess = () => {
-    loadUsers();
+  const handleCreateSuccess = async (businessId: string) => {
+    toast({ title: 'Бизнес создан' });
+    void loadUsers();
+    await dashboard?.reloadBusinesses();
+    if (canSetUpBusiness(businessId)) openInitialSetup(businessId);
   };
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
@@ -1970,7 +1987,8 @@ export const AdminPage: React.FC = () => {
             description="Один список компаний: продажи LocalOS и партнёры клиентов с раздельными сообщениями, комнатами и результатами."
             contentClassName="p-0"
           >
-            <AdminLeadRegistry businessOptions={radarBusinessOptions} senderBusinessLabel="LocalOS" />
+            <AdminLeadRegistry businessOptions={radarBusinessOptions} senderBusinessLabel="LocalOS"
+              canSetUpLead={initialSetupAccess ? (id) => initialSetupAccess.lead_ids.length ? initialSetupAccess.lead_ids.includes(id) : !initialSetupAccess.business_ids.length : undefined} />
           </DashboardSection>
         ) : activeTab === 'knowledge' ? (
           <DashboardSection
@@ -2188,6 +2206,7 @@ export const AdminPage: React.FC = () => {
                                 <BusinessCard
                                   key={business.id}
                                   business={business}
+                                  initialSetup={canSetUpBusiness(business.id) ? () => openInitialSetup(business.id) : undefined}
                                   isPinned={business.id === pinnedBusinessId}
                                   onSettingsClick={() => setSettingsModal({
                                     isOpen: true,
@@ -2206,6 +2225,7 @@ export const AdminPage: React.FC = () => {
                       ) : (
                         <BusinessCard
                           business={item.business}
+                          initialSetup={canSetUpBusiness(item.business.id) ? () => openInitialSetup(item.business.id) : undefined}
                           isPinned={item.business.id === pinnedBusinessId}
                           onSettingsClick={() => setSettingsModal({
                             isOpen: true,
@@ -2467,6 +2487,7 @@ export const AdminPage: React.FC = () => {
 // Business Card Component
 interface BusinessCardProps {
   business: Business;
+  initialSetup?: () => void;
   isPinned?: boolean;
   onSettingsClick: () => void;
   onPaymentClick: () => void;
@@ -2477,6 +2498,7 @@ interface BusinessCardProps {
 
 const BusinessCard: React.FC<BusinessCardProps> = ({
   business,
+  initialSetup,
   isPinned = false,
   onSettingsClick,
   onPaymentClick,
@@ -2529,6 +2551,7 @@ const BusinessCard: React.FC<BusinessCardProps> = ({
           className="flex w-full items-center justify-end gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 lg:w-auto"
           onClick={(event) => event.stopPropagation()}
         >
+          {initialSetup && !isBlocked && <Button size="sm" variant="ghost" onClick={initialSetup}>Первичная настройка</Button>}
           <PreparedCabinetInvite businessId={business.id} disabled={isBlocked} />
           <Button
             variant="ghost"

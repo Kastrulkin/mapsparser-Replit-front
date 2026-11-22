@@ -25,6 +25,11 @@ RUN npm ci --legacy-peer-deps
 COPY frontend/ .
 RUN npm run build:all
 
+WORKDIR /opt/localos/website-seo
+COPY src/website_seo/package*.json ./
+RUN npm ci --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund
+COPY src/website_seo/audit.mjs ./
+
 # Этап 2: backend + worker
 # Базовый образ Python 3.11 на Debian bookworm (стабильный apt-канал).
 FROM python:3.11-bookworm@sha256:35d3a4a3d5e42e02ab916d44513a050689f12c0533d45598d229672503fe77ca
@@ -124,6 +129,8 @@ COPY . .
 # Подставляем собранный фронтенд из первого этапа (поле «Город» и прочие правки всегда актуальны)
 COPY --chown=localos:localos --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY --chown=localos:localos --from=frontend-builder /app/frontend/public-dist ./frontend/public-dist
+COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=frontend-builder /opt/localos/website-seo /opt/localos/website-seo
 
 # Entrypoint: ждёт Postgres, выполняет flask db upgrade, затем exec CMD
 COPY entrypoint.sh /app/entrypoint.sh

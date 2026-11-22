@@ -771,6 +771,8 @@ def _decode_website_html(body: bytes, content_type: str) -> str:
 
 def collect_public_website_intelligence(
     website: Any,
+    *,
+    observe_page=None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     safe_url = _public_http_url(website)
     if not safe_url:
@@ -803,6 +805,8 @@ def collect_public_website_intelligence(
                 warnings.append(f"Страница {page_url} слишком большая и пропущена")
                 continue
             html = _decode_website_html(body, str(response.headers.get("content-type") or ""))
+            if observe_page is not None:
+                observe_page(page_url, html)
             contacts.extend(extract_contacts_from_html(html, page_url))
             crm_observations.extend(extract_booking_crm_observations_from_html(html, page_url))
             if len(visited) == 1:

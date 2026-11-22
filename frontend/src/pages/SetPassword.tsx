@@ -125,7 +125,8 @@ const SetPassword: React.FC = () => {
         } else if (result.user) {
           setInfo('Пароль успешно установлен! Выполняется вход...');
           setTimeout(() => {
-            navigate(result.businessId ? '/dashboard/today?business_id=' + encodeURIComponent(result.businessId) : consumeMaxConnection() ? '/dashboard/max' : '/dashboard', { replace: true });
+            const destination = result.initialSetup ? '/dashboard/operator?setup=1&business_id=' : '/dashboard/today?business_id=';
+            navigate(result.businessId ? destination + encodeURIComponent(result.businessId) : consumeMaxConnection() ? '/dashboard/max' : '/dashboard', { replace: true });
           }, 2000);
         }
       }

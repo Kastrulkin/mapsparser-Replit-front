@@ -1,0 +1,12 @@
+{
+  "name": "localos-website-seo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@seomator/seo-audit": "8.0.1",
+    "cheerio": "1.2.0"
+  }
+}

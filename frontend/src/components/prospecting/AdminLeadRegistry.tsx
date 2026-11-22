@@ -681,6 +681,7 @@ interface SearchResult extends LeadItem {
 interface AdminLeadRegistryProps {
   businessOptions: BusinessOption[];
   senderBusinessLabel?: string;
+  canSetUpLead?: (id: string) => boolean;
 }
 
 const viewOptions: Array<{ id: RegistryView; label: string }> = [
@@ -1063,7 +1064,7 @@ const senderProfileFactLines = (
   .filter(Boolean)
   .join('\n');
 
-export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ваш бизнес' }: AdminLeadRegistryProps) {
+export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ваш бизнес', canSetUpLead }: AdminLeadRegistryProps) {
   const [view, setView] = useState<RegistryView>('leads');
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [clientBusinessId, setClientBusinessId] = useState('');
@@ -2024,6 +2025,12 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
       setBusyAction('');
     }
   };
+
+  const prepareLeadCabinet = (leadId: string) => runAction('prepare-cabinet', async () => {
+    const result = await newAuth.makeRequest('/operator/initial-setup/lead/' + encodeURIComponent(leadId), { method: 'POST', body: '{}' });
+    if (typeof result.business_id !== 'string') throw new Error('Сервер не вернул кабинет компании.');
+    window.location.assign('/dashboard/operator?setup=1&business_id=' + encodeURIComponent(result.business_id));
+  }, 'Кабинет открыт для настройки.');
 
   const addLocalosWorkstream = () => {
     if (!selectedLead) return;
@@ -3164,6 +3171,8 @@ export function AdminLeadRegistry({ businessOptions, senderBusinessLabel = 'ва
           <SheetHeader className="pr-8">
             <SheetTitle className="text-wrap-balance text-xl">{selectedLead?.name || 'Карточка лида'}</SheetTitle>
             <SheetDescription>{[selectedLead?.category, selectedLead?.city || selectedLead?.address].filter(Boolean).join(' · ')}</SheetDescription>
+            {selectedLead && canSetUpLead?.(selectedLead.id) && <Button className="w-fit" size="sm" disabled={Boolean(busyAction)}
+              onClick={() => void prepareLeadCabinet(selectedLead.id)}>{busyAction === 'prepare-cabinet' ? 'Готовим кабинет…' : 'Подготовить кабинет'}</Button>}
             {selectedLeadMapLink ? (
               <a
                 href={selectedLeadMapLink.url}

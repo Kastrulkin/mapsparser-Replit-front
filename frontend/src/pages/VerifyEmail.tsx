@@ -74,6 +74,11 @@ const VerifyEmail: React.FC = () => {
           return;
         }
 
+        if (typeof data.initial_setup_business_id === 'string' && data.initial_setup_business_id) {
+          setMessage('Email подтверждён. Открываем чат настройки компании…');
+          navigate('/dashboard/operator?setup=1&business_id=' + encodeURIComponent(data.initial_setup_business_id), { replace: true });
+          return;
+        }
         setMessage('Email подтверждён. Открываем кабинет без автоматической оплаты...');
         setTimeout(() => navigate('/dashboard/profile?onboarding=1', { replace: true }), 1200);
       } catch (error) {
