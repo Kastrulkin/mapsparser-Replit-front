@@ -49,6 +49,7 @@ export type OutreachSenderAccountSummary = {
 };
 
 export type IntegrationsRegistryRawState = {
+  trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   business?: SettingsHubBusiness | null;
   telegramOwnerLinked?: boolean | null;
   telegramPublishStatus?: {
@@ -162,6 +163,15 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
   const altegioProvider = crmProviders.find((provider) => provider.provider === 'altegio') || null;
 
   return [
+    {
+      id: 'trello', name: 'Trello', tag: 'Задачи',
+      description: 'Чтение выбранных досок, карточек и сроков. Обновление по кнопке.',
+      connectionType: 'oauth',
+      status: rawState.trelloStatus?.needs_reauthorization ? 'action_required' : rawState.trelloStatus?.connected ? 'connected' : 'not_connected',
+      nextAction: rawState.trelloStatus?.connected ? 'Выберите доску и загрузите карточки.' : 'Подключите Trello для чтения.',
+      primaryAction: { label: rawState.trelloStatus?.connected ? 'Открыть' : 'Подключить', type: 'drawer', target: 'trello' },
+      hasLogs: false, hasHelp: true,
+    },
     {
       id: 'telegram',
       name: 'Telegram',
@@ -357,4 +367,20 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       hasHelp: true,
     },
   ];
+};
+
+export type ServiceGroupKey = 'owner' | 'maps' | 'publishing' | 'data';
+
+export const serviceGroups: Array<{ key: ServiceGroupKey; title: string; description: string }> = [
+  { key: 'owner', title: 'Связь с владельцем', description: 'Уведомления, команды и рабочие сообщения.' },
+  { key: 'maps', title: 'Карты и справочники', description: 'Google — правки через API после подтверждения. Яндекс и 2ГИС — подготовка материалов и ручной перенос.' },
+  { key: 'publishing', title: 'Публикации и сообщения', description: 'Каналы, где внешнее действие требует проверки и подтверждения.' },
+  { key: 'data', title: 'Данные и CRM', description: 'Источники данных для агентов, финансов и отчётности.' },
+];
+
+export const serviceGroup = (serviceId: string): ServiceGroupKey => {
+  if (serviceId === 'telegram') return 'owner';
+  if (['google_business', 'yandex_maps', '2gis'].includes(serviceId)) return 'maps';
+  if (['whatsapp', 'outreach_email', 'outreach_vk', 'outreach_max', 'vk', 'meta'].includes(serviceId)) return 'publishing';
+  return 'data';
 };
