@@ -303,7 +303,8 @@ def test_agent_blueprint_api_guards_version_blueprint_mismatch():
     assert "output: hasStructuredResult" in agents_page_source
     assert "Intl.supportedValuesOf('timeZone')" in agents_page_source
     assert "Найти город или Europe/Paris" in agents_page_source
-    assert agents_page_source.count("<TimezoneSelect") == 4
+    for value in ("timezone", "draftScheduleTimezone", "scheduleTimezone", "execution.timezone"):
+        assert f"<TimezoneSelect value={{{value}}}" in agents_page_source
     assert "Архивировать" in agents_page_source
     assert "primary_action_label" in agents_page_source
     assert "Активировать версию" in agents_page_source
@@ -2399,9 +2400,13 @@ def test_agent_run_completion_refreshes_server_today_summary():
 def test_agent_overview_uses_normalized_result_after_reload():
     employee_source = Path("frontend/src/pages/dashboard/agents/employee.tsx").read_text(encoding="utf-8")
 
-    assert "findPreparedResultPayload(detailedLatestRun, pendingApproval)" in employee_source
-    assert "|| details?.last_business_result" in employee_source
-    assert "|| blueprint.last_business_result" in employee_source
+    selection = employee_source.split("const latestResult = [", 1)[1].split("].find(", 1)[0]
+    assert [line.strip().rstrip(",") for line in selection.strip().splitlines()] == [
+        "findPreparedResultPayload(detailedLatestRun, pendingApproval)",
+        "details?.last_business_result",
+        "blueprint.last_business_result",
+    ]
+    assert "].find((result) => result && Object.keys(result).length > 0)" in employee_source
 
 
 def test_agent_review_reply_analysis_uses_only_one_unanswered_review_when_requested():

@@ -1,9 +1,14 @@
+import os
 import sys
 
 
-def test_finance_routes_stay_registered_after_blueprint_split():
+def test_finance_routes_stay_registered_after_blueprint_split(monkeypatch):
     if "src" not in sys.path:
         sys.path.insert(0, "src")
+
+    # Importing the app registers the routes without opening a database connection.
+    if not os.getenv("DATABASE_URL"):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://127.0.0.1:1/localos_route_contract")
 
     import main
 
