@@ -7,7 +7,7 @@ import { DESIGN_TOKENS, cn } from '@/lib/design-tokens';
 import { errorMessage } from '@/lib/errorMessage';
 import type { DashboardOutletContext } from '@/types/business';
 import { Check, RefreshCw, Search, Trash2, TrendingUp, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 
 interface Keyword {
@@ -106,9 +106,14 @@ const additionalSeoOperationalCopy: Record<string, Record<string, string>> = {
 };
 
 export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
-    const { language, t } = useLanguage();
     const { user } = useOutletContext<DashboardOutletContext>();
     const demoMode = Boolean(user?.demo_mode);
+    const scopeKey = JSON.stringify([user?.id ?? null, businessId ?? null, demoMode]);
+    return <ScopedSEOKeywordsTab key={scopeKey} businessId={businessId} demoMode={demoMode} />;
+}
+
+function ScopedSEOKeywordsTab({ businessId, demoMode }: SEOKeywordsTabProps & { demoMode: boolean }) {
+    const { language, t } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [keywords, setKeywords] = useState<Keyword[]>([]);
@@ -131,9 +136,25 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     const [negativeBulkText, setNegativeBulkText] = useState('');
     const [negativeLoading, setNegativeLoading] = useState(false);
     const operationalCopy = seoOperationalCopy[language] || additionalSeoOperationalCopy[language] || seoOperationalCopy.en;
+    const mounted = useRef(false);
+    const keywordsRequest = useRef<AbortController | null>(null);
+    const negativeKeywordsRequest = useRef<AbortController | null>(null);
+    const suggestionsRequest = useRef<AbortController | null>(null);
+    const refreshTimer = useRef<number | undefined>(undefined);
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            keywordsRequest.current?.abort();
+            negativeKeywordsRequest.current?.abort();
+            suggestionsRequest.current?.abort();
+            window.clearTimeout(refreshTimer.current);
+        };
+    }, []);
 
     const loadKeywords = useLatestCallback(async () => {
-        setLoading(true);
+        if (!mounted.current) return;
         if (demoMode) {
             const demoKeywords = getDemoShowcaseData(language).keywords;
             setKeywords(demoKeywords);
@@ -142,55 +163,72 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
             setLoading(false);
             return;
         }
+        if (!businessId) return;
+
+        keywordsRequest.current?.abort();
+        const controller = new AbortController();
+        keywordsRequest.current = controller;
+        setLoading(true);
         try {
             const token = browserBearerToken();
-            const qs = businessId
-                ? `?business_id=${encodeURIComponent(businessId)}&use_city=1&include_blocked=${showBlocked ? '1' : '0'}`
-                : '';
+            const qs = `?business_id=${encodeURIComponent(businessId)}&use_city=1&include_blocked=${showBlocked ? '1' : '0'}`;
             const response = await fetch(`${window.location.origin}/api/wordstat/keywords${qs}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal: controller.signal,
             });
+            if (controller.signal.aborted) return;
+            if (response.status === 401 || response.status === 403) {
+                setKeywords([]);
+                setGrouped({});
+                setSuggestions([]);
+                setActiveCategory('all');
+            }
             const data = await response.json();
+            if (controller.signal.aborted) return;
 
-            if (data.success) {
-                setKeywords(data.items);
-                setGrouped(data.grouped);
+            if (response.ok && data.success) {
+                const nextGroups = data.grouped || {};
+                setKeywords(data.items || []);
+                setGrouped(nextGroups);
+                setActiveCategory(current =>
+                    current === 'all' || Object.prototype.hasOwnProperty.call(nextGroups, current) ? current : 'all',
+                );
             } else {
-                setError(data.error);
+                setError(data.error || operationalCopy.updateError);
             }
         } catch (e: unknown) {
-            setError(errorMessage(e));
+            if (!controller.signal.aborted) setError(errorMessage(e));
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) setLoading(false);
         }
     });
 
     const loadNegativeKeywords = useLatestCallback(async () => {
-        if (demoMode) {
-            setNegativeKeywords([]);
-            return;
-        }
-        if (!businessId) {
-            setNegativeKeywords([]);
-            return;
-        }
+        if (!mounted.current || demoMode || !businessId) return;
+
+        negativeKeywordsRequest.current?.abort();
+        const controller = new AbortController();
+        negativeKeywordsRequest.current = controller;
         setNegativeLoading(true);
         try {
             const token = browserBearerToken();
             const response = await fetch(
                 `${window.location.origin}/api/wordstat/negative-keywords?business_id=${encodeURIComponent(businessId)}`,
-                { headers: { 'Authorization': `Bearer ${token}` } },
+                { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal },
             );
+            if (controller.signal.aborted) return;
+            if (response.status === 401 || response.status === 403) setNegativeKeywords([]);
             const data = await response.json();
-            if (data.success) {
+            if (controller.signal.aborted) return;
+            if (response.ok && data.success) {
                 setNegativeKeywords(data.items || []);
             } else {
                 setError(data.error || operationalCopy.loadNegativeError);
             }
         } catch (e: unknown) {
-            setError(errorMessage(e));
+            if (!controller.signal.aborted) setError(errorMessage(e));
         } finally {
-            setNegativeLoading(false);
+            if (!controller.signal.aborted) setNegativeLoading(false);
         }
     });
 
@@ -292,6 +330,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
     };
 
     const updateData = async () => {
+        if (!businessId) return;
         setUpdating(true);
         setError(null);
         setSuccess(null);
@@ -306,11 +345,12 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 body: JSON.stringify({ business_id: businessId }),
             });
             const data = await response.json();
+            if (!mounted.current) return;
 
             if (data.success) {
                 setSuccess(data.message || (t.common.success || 'Update started.'));
-                // Reload after a delay to show new data if possible, or user can refresh manually
-                setTimeout(loadKeywords, 3000);
+                window.clearTimeout(refreshTimer.current);
+                refreshTimer.current = window.setTimeout(loadKeywords, 3000);
             } else {
                 const superadminDetails = typeof data.superadmin === 'string' && data.superadmin.trim()
                     ? `\n\nsuperadmin: ${data.superadmin.trim()}`
@@ -375,22 +415,26 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         setSearching(true);
         setHasSearchedSuggestions(true);
         setError(null);
+        suggestionsRequest.current?.abort();
+        const controller = new AbortController();
+        suggestionsRequest.current = controller;
         try {
             const token = browserBearerToken();
             const response = await fetch(
                 `${window.location.origin}/api/wordstat/search?business_id=${encodeURIComponent(businessId)}&q=${encodeURIComponent(q)}&limit=10`,
-                { headers: { 'Authorization': `Bearer ${token}` } },
+                { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal },
             );
             const data = await response.json();
+            if (controller.signal.aborted) return;
             if (!data.success) {
                 setError(data.error || operationalCopy.searchError);
                 return;
             }
             setSuggestions((data.items || []).filter((item: Keyword) => !rejectedSuggestions.has(item.keyword)));
         } catch (e: unknown) {
-            setError(errorMessage(e));
+            if (!controller.signal.aborted) setError(errorMessage(e));
         } finally {
-            setSearching(false);
+            if (!controller.signal.aborted) setSearching(false);
         }
     };
 
@@ -429,20 +473,19 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         setSuggestions(prev => prev.filter(s => s.keyword !== keyword));
     };
 
-    useEffect(() => {
-        loadKeywords();
-        loadNegativeKeywords();
-    }, [businessId, showBlocked, language, demoMode, loadKeywords, loadNegativeKeywords]);
+    const demoLanguage = demoMode ? language : null;
+    useEffect(() => { void loadKeywords(); }, [showBlocked, demoLanguage, loadKeywords]);
+    useEffect(() => { void loadNegativeKeywords(); }, [loadNegativeKeywords]);
 
     const categories = ['all', ...Object.keys(grouped)];
+    const normalizedTableQuery = tableQuery.trim().toLowerCase();
     const displayedKeywords = (activeCategory === 'all'
         ? keywords
         : (grouped[activeCategory] || [])
     ).filter((k) => {
-        const q = tableQuery.trim().toLowerCase();
-        if (q) {
+        if (normalizedTableQuery) {
             const keywordText = `${k.keyword_with_city || ''} ${k.keyword} ${k.category}`.toLowerCase();
-            if (!keywordText.includes(q)) return false;
+            if (!keywordText.includes(normalizedTableQuery)) return false;
         }
 
         if (viewsFilter === 'high') return k.views >= 10000;
@@ -459,13 +502,16 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
         updating: operationalCopy.loading,
         all: operationalCopy.allFrequency,
         loading: operationalCopy.loading,
-        empty: operationalCopy.negativeEmpty,
-        columns: { keyword: operationalCopy.findQueries, category: operationalCopy.categoryPlaceholder, views: operationalCopy.allFrequency, updated: operationalCopy.loading },
+        empty: t.common.noData,
+        columns: { keyword: operationalCopy.findQueries, category: operationalCopy.categoryPlaceholder, views: operationalCopy.allFrequency, updated: t.common.updated },
         categories: { grooming: operationalCopy.categoryScope, other: operationalCopy.globalScope, custom: operationalCopy.actions },
     };
 
     const getSeoText = (key: 'title' | 'subtitle' | 'update' | 'updating' | 'all' | 'loading' | 'empty') => language === 'en' ? seoCopy[key] || fallbackSeoCopy[key] : fallbackSeoCopy[key];
-    const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') => language === 'en' ? seoCopy.columns?.[key] || fallbackSeoCopy.columns[key] : fallbackSeoCopy.columns[key];
+    const getSeoColumnText = (key: 'keyword' | 'category' | 'views' | 'updated') =>
+        language === 'en' || language === 'ru' || language === 'hy' || language === 'kk'
+            ? seoCopy.columns[key]
+            : fallbackSeoCopy.columns[key];
     const negativeBulkLabels = negativeBulkCopy[language] || negativeBulkCopy.en;
     const formatCategory = (category: string) => {
         const normalized = String(category || 'other').trim().toLowerCase();
@@ -487,7 +533,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                 </div>
                 <Button
                     onClick={updateData}
-                    disabled={updating}
+                    disabled={updating || !businessId}
                 >
                     <RefreshCw className={cn("w-4 h-4 mr-2", updating && "animate-spin")} />
                     {updating ? getSeoText('updating') : getSeoText('update')}
@@ -703,7 +749,7 @@ export default function SEOKeywordsTab({ businessId }: SEOKeywordsTabProps) {
                                         <div className="p-3 bg-gray-50 rounded-full">
                                             <Search className="w-8 h-8 text-gray-300" />
                                         </div>
-                                        <p>{getSeoText('empty')}</p>
+                                        <p>{!demoMode && !businessId ? operationalCopy.chooseBusiness : getSeoText('empty')}</p>
                                     </div>
                                 </td>
                             </tr>
