@@ -38,6 +38,8 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
         { title: l('Сравнивает варианты', 'Compares options'), text: l('Проверим фотографии, цены и отзывы: по ним клиент выбирает компанию.', 'We work on presentation, photos, reviews and your business offer.') },
         { title: l('Выбирает и обращается', 'Chooses and gets in touch'), text: l('Проверим контакты, часы работы и способы записи.', 'We check that services, terms and ways to contact you are clear.') },
       ], questions: [
+        { question: l('Что потребуется от владельца?', 'What will the owner need to do?'), answer: l('В начале нужны сведения о компании и доступ к карточке. Дальше от вас потребуется проверять и подтверждать материалы и изменения, которые команда подготовит. Сколько времени это займёт, зависит от объёма работ.', 'We start with business details and access to the listing. You then review and approve the materials and changes the team prepares. The time required depends on the scope.') },
+        { question: l('Что входит в работу с карточкой?', 'What does the listing work include?'), answer: l('Проверяем оформление карточки, контакты, фото и услуги. Готовим SEO-описания услуг, публикации и ответы на отзывы. Состав работ для вашей карточки уточним с менеджером до начала.', 'We review the listing, contact details, photos and services. We prepare search-friendly service descriptions, posts and review replies. The manager confirms the scope for your listing before work starts.') },
         { question: l('Подойдёт, если карточка уже есть?', 'Does this work with an existing listing?'), answer: l('Да. Проверим вашу карточку и предложим, что исправить. Если карточки ещё нет, обсудим создание и подтверждение.', 'Yes. We start with your current listing, services, reviews and access. If you do not have a listing, we discuss creation and verification.') },
         { question: l('Что означает SEO для Карт?', 'What does SEO for maps mean?'), answer: l('Понятные категории и описания услуг, актуальные сведения и полезное содержание карточки. Позиции зависят и от других факторов, поэтому конкретное место в выдаче и число клиентов не гарантируем.', 'Clear categories and service descriptions, current business details and useful listing content. Rankings also depend on other factors, so we do not guarantee a position or number of customers.') },
       ],
@@ -70,6 +72,8 @@ export const promotionContent = (english = false): Record<PromotionKey, Promotio
         { title: l('Выгода обеим сторонам', 'Value for both sides'), text: l('Предлагаем, что каждый партнёр даст клиентам: скидку, бонус или рекомендацию.', 'We define what each participant contributes and what the customer receives.') },
         { title: l('Совместная акция', 'A joint offer'), text: l('Пишем партнёру, что предлагаем и на каких условиях. Запуск и расходы согласуем с обеими сторонами.', 'We prepare the promotion mechanics and partner proposal. Terms, costs and launch require agreement.') },
       ], questions: [
+        { question: l('Что даёт и получает каждый партнёр?', 'What does each partner contribute and receive?'), answer: l('Каждый знакомит своих клиентов с предложением соседа и получает рекомендацию в ответ. Например, кофейня рассказывает гостям о бонусе на занятие, а студия предлагает своим клиентам зайти на кофе после тренировки.', 'Each business tells its customers about the other’s offer and receives a recommendation in return. A café might tell guests about a class offer, while the studio invites its clients to stop by for coffee after training.') },
+        { question: l('Как устроена совместная акция?', 'How does a joint offer work?'), answer: l('Договариваемся, что получат клиенты, где о предложении узнают и как им воспользоваться. Например, гость кофейни называет кодовое слово при записи в студию. Запускаем предложение после подтверждения обеими сторонами.', 'We agree what customers get, where they will hear about the offer and how to redeem it. A café guest might mention a code word when booking a class. The offer goes live after both sides confirm.') },
         { question: l('Как учитывать отклики на совместную акцию?', 'How can we track responses to a joint offer?'), answer: l('Выберите с партнёром способ учёта до запуска: отдельную ссылку, кодовое слово или вопрос при записи. Считайте обращения и записи по акции отдельно.', 'Before launch, agree how to track responses with your partner: a dedicated link, a code word or a question at booking. Count enquiries and bookings from the offer separately.') },
         { question: l('Партнёрами могут быть только соседи?', 'Do partners have to be next door?'), answer: l('Нет. Главное, чтобы клиентам были нужны услуги обеих компаний. Обсудим подходящие категории и расстояние от вашей точки.', 'Proximity matters, but is not enough. We consider your task, complementary services and customer convenience. We agree a suitable search radius.') },
         { question: l('Что, если бизнес откажется?', 'What if a business declines?'), answer: l('Предложим другого партнёра или пересмотрим условия. Сотрудничество начнётся, когда обе стороны договорятся.', 'Partner acceptance is not guaranteed. We record the response and discuss another candidate or an adjusted proposal. A declined proposal is not a launched partnership.') },
@@ -91,6 +95,16 @@ export const promotionExamples = (english = false) => english ? [
   { title: 'SEO-описание услуги', text: 'Массаж спины в студии. При записи администратор подскажет продолжительность сеанса, стоимость и свободное время.' },
   { title: 'Публикация о бизнесе', text: 'Хотите записаться на массаж спины на этой неделе? Напишите нам через карточку, подберём удобное время.' },
   { title: 'Ответ на отзыв', text: 'Спасибо за отзыв! Рады, что вам понравилось. До следующей встречи.' },
+];
+
+export const promotionCreatorExamples = (english = false) => english ? [
+  { title: 'Neighbourhood guide', text: 'Covers places within walking distance. A review could show readers what the service is like and how to get there.' },
+  { title: 'Creator covering an active lifestyle', text: 'Writes about training and recovery. An introductory visit could explain who the service might suit after a workout.' },
+  { title: 'Neighbourhood community', text: 'Shares news and offers for residents. A subscriber offer could give nearby readers a reason to book a first visit.' },
+] : [
+  { title: 'Автор путеводителя по району', text: 'Рассказывает о местах в пешей доступности. В обзоре можно показать, как проходит визит и как добраться.' },
+  { title: 'Блогер о тренировках', text: 'Пишет о занятиях и восстановлении. В первом визите можно показать, кому подойдёт услуга после тренировки.' },
+  { title: 'Автор районного сообщества', text: 'Делится новостями и предложениями для жителей. Для подписчиков можно подготовить предложение на первый визит.' },
 ];
 
 // Preserve only marketing context and locale in links, never arbitrary URL fields.
@@ -141,9 +155,13 @@ const commonWorkSteps = (english: boolean) => english ? [
 
 export const promotionWorkSteps = (english = false, direction: PromotionKey = 'home') => {
   const steps = commonWorkSteps(english);
-  if (direction === 'home') return steps;
-
   const l = (ru: string, en: string) => english ? en : ru;
+  const launch = {
+    title: l('Запустим после согласования', 'Launch after approval'),
+    text: l('Вы подтверждаете материалы и условия. Затем публикуем изменения, отправляем предложение или запускаем согласованную акцию.', 'You approve the materials and terms. We then publish updates, send the proposal or launch the agreed offer.'),
+  };
+
+  if (direction === 'home') return [steps[0], steps[1], launch, steps[2]];
   const startingWork = {
     maps: {
       title: l('Подключим карточку', 'Connect your listing'),
@@ -158,7 +176,7 @@ export const promotionWorkSteps = (english = false, direction: PromotionKey = 'h
       text: l('Определим, какие компании подходят, и подготовим предложение о сотрудничестве.', 'We identify suitable businesses and prepare a collaboration proposal.'),
     },
   };
-  return [steps[0], startingWork[direction], steps[2]];
+  return [steps[0], startingWork[direction], launch, steps[2]];
 };
 
 export const promotionFaqGroups = (english = false) => {

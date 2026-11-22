@@ -1,6 +1,6 @@
 import petersburgMap from '@/assets/promotion/petersburg-map-clean-v2.webp';
-import { Building2, Star, Users } from 'lucide-react';
-import { promotionExamples, type PromotionKey } from '@/content/promotionContent';
+import { Building2, Star } from 'lucide-react';
+import { promotionCreatorExamples, promotionExamples, type PromotionKey } from '@/content/promotionContent';
 
 export function PromotionIllustration({ english = false }: { direction: PromotionKey; english?: boolean }) {
   const l = (ru: string, en: string) => english ? en : ru;
@@ -38,11 +38,28 @@ export function PromotionExample({ direction, english }: { direction: PromotionK
       </ul>
     </div>;
   }
+  if (direction === 'bloggers') {
+    return <div className="promotion-example space-y-6">
+      <ul className="grid gap-5 md:grid-cols-3">
+        {promotionCreatorExamples(english).map((example) => (
+          <li key={example.title} className="min-w-0 border-s-2 border-warning ps-4">
+            <h3 className="text-base font-semibold text-primary">{example.title}</h3>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">{example.text}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm leading-7 text-muted-foreground">{l('Перед размещением проверим географию аудитории выбранных авторов.', 'Before placement, we check where the shortlisted creators’ audiences are based.')}</p>
+      <blockquote className="border-t border-border pt-4 text-base leading-7">
+        {l('«Здравствуйте! В вашем путеводителе много мест рядом с нашей студией. Приглашаем вас на массаж спины: можно показать читателям, как проходит визит и как нас найти. Пришлите, пожалуйста, условия размещения и статистику аудитории по городам».', '“Hello! Your guide covers plenty of places near our studio. We’d like to invite you for a back massage so you can show readers what a visit is like and how to find us. Could you share your placement terms and audience statistics by city?”')}
+      </blockquote>
+    </div>;
+  }
+
   return <div className="promotion-example">
 
     <div className="grid gap-6 md:grid-cols-2 md:gap-10">
-      <div><span className="mb-4 flex size-11 items-center justify-center rounded-xl bg-secondary">{direction === 'bloggers' ? <Users size={22} /> : <Building2 size={22} />}</span><h3 className="text-2xl font-semibold tracking-tight">{direction === 'bloggers' ? l('Автор о жизни района', 'A neighbourhood creator') : l('Кофейня + студия рядом', 'A café + nearby studio')}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{direction === 'bloggers' ? l('В публикациях — места и события района. Тематика подходит бизнесу; географию аудитории ещё нужно подтвердить статистикой автора.', 'Posts cover local places and events. The topic fits the business; audience geography still needs verification from creator statistics.') : l('Клиенты студии могут зайти за кофе после занятия. Гости кофейни могут заинтересоваться тренировкой поблизости.', 'Studio clients may enjoy a coffee after class. Café customers may be interested in a nearby workout.')}</p></div>
-      <div className="border-s-2 border-warning ps-6"><p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{direction === 'bloggers' ? l('«Здравствуйте! Хотим предложить вам обзор нашей услуги для жителей района. Пришлите, пожалуйста, условия размещения и статистику аудитории по городам».', '“We would like to introduce our service and discuss a review for local residents. Let’s first agree the format, terms and enquiry tracking.”') : l('«Здравствуйте! Наша студия работает рядом с вашей кофейней. Предлагаем обсудить бонус на занятия для ваших гостей и предложение на кофе для наших клиентов. Вам это интересно?»', '“Let’s discuss mutual recommendations: an offer for café guests and a benefit for studio clients. We’ll agree each side’s contribution and terms.”')}</p></div>
+      <div><span className="mb-4 flex size-11 items-center justify-center rounded-xl bg-secondary"><Building2 size={22} /></span><h3 className="text-2xl font-semibold tracking-tight">{l('Кофейня + студия рядом', 'A café + nearby studio')}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{l('Клиенты студии могут зайти за кофе после занятия. Гости кофейни могут заинтересоваться тренировкой поблизости.', 'Studio clients may enjoy a coffee after class. Café customers may be interested in a nearby workout.')}</p></div>
+      <div className="border-s-2 border-warning ps-6"><p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">{l('«Здравствуйте! Наша студия работает рядом с вашей кофейней. Предлагаем обсудить бонус на занятия для ваших гостей и предложение на кофе для наших клиентов. Вам это интересно?»', '“Let’s discuss mutual recommendations: an offer for café guests and a benefit for studio clients. We’ll agree each side’s contribution and terms.”')}</p></div>
     </div>
 
   </div>;

@@ -87,14 +87,14 @@ export default function PromotionLanding({ direction = 'home' }: { direction?: P
       </section>
 
       {!home && <section id="examples" className="promotion-section scroll-mt-24 sm:scroll-mt-36 xl:scroll-mt-24" aria-labelledby="example-title">
-        <div className="promotion-section-heading"><p className="promotion-eyebrow">{l('Примеры', 'Examples')}</p><h2 id="example-title">{maps ? l('Что подготовим для карточки', 'What we prepare for your listing') : direction === 'bloggers' ? l('Пример предложения блогеру', 'A sample creator proposal') : l('Пример совместной акции', 'A sample joint promotion')}</h2><p>{l('Тексты и условия подготовим с учётом ваших услуг и цен.', 'We prepare the text and terms using your services and prices.')}</p></div>
+        <div className="promotion-section-heading"><p className="promotion-eyebrow">{l('Примеры', 'Examples')}</p><h2 id="example-title">{maps ? l('Что подготовим для карточки', 'What we prepare for your listing') : direction === 'bloggers' ? l('Пример подбора блогеров', 'A sample creator shortlist') : l('Пример совместной акции', 'A sample joint promotion')}</h2><p>{l('Тексты и условия подготовим с учётом ваших услуг и цен.', 'We prepare the text and terms using your services and prices.')}</p></div>
         <PromotionExample direction={direction} english={english} />
       </section>}
 
       <section id="how-it-works" className="promotion-section scroll-mt-24 sm:scroll-mt-36 xl:scroll-mt-24" aria-labelledby="process-title">
         {home && <span id="agents" className="block scroll-mt-36" aria-hidden="true" />}
         <div className="promotion-section-heading"><p className="promotion-eyebrow">{l('Начало работы', 'Getting started')}</p><h2 id="process-title">{l('Как начнём работу', 'How we get started')}</h2>{home && <p>{l('Вы рассказываете о бизнесе и предоставляете доступы. Мы занимаемся продвижением и показываем результат.', 'You share business details and provide access. We handle marketing and report on the work.')}</p>}</div>
-        <ol className="promotion-process grid gap-5 md:grid-cols-3">{promotionWorkSteps(english, direction).map((step, index) => <li key={step.title} className="border-t border-border pt-5"><span className="text-xs font-medium text-muted-foreground">0{index + 1}</span><h3 className="mt-4 text-lg font-semibold text-primary">{step.title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{step.text}</p></li>)}</ol>
+        <ol className="promotion-process grid gap-5 md:grid-cols-2 lg:grid-cols-4">{promotionWorkSteps(english, direction).map((step, index) => <li key={step.title} className="border-t border-border pt-5"><span className="text-xs font-medium text-muted-foreground">0{index + 1}</span><h3 className="mt-4 text-lg font-semibold text-primary">{step.title}</h3><p className="mt-3 text-sm leading-7 text-muted-foreground">{step.text}</p></li>)}</ol>
       </section>
 
       {(home || maps) && <section className="promotion-section promotion-cases-section" aria-labelledby="case-title">
