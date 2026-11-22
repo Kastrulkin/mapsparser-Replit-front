@@ -6,7 +6,7 @@ import os
 import threading
 from contextvars import copy_context
 
-from services.llm.adapters import DeepSeekAdapter, GigaChatAdapter, _record_llm_usage
+from services.llm.adapters import CloudRuAdapter, DeepSeekAdapter, GigaChatAdapter, _record_llm_usage
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
 from services.llm.policy import most_restrictive_data_class, prepare_prompt_for_provider
 from services.llm.registry import get_task_definition, model_for_definition
@@ -52,6 +52,15 @@ def _deepseek_business_allowed(business_id: str) -> bool:
     return bool(business_id and business_id in allowed)
 
 
+def _cloud_ru_business_allowed(business_id: str) -> bool:
+    allowed = {
+        item.strip()
+        for item in str(os.getenv("LLM_CLOUD_RU_BUSINESS_IDS") or "").split(",")
+        if item.strip()
+    }
+    return bool(business_id and business_id in allowed)
+
+
 def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest) -> str:
     if (
         request.task_key in {"operator_intent_classify", "operator_tool_plan"}
@@ -59,6 +68,13 @@ def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest
         and _env_enabled("OPERATOR_DEEPSEEK_ROUTER_ENABLED")
     ):
         return "deepseek"
+    if (
+        definition.primary_provider == "gigachat"
+        and _env_enabled("CLOUD_RU_CHAT_ROUTER_ENABLED")
+        and bool(str(os.getenv("CLOUD_RU_API_KEY") or "").strip())
+        and _cloud_ru_business_allowed(request.business_id)
+    ):
+        return "cloudru"
     if not _env_enabled("LLM_ROUTER_ENABLED"):
         return "gigachat"
     if definition.primary_provider != "deepseek":
@@ -72,11 +88,13 @@ def _provider_for_request(definition: LLMTaskDefinition, request: LLMTaskRequest
     return "deepseek"
 
 
-def _adapter(provider: str) -> GigaChatAdapter | DeepSeekAdapter | None:
+def _adapter(provider: str) -> GigaChatAdapter | DeepSeekAdapter | CloudRuAdapter | None:
     if provider == "gigachat":
         return GigaChatAdapter()
     if provider == "deepseek":
         return DeepSeekAdapter()
+    if provider == "cloudru":
+        return CloudRuAdapter()
     return None
 
 
@@ -433,6 +451,14 @@ def _run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
         shadow=request.shadow,
     )
     first_result = result
+    if result.fallback_reason in {
+        'gigachat_budget_exceeded', 'deepseek_budget_exceeded', 'cloudru_budget_exceeded'
+    }:
+        # A spend refusal is terminal across providers and shadow processing.
+        result.primary_provider = provider
+        result.output_source = result.provider
+        _record_result(request, definition, result)
+        return result
     correction_attempted = False
     if result.status in {"invalid_json", "schema_invalid"} or (request.task_key == "operator_tool_plan" and result.status in {"empty_response", "truncated_response", "provider_error", "provider_unavailable", "provider_timeout"}):
         correction_attempted = True

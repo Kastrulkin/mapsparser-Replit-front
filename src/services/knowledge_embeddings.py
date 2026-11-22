@@ -34,6 +34,12 @@ def _enabled() -> bool:
     }
 
 
+def _gigachat_processing_enabled() -> bool:
+    return str(
+        os.getenv("KNOWLEDGE_GIGACHAT_EMBEDDINGS_ENABLED") or "true"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _model() -> str:
     return str(os.getenv("KNOWLEDGE_EMBEDDINGS_MODEL") or "EmbeddingsGigaR").strip()
 
@@ -317,7 +323,10 @@ def enqueue_document_chunks(
                 ),
             )
             linked += 1
-            if str(stored.get("status") or "") != "ready":
+            if (
+                str(stored.get("status") or "") != "ready"
+                and _gigachat_processing_enabled()
+            ):
                 cursor.execute(
                     """
                     INSERT INTO knowledge_embedding_jobs (id, chunk_id, status)
@@ -384,6 +393,8 @@ def _claim_jobs(conn, batch_size: int) -> list[dict[str, Any]]:
 def process_embedding_jobs(conn, *, batch_size: int | None = None) -> dict[str, Any]:
     if not _enabled():
         return {"status": "disabled", "processed": 0}
+    if not _gigachat_processing_enabled():
+        return {"status": "disabled", "processed": 0, "provider": "gigachat"}
     safe_batch = max(1, min(int(batch_size or os.getenv("KNOWLEDGE_EMBEDDINGS_BATCH_SIZE") or 16), 256))
     client = GigaChatEmbeddingClient()
     balance = client.embedding_balance()

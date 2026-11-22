@@ -96,6 +96,10 @@ from services.knowledge_embeddings import (
     process_embedding_jobs,
     run_embedding_maintenance,
 )
+from services.knowledge_cloud_ru_embeddings import (
+    enqueue_cloud_ru_vectors,
+    process_cloud_ru_vectors,
+)
 from services.contact_intelligence_service import (
     claim_next_enrichment_job,
     fail_enrichment_job,
@@ -3001,10 +3005,20 @@ def _run_knowledge_embeddings_if_due() -> None:
             limit=max(1, int(os.getenv("KNOWLEDGE_EMBEDDINGS_ENQUEUE_BATCH_SIZE", "1000"))),
         )
         process_result = process_embedding_jobs(db.conn)
+        cloud_ru_enqueue_result = {}
+        cloud_ru_process_result = {"status": "disabled", "processed": 0}
+        if _env_bool("CLOUD_RU_EMBEDDINGS_ENABLED", False):
+            cloud_ru_enqueue_result = enqueue_cloud_ru_vectors(
+                db.conn,
+                limit=max(1, int(os.getenv("KNOWLEDGE_EMBEDDINGS_ENQUEUE_BATCH_SIZE", "1000"))),
+            )
+            cloud_ru_process_result = process_cloud_ru_vectors(db.conn)
         db.conn.commit()
         if (
             ingest_result or maintenance_result or int(enqueue_result.get("queued") or 0) > 0
             or process_result.get("status") != "idle"
+            or int(cloud_ru_enqueue_result.get("queued") or 0) > 0
+            or cloud_ru_process_result.get("status") not in {"disabled", "idle"}
         ):
             print(
                 "[KNOWLEDGE_EMBEDDINGS] "
@@ -3013,7 +3027,10 @@ def _run_knowledge_embeddings_if_due() -> None:
                 f"queued={int(enqueue_result.get('queued') or 0)} "
                 f"status={process_result.get('status')} "
                 f"processed={int(process_result.get('processed') or 0)} "
-                f"balance={process_result.get('balance')}",
+                f"balance={process_result.get('balance')} "
+                f"cloudru_queued={int(cloud_ru_enqueue_result.get('queued') or 0)} "
+                f"cloudru_status={cloud_ru_process_result.get('status')} "
+                f"cloudru_processed={int(cloud_ru_process_result.get('processed') or 0)}",
                 flush=True,
             )
     except Exception:

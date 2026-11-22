@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 import requests
+from services.ai_spend_budget import BudgetDenied
 from services.pii_protection.gateway import PIIProtectionError, assert_protected_transport
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
 from services.llm.registry import model_for_definition
@@ -256,3 +257,132 @@ class DeepSeekAdapter:
             shadow=shadow,
         )
         return result
+
+
+class CloudRuAdapter:
+    """Opt-in Cloud.ru route; defaults to an internal ai-sage model only."""
+
+    provider = "cloudru"
+
+    def generate(
+        self,
+        request: LLMTaskRequest,
+        definition: LLMTaskDefinition,
+        *,
+        prompt: str,
+        shadow: bool = False,
+        model_override: str = "",
+    ) -> LLMTaskResult:
+        from services.cloud_ru_foundation import (
+            CloudRuConfigurationError,
+            CloudRuFoundationClient,
+        )
+
+        started = time.monotonic()
+        try:
+            client = CloudRuFoundationClient()
+        except CloudRuConfigurationError as error:
+            return LLMTaskResult(
+                status="provider_unavailable",
+                provider=self.provider,
+                model=str(model_override or os.getenv("CLOUD_RU_CHAT_MODEL") or ""),
+                fallback_reason=str(error),
+                shadow=shadow,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        model = str(model_override or client.config.chat_model).strip()
+        expects_json = bool(
+            definition.response_kind == "json"
+            or request.response_schema
+            or definition.response_schema
+        )
+        effective_prompt = prompt
+        if expects_json and "json" not in prompt.lower():
+            effective_prompt = prompt + "\n\nReturn only a valid JSON object without markdown."
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": effective_prompt}],
+            "temperature": definition.temperature,
+            "max_tokens": definition.max_tokens,
+        }
+        if expects_json:
+            body["response_format"] = {"type": "json_object"}
+        try:
+            payload = client.chat_completion(
+                body,
+                timeout=definition.timeout_seconds,
+                context={
+                    "task_key": request.task_key,
+                    "business_id": request.business_id,
+                    "user_id": request.user_id,
+                },
+            )
+            choices = payload.get("choices") if isinstance(payload.get("choices"), list) else []
+            choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+            message = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+            content = str(message.get("content") or "")
+            finish = str(choice.get("finish_reason") or "")
+            return LLMTaskResult(
+                status=(
+                    "provider_refusal"
+                    if finish == "content_filter" or message.get("refusal")
+                    else "truncated_response"
+                    if finish == "length"
+                    else "completed"
+                    if content
+                    else "empty_response"
+                ),
+                finish_reason=finish,
+                content=content,
+                provider=self.provider,
+                model=str(payload.get("model") or model),
+                usage=_usage_dict(payload.get("usage")),
+                latency_ms=int((time.monotonic() - started) * 1000),
+                fallback_reason=(
+                    "CLOUD_RU_OUTPUT_LIMIT"
+                    if finish == "length"
+                    else ""
+                    if content
+                    else "CLOUD_RU_EMPTY_RESPONSE"
+                ),
+                shadow=shadow,
+                provider_request_id=str(payload.get("id") or ""),
+            )
+        except BudgetDenied:
+            return LLMTaskResult(
+                status="budget_exceeded",
+                provider=self.provider,
+                model=model,
+                fallback_reason="cloudru_budget_exceeded",
+                shadow=shadow,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        except PIIProtectionError:
+            raise
+        except CloudRuConfigurationError as error:
+            return LLMTaskResult(
+                status="provider_unavailable",
+                provider=self.provider,
+                model=model,
+                fallback_reason=str(error),
+                shadow=shadow,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        except requests.Timeout:
+            return LLMTaskResult(
+                status="provider_timeout",
+                provider=self.provider,
+                model=model,
+                fallback_reason="CLOUD_RU_REQUEST_TIMEOUT",
+                shadow=shadow,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        except Exception:
+            return LLMTaskResult(
+                status="provider_error",
+                provider=self.provider,
+                model=model,
+                fallback_reason="CLOUD_RU_REQUEST_FAILED",
+                shadow=shadow,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )

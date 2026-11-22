@@ -17,6 +17,20 @@ DEEPSEEK_LIMITS = {'daily_tokens': 1000000, 'monthly_tokens': 3000000,
                    'operation_tokens': 400000, 'operation_calls': 8,
                    'request_tokens': 150000}
 
+CLOUD_RU_LIMITS = {'daily_tokens': 100000, 'monthly_tokens': 300000,
+                   'daily_calls': 20, 'monthly_calls': 100,
+                   'operation_tokens': 80000, 'operation_calls': 4,
+                   'request_tokens': 60000}
+CLOUD_RU_EMBEDDING_LIMITS = {
+    'daily_tokens': 2000000,
+    'monthly_tokens': 10000000,
+    'daily_calls': 10000,
+    'monthly_calls': 50000,
+    'operation_tokens': 2000000,
+    'operation_calls': 10000,
+    'request_tokens': 1000000,
+}
+
 
 class BudgetDenied(RuntimeError):
     code = 'gigachat_budget_exceeded'
@@ -44,9 +58,14 @@ def spend_operation(function):
 def limits(provider='gigachat'):
     # One shared code policy for app, worker, operator and Telegram processes.
     # Raising a limit requires an explicit reviewed change; provider-profile switches cannot change it.
-    if provider not in {'gigachat', 'deepseek', 'gigachat_embeddings'}:
+    if provider not in {'gigachat', 'deepseek', 'gigachat_embeddings', 'cloudru', 'cloudru_embeddings'}:
         raise BudgetDenied('Неизвестный бюджет провайдера. Генерация остановлена.')
-    return dict(DEEPSEEK_LIMITS if provider == 'deepseek' else DEFAULT_LIMITS)
+    provider_limits = {
+        'deepseek': DEEPSEEK_LIMITS,
+        'cloudru': CLOUD_RU_LIMITS,
+        'cloudru_embeddings': CLOUD_RU_EMBEDDING_LIMITS,
+    }
+    return dict(provider_limits.get(provider, DEFAULT_LIMITS))
 
 
 def windows(now=None):
