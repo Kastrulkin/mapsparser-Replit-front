@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "purpose": "Synthetic server-verified map record spans; never private entity expectations",
+  "cases": {
+    "synthetic-170": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-170",
+        "kind": "ORGANIZATION",
+        "start": 26,
+        "end": 44,
+        "value": "Example Studio 170"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-170",
+        "kind": "ADDRESS",
+        "start": 64,
+        "end": 93,
+        "value": "Example Commercial Avenue 170"
+      }
+    ],
+    "synthetic-171": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-171",
+        "kind": "ORGANIZATION",
+        "start": 26,
+        "end": 44,
+        "value": "Example Studio 171"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-171",
+        "kind": "ADDRESS",
+        "start": 64,
+        "end": 93,
+        "value": "Example Commercial Avenue 171"
+      }
+    ],
+    "synthetic-172": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-172",
+        "kind": "ORGANIZATION",
+        "start": 26,
+        "end": 44,
+        "value": "Example Studio 172"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-172",
+        "kind": "ADDRESS",
+        "start": 64,
+        "end": 93,
+        "value": "Example Commercial Avenue 172"
+      }
+    ],
+    "synthetic-173": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-173",
+        "kind": "ORGANIZATION",
+        "start": 27,
+        "end": 45,
+        "value": "Example Studio 173"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-173",
+        "kind": "ADDRESS",
+        "start": 65,
+        "end": 94,
+        "value": "Example Commercial Avenue 173"
+      }
+    ],
+    "synthetic-174": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-174",
+        "kind": "ORGANIZATION",
+        "start": 27,
+        "end": 45,
+        "value": "Example Studio 174"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-174",
+        "kind": "ADDRESS",
+        "start": 65,
+        "end": 94,
+        "value": "Example Commercial Avenue 174"
+      }
+    ],
+    "synthetic-175": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-175",
+        "kind": "ORGANIZATION",
+        "start": 25,
+        "end": 43,
+        "value": "Example Studio 175"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-175",
+        "kind": "ADDRESS",
+        "start": 63,
+        "end": 92,
+        "value": "Example Commercial Avenue 175"
+      }
+    ],
+    "synthetic-176": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-176",
+        "kind": "ORGANIZATION",
+        "start": 25,
+        "end": 43,
+        "value": "Example Studio 176"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-176",
+        "kind": "ADDRESS",
+        "start": 63,
+        "end": 92,
+        "value": "Example Commercial Avenue 176"
+      }
+    ],
+    "synthetic-177": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-177",
+        "kind": "ORGANIZATION",
+        "start": 32,
+        "end": 50,
+        "value": "Example Studio 177"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-177",
+        "kind": "ADDRESS",
+        "start": 70,
+        "end": 99,
+        "value": "Example Commercial Avenue 177"
+      }
+    ],
+    "synthetic-178": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-178",
+        "kind": "ORGANIZATION",
+        "start": 21,
+        "end": 39,
+        "value": "Example Studio 178"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-178",
+        "kind": "ADDRESS",
+        "start": 59,
+        "end": 88,
+        "value": "Example Commercial Avenue 178"
+      }
+    ],
+    "synthetic-179": [
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-179",
+        "kind": "ORGANIZATION",
+        "start": 44,
+        "end": 62,
+        "value": "Example Studio 179"
+      },
+      {
+        "business_id": "synthetic-business",
+        "source_id": "synthetic-map-synthetic-179",
+        "kind": "ADDRESS",
+        "start": 82,
+        "end": 111,
+        "value": "Example Commercial Avenue 179"
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+# VPS profile: append to COMPOSE_FILE after the existing production profiles.
+# Keep the default network as well as the private PII network for every client.
+x-pii-client: &pii-client
+  volumes:
+    - type: bind
+      source: /etc/localos/pii/client.json
+      target: /run/secrets/localos-pii-client.json
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: /etc/localos/pii/activation.json
+      target: /run/secrets/localos-pii-activation.json
+      read_only: true
+      bind:
+        create_host_path: false
+  environment:
+    PII_PROTECTION_ENABLED: "true"
+    PII_PROTECTION_SCOPE: operator_text
+    PII_ACTIVATION_REQUIRED: "true"
+    PII_ACTIVATION_CONFIG_FILE: /run/secrets/localos-pii-activation.json
+    PII_RUNTIME_TRANSPORT: shared
+    PII_RUNTIME_CONFIG_FILE: /run/secrets/localos-pii-client.json
+  networks:
+    default: {}
+    localos-pii-private: {}
+services:
+  app:
+    <<: *pii-client
+  worker:
+    <<: *pii-client
+  operator-worker:
+    <<: *pii-client
+  outreach-worker:
+    <<: *pii-client
+  telegram-bot:
+    <<: *pii-client
+networks:
+  localos-pii-private:
+    external: true
+    name: localos-pii-private

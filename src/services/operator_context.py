@@ -16,11 +16,12 @@ DOMAINS = {
 
 
 class PlannerContext:
-    def __init__(self, message):
+    def __init__(self, message, contact_references=True):
         intent = re.sub(r'(?:сотрудник\w*|коллег\w*)\s+ничего\s+не\s+отправляй', '', message, flags=re.I)
         self.domains = {name for name, pattern in DOMAINS.items() if re.search(pattern, intent, re.I)}
         self.references = {}
         self.reverse = {}
+        self.contact_references = contact_references
 
     def tools(self, tools):
         # Keep every tool and its complete input contract. Output schemas and
@@ -39,7 +40,7 @@ class PlannerContext:
                 ref = '@ref' + str(len(self.references) + 1)
                 self.references[ref] = value; self.reverse[value] = ref
             return self.reverse[value]
-        if isinstance(value, str):
+        if isinstance(value, str) and self.contact_references:
             def contact_reference(match):
                 contact = match.group(0)
                 if contact not in self.reverse:

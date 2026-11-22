@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 import requests
+from services.pii_protection.gateway import PIIProtectionError, assert_protected_transport
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
 from services.llm.registry import model_for_definition
 
@@ -128,6 +129,8 @@ class GigaChatAdapter:
                 shadow=shadow,
             )
             return result
+        except PIIProtectionError:
+            raise
         except GigaChatProviderError as error:
             return LLMTaskResult(
                 status="provider_terminal_error",
@@ -206,6 +209,7 @@ class DeepSeekAdapter:
         attempts = 1 if request.task_key in {"operator_tool_plan", "content_plan_direction"} else 2
         for attempt in range(attempts):
             try:
+                assert_protected_transport(body)
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
                     headers=headers,
@@ -235,6 +239,8 @@ class DeepSeekAdapter:
                     provider_request_id=str(payload.get("id") or ""),
                 )
                 return result
+            except PIIProtectionError:
+                raise
             except Exception:
                 last_error = str(sys.exc_info()[1])[:240]
                 failure = sys.exception()

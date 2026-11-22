@@ -102,13 +102,18 @@ def _planner_prompt(state: dict[str, Any]) -> str:
 
 
 def plan_operator_step(state: dict[str, Any]) -> dict[str, Any]:
+    from services.pii_protection.operator_context import public_planner_prompt
+    prompt, public_context = public_planner_prompt(_planner_prompt(state), state.get('business_id'), state.get('user_id'))
     result = run_llm_task(
         LLMTaskRequest(
             task_key="operator_tool_plan",
-            prompt=_planner_prompt(state),
+            prompt=prompt,
+            pii_policy="content" if public_context else "private",
+            pii_public_context=public_context,
             business_id=str(state.get("business_id") or ""),
             user_id=str(state.get("user_id") or ""),
             pipeline_id=str(state.get("conversation_id") or ""),
+            pii_session_id=str(state.get("conversation_id") or ""),
             pipeline_stage="operator_tool_plan",
             response_schema={"type":"object","required":["action","remaining_actions"],"properties":{"action":{"type":"string","enum":["tool_call","final","clarification"]},"tool":{"type":"string"},"arguments":{"type":"object"},"message":{"type":"string"},"remaining_actions":{"type":"array","items":{"type":"string","enum":[tool['name'] for tool in state.get('tools',[]) if tool.get('name')]}}}},
         )
@@ -116,10 +121,20 @@ def plan_operator_step(state: dict[str, Any]) -> dict[str, Any]:
     if result.status != "completed" or not isinstance(result.parsed_data, dict):
         return {
             "action": "error",
-            "message": "Достигнут лимит AI. Подготовка остановлена; проверьте расход перед повторным запуском." if result.fallback_reason in {"gigachat_budget_exceeded", "deepseek_budget_exceeded"} else "Оператор не смог построить безопасный план действий.",
+            "message": ("Распознавание занято. Повторите запрос немного позже." if result.fallback_reason in {"PII_RUNTIME_BUSY", "PII_RUNTIME_RATE_LIMITED"} else "Достигнут лимит AI. Подготовка остановлена; проверьте расход перед повторным запуском." if result.fallback_reason in {"gigachat_budget_exceeded", "deepseek_budget_exceeded"} else "Оператор не смог построить безопасный план действий."),
             "error_code": result.fallback_reason or result.status,
         }
-    return dict(result.parsed_data)
+    decision = dict(result.parsed_data)
+    if result.pii_context is not None:
+        decision["_pii_exchange"] = result.pii_context
+        if decision.get("action") in {"final", "clarification"}:
+            from services.pii_protection.gateway import PIIProtectionError
+            try:
+                decision["message"] = result.pii_context.restore_text(str(decision.get("message") or ""))
+            except PIIProtectionError:
+                return {"action": "error", "error_code": "pii_restore_denied",
+                        "message": "Не удалось безопасно восстановить данные ответа."}
+    return decision
 
 
 def _tool_signature(tool_name: str, arguments: dict[str, Any]) -> str:
@@ -279,7 +294,8 @@ def run_operator_tool_loop(
         and (not read_only_request or tool.get("risk_class") in {"read_only", "privileged_read", "support_read", "financial_read"})
     }
     from services.operator_context import PlannerContext
-    context_builder = PlannerContext(message)
+    from services.pii_protection.gateway import enabled
+    context_builder = PlannerContext(message, contact_references=not enabled())
     observations: list[dict[str, Any]] = []
     trace: list[dict[str, Any]] = []
     seen_calls: set[str] = set()
@@ -358,6 +374,7 @@ def run_operator_tool_loop(
         decision = context_builder.decode(plan(state))
         if not isinstance(decision, dict):
             decision = {"action": "error", "message": "Модель вернула неверный план."}
+        pii_exchange = decision.pop("_pii_exchange", None)
         action = str(decision.get("action") or "").strip().lower()
         if isinstance(decision.get("remaining_actions"),list):
             remaining_actions=[str(value)[:300] for value in decision["remaining_actions"][:10]]
@@ -540,6 +557,21 @@ def run_operator_tool_loop(
                 "message": "Инструмент не разрешён для текущего пользователя и бизнеса.",
             })
             continue
+        from services.pii_protection.gateway import Exchange, PIIProtectionError, Scope
+        if isinstance(pii_exchange, Exchange) and "<<PII_" in json.dumps(arguments, ensure_ascii=False):
+            try:
+                arguments = pii_exchange.restore_tool(
+                    tool_name, arguments,
+                    scope=Scope(business_id, user_id, conversation_id),
+                    allowed_fields=tuple(tool.get("pii_restore_fields") or ()),
+                    authorized=True,
+                    operation="preview" if tool.get("approval_required") or tool.get("risk_class") == "draft_only" else
+                              "read" if tool.get("risk_class") in {"read_only", "privileged_read", "support_read", "financial_read"} else "write",
+                )
+            except PIIProtectionError:
+                observations.append({"tool": tool_name, "status": "denied",
+                                     "error_code": "pii_tool_restore_denied"})
+                continue
         argument_errors = _validate_tool_arguments(tool, arguments)
         if argument_errors:
             observations.append({

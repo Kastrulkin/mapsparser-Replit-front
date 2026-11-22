@@ -130,6 +130,9 @@ class GigaChatEmbeddingClient:
         if not texts:
             return {"vectors": [], "usage": 0, "request_id": ""}
         started = time.monotonic()
+        from services.pii_protection.gateway import assert_protected_transport
+
+        assert_protected_transport()
         response = requests.post(
             f"{self.base_url}/embeddings",
             headers=self._headers(),

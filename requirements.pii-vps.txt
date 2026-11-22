@@ -1,0 +1,9 @@
+# Selected-engine synthetic verification profile; separate from the application image.
+-r requirements.pii.txt
+pytest==9.2.0
+psutil==7.2.2
+fakeredis==2.40.0
+redis==5.3.1
+requests==2.34.2
+psycopg2-binary==2.9.13
+Flask==3.1.3

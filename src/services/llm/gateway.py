@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 import os
 import threading
+from contextvars import copy_context
 
 from services.llm.adapters import DeepSeekAdapter, GigaChatAdapter, _record_llm_usage
 from services.llm.contracts import LLMTaskDefinition, LLMTaskRequest, LLMTaskResult
@@ -126,8 +127,11 @@ def _generate_once(
     data_class_override: str = "",
     model_override: str = "",
 ) -> LLMTaskResult:
+    from services.pii_protection.gateway import enabled, prepare_attempt, outbound
+    exchange = prepare_attempt(prompt) if enabled() else None
+    effective_prompt = exchange.text if exchange else prompt
     decision = prepare_prompt_for_provider(
-        prompt,
+        effective_prompt,
         provider=provider,
         data_class=(
             data_class_override
@@ -149,13 +153,14 @@ def _generate_once(
             fallback_reason="LLM_PROVIDER_UNKNOWN",
             shadow=shadow,
         )
-    return selected.generate(
-        request,
-        definition,
-        prompt=decision.prompt,
-        shadow=shadow,
-        model_override=model_override,
-    )
+    if exchange:
+        # Preserve provider/data-class denials, but use the reversible gateway's
+        # output instead of applying a second, irreversible regex replacement.
+        with outbound(exchange):
+            return selected.generate(request, definition, prompt=exchange.text,
+                                     shadow=shadow, model_override=model_override)
+    return selected.generate(request, definition, prompt=decision.prompt,
+                             shadow=shadow, model_override=model_override)
 
 
 def _attempt_payload(result: LLMTaskResult, *, provider: str, model: str) -> dict[str, str]:
@@ -226,7 +231,7 @@ def _generate_with_provider_fallback(
     return result
 
 
-def _run_shadow_request(
+def _run_shadow_request_inner(
     request: LLMTaskRequest,
     definition: LLMTaskDefinition,
 ) -> None:
@@ -271,10 +276,27 @@ def _run_shadow_request(
             result,
             correction_attempted=correction_attempted,
         )
+        return result
     finally:
         release = getattr(_SHADOW_SEMAPHORE, "release", None)
         if release:
             release()
+
+
+def _run_shadow_request(request, definition):
+    from services.pii_protection.gateway import run_with_privacy
+    started = False
+
+    def execute():
+        nonlocal started
+        started = True
+        return _run_shadow_request_inner(request, definition)
+
+    try:
+        return run_with_privacy(request, execute)
+    finally:
+        if not started:
+            _SHADOW_SEMAPHORE.release()
 
 
 def _combined_usage(first: LLMTaskResult, second: LLMTaskResult) -> dict[str, int]:
@@ -354,11 +376,14 @@ def run_llm_shadow_task(request: LLMTaskRequest) -> bool:
         pipeline_id=request.pipeline_id,
         pipeline_stage=request.pipeline_stage,
         fallback_prompt=request.fallback_prompt,
+        pii_session_id=request.pii_session_id,
+        pii_policy=request.pii_policy,
+        pii_public_context=request.pii_public_context,
     )
     try:
         threading.Thread(
-            target=_run_shadow_request,
-            args=(shadow_request, definition),
+            target=copy_context().run,
+            args=(_run_shadow_request, shadow_request, definition),
             name=f"llm-shadow-{request.task_key}",
             daemon=True,
         ).start()
@@ -389,7 +414,7 @@ def _recovery_prompt(request, definition, result):
     )
 
 
-def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
+def _run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     definition = get_task_definition(request.task_key)
     if definition is None:
         return LLMTaskResult(
@@ -487,6 +512,11 @@ def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
     if should_shadow:
         run_llm_shadow_task(request)
     return result
+
+
+def run_llm_task(request: LLMTaskRequest) -> LLMTaskResult:
+    from services.pii_protection.gateway import run_with_privacy
+    return run_with_privacy(request, lambda: _run_llm_task(request))
 
 
 def analyze_text_with_gigachat(

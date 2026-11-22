@@ -135,7 +135,7 @@ done
 retry_command "sync backend source on server" remote_exec "\
   command -v rsync >/dev/null 2>&1 && \
   mkdir -p src alembic_migrations scripts && \
-  rsync -a --delete ${remote_tmp}/src/ src/ && \
+  rsync -a --delete --exclude='services/pii_protection/.activation-required' ${remote_tmp}/src/ src/ && \
   rsync -a --delete ${remote_tmp}/alembic_migrations/ alembic_migrations/ && \
   rsync -a ${remote_tmp}/scripts/ scripts/ && \
   install -m 755 ${remote_tmp}/entrypoint.sh entrypoint.sh && \

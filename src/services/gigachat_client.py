@@ -184,6 +184,8 @@ class GigaChatClient:
         
         for attempt in range(max_retries):
             try:
+                from services.pii_protection.gateway import assert_protected_transport
+                assert_protected_transport(json_body)
                 response = requests.post(url, json=json_body, headers=headers, timeout=timeout, verify=self.verify_tls)
                 
                 status_code = int(response.status_code or 0)
@@ -247,6 +249,8 @@ class GigaChatClient:
     
     def upload_file_simple(self, file_data: bytes, filename: str) -> str:
         """Простая загрузка файла в GigaChat"""
+        from services.pii_protection.gateway import assert_protected_transport
+        assert_protected_transport()
         try:
             token = self.get_access_token()
             

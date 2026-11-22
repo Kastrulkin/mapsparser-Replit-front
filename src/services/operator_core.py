@@ -884,10 +884,12 @@ def _read_mobile_module(cursor: Any, *, business_id: str, module: str) -> dict[s
 
 
 def _normalize_tool_contract(tool: dict[str, Any], *, business_id: str) -> dict[str, Any]:
+    from services.pii_protection.operator_context import tool_restore_fields
     risk_class = str(tool.get("risk_class") or "read_only")
     default_timeout = 60 if risk_class in {"paid_compute", "paid_external_read"} else 30
     return {
         **tool,
+        "pii_restore_fields": tool_restore_fields(tool),
         "input_schema": tool.get("input_schema") if isinstance(tool.get("input_schema"), dict) else {"type": "object", "properties": {}},
         "output_schema": tool.get("output_schema") if isinstance(tool.get("output_schema"), dict) else {
             "type": "object",

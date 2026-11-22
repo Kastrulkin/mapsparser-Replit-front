@@ -1,0 +1,17 @@
+FROM python:3.11-slim-bookworm
+
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=1 -o Acquire::https::Timeout=20 update \
+    && apt-get -o Acquire::Retries=1 -o Acquire::https::Timeout=20 install -y --no-install-recommends redis-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --uid 10001 --create-home pilot
+COPY requirements.pii.txt requirements.pii-vps.txt requirements.pii-linux.lock.txt /opt/pilot-deps/
+RUN python -m pip install --no-cache-dir \
+    -c /opt/pilot-deps/requirements.pii-linux.lock.txt \
+    -r /opt/pilot-deps/requirements.pii-vps.txt \
+    && python -m pip check
+USER 10001
+WORKDIR /opt/pilot
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/pilot/src \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 TOKENIZERS_PARALLELISM=false \
+    PII_PROTECTION_ENABLED=false

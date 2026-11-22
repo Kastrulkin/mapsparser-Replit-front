@@ -13,6 +13,28 @@ from services.operator_conversations import (
 
 
 def process_chat(cursor, **kwargs):
+    from services.pii_protection.activation import enter_operator_request, exit_operator_request
+    token = enter_operator_request()
+    try:
+        return _process_chat_private(cursor, **kwargs)
+    finally:
+        exit_operator_request(token)
+
+
+def _process_chat_private(cursor, **kwargs):
+    from services.pii_protection.gateway import enabled
+    if not enabled():
+        return _process_chat_audited(cursor, **kwargs)
+    from services.pii_protection.operator_context import PUBLIC_CARDS, load_public_cards
+    business_id, user_id = kwargs['business_id'], kwargs['user_id']
+    token = PUBLIC_CARDS.set((business_id, user_id, load_public_cards(cursor, business_id, user_id)))
+    try:
+        return _process_chat_audited(cursor, **kwargs)
+    finally:
+        PUBLIC_CARDS.reset(token)
+
+
+def _process_chat_audited(cursor, **kwargs):
     from services import operator_request_history
     if not operator_request_history.enabled(kwargs['business_id']):
         return _process_chat(cursor, **kwargs)

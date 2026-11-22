@@ -1,0 +1,6 @@
+# Optional runtime profile; not installed by the default application image.
+piighost[crypto,presidio]==2.1.1
+presidio-analyzer==2.2.366
+spacy==3.8.18
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
+ru-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/ru_core_news_sm-3.8.0/ru_core_news_sm-3.8.0-py3-none-any.whl#sha256=69978d47b43e2c4f329bebdb155e8e9d3861bba1a58ba25551419dae7d7e07fc

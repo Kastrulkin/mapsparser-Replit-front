@@ -169,6 +169,8 @@ def settle(identifier, state, actual_tokens=0, error_code='', *, database_factor
 
 
 def guarded_post(post, body, context=None):
+    from services.pii_protection.gateway import assert_protected_transport
+    assert_protected_transport(body)
     if 'max_tokens' not in body:
         body['max_tokens'] = (body.get('parameters') or {}).get('max_tokens', 4000)
     identifier = reserve(body, context)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from services.pii_protection.public_context import PublicSpan
 
 
 DATA_CLASSES = {
@@ -49,6 +50,9 @@ class LLMTaskRequest:
     pipeline_id: str = ""
     pipeline_stage: str = ""
     fallback_prompt: str = ""
+    pii_session_id: str = ""
+    pii_policy: str = "private"
+    pii_public_context: tuple[PublicSpan, ...] = ()
 
 
 @dataclass
@@ -70,3 +74,4 @@ class LLMTaskResult:
     primary_failure_reason: str = ""
     output_source: str = ""
     attempt_chain: list[dict[str, str]] = field(default_factory=list)
+    pii_context: Any = field(default=None, repr=False, compare=False)

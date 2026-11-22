@@ -1,0 +1,77 @@
+services:
+  pii-redis:
+    image: redis:7.4-alpine
+    container_name: localos-pii-redis
+    user: "999:999"
+    entrypoint: [redis-server]
+    command: [/run/secrets/redis.conf]
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 96m
+    memswap_limit: 96m
+    cpus: "0.1"
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ulimits:
+      core: {soft: 0, hard: 0}
+    tmpfs:
+      - /data:rw,size=16m,uid=999,gid=999,mode=0700
+    volumes:
+      - /etc/localos/pii/redis.conf:/run/secrets/redis.conf:ro
+      - /etc/localos/pii/users.acl:/run/secrets/users.acl:ro
+      - /etc/localos/pii/redis-health.password:/run/secrets/redis-health.password:ro
+    networks:
+      private:
+        aliases: [localos-pii-redis]
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH=$$(cat /run/secrets/redis-health.password) redis-cli --user pii_health ping | grep -qx PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 1m, max-file: "2"}
+  pii-runtime:
+    image: localos-pii-runtime:20261104-v3
+    container_name: localos-pii-runtime
+    user: "10001:10001"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 640m
+    memswap_limit: 640m
+    cpus: "0.5"
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ulimits:
+      core: {soft: 0, hard: 0}
+    tmpfs:
+      - /tmp:rw,size=64m,uid=10001,gid=10001,mode=1777
+    volumes:
+      - /etc/localos/pii/runtime.json:/run/secrets/localos-pii-runtime.json:ro
+      - /etc/localos/pii/server.crt:/run/secrets/pii-server.crt:ro
+      - /etc/localos/pii/server.key:/run/secrets/pii-server.key:ro
+      - /etc/localos/pii/ca.crt:/run/secrets/pii-ca.crt:ro
+    environment:
+      PII_PROTECTION_ENABLED: "false"
+      PII_SERVER_CONFIG_FILE: /run/secrets/localos-pii-runtime.json
+    networks:
+      private:
+        aliases: [localos-pii-runtime]
+    depends_on:
+      pii-redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, /opt/pii/healthcheck.py]
+      start_period: 45s
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 1m, max-file: "2"}
+networks:
+  private:
+    name: localos-pii-private
+    internal: true

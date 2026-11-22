@@ -1,0 +1,9 @@
+-r requirements.pii.txt
+preserve-pii==0.6.2
+pytest==9.2.0
+psutil==7.2.2
+fakeredis==2.40.0
+redis==5.3.1
+requests==2.34.2
+psycopg2-binary==2.9.13
+Flask==3.1.3
