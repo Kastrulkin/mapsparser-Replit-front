@@ -107,22 +107,23 @@ export const closeMiniAppForBotHandoff = (): boolean => {
 export const loadMiniAppSdk = () => new Promise<void>((resolve) => {
   if (miniWebApp()) { resolve(); return; }
   const url = miniAppSdkUrl();
-  let settled = false;
+  const existing = document.querySelector<HTMLScriptElement>(`script[src="${url}"]`);
+  const script = existing || document.createElement('script');
   const finish = () => {
-    if (settled) return;
-    settled = true;
     window.clearTimeout(timeout);
+    script.removeEventListener('load', finish);
+    script.removeEventListener('error', finish);
     resolve();
   };
   const timeout = window.setTimeout(finish, 5000);
-  const existing = document.querySelector<HTMLScriptElement>(`script[src="${url}"]`);
-  const script = existing || document.createElement('script');
-  script.addEventListener('load', finish, { once: true });
-  script.addEventListener('error', finish, { once: true });
+  script.addEventListener('load', finish);
+  script.addEventListener('error', finish);
   if (!existing) { script.src = url; script.async = true; document.head.appendChild(script); }
 });
 
 export const safeCheckoutReturn = (value: string | null): string | null => {
+  // Reject control characters before the browser can normalize the return path.
+  // eslint-disable-next-line no-control-regex
   if (!value || value.length > 500 || !value.startsWith("/") || value.startsWith("//") || /[\\\x00-\x1f]/.test(value)) return null;
   const path = value.split(/[?#]/, 1)[0];
   return path.startsWith("/dashboard/") || path === "/telegram/control" || path === "/max/control" ? value : null;

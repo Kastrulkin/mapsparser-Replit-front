@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 export DOCKER_BUILDKIT=0
 
 backup_postgres_if_running() {
-  local backup_dir backup_file latest_file ts pg_user pg_db postgres_id
+  local backup_dir backup_file latest_file partial_file ts pg_user pg_db postgres_id
   backup_dir="data/backups/postgres"
   latest_file="${backup_dir}/latest.sql.gz"
 
@@ -31,14 +31,19 @@ backup_postgres_if_running() {
   mkdir -p "${backup_dir}"
   ts="$(date +%Y%m%d_%H%M%S)"
   backup_file="${backup_dir}/${pg_db}_${ts}.sql.gz"
+  partial_file="$(mktemp "${backup_file}.partial.XXXXXXXX")"
 
   echo "Creating Postgres backup: ${backup_file}"
-  if docker compose exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" | gzip > "${backup_file}"; then
+  if (
+    set -o pipefail
+    docker compose exec -T postgres pg_dump -U "${pg_user}" "${pg_db}" | gzip > "${partial_file}"
+  ) && ln "${partial_file}" "${backup_file}"; then
+    rm -f -- "${partial_file}"
     ln -f "${backup_file}" "${latest_file}"
     python3 scripts/prune_postgres_backups.py --apply
     echo "Postgres backup complete: ${backup_file}"
   else
-    rm -f "${backup_file}"
+    rm -f -- "${partial_file}"
     echo "WARNING: Postgres backup failed; continue without backup."
   fi
 }

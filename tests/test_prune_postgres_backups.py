@@ -76,3 +76,23 @@ def test_default_retention_is_sized_for_small_production_disk(tmp_path: Path) ->
 
     remaining = sorted(tmp_path.glob("local_????????_??????.sql.gz"))
     assert len(remaining) == 4
+
+
+def test_repeat_rotation_removes_stale_temporary_link(tmp_path: Path) -> None:
+    archive = tmp_path / "local_20261122_120000.sql.gz"
+    latest = tmp_path / "latest.sql.gz"
+    temporary = tmp_path / ".latest.sql.gz.tmp"
+    archive.write_bytes(b"fixture")
+    os.link(archive, latest)
+    os.link(archive, temporary)
+
+    for _ in range(2):
+        subprocess.run(
+            [sys.executable, str(SCRIPT), "--directory", str(tmp_path), "--apply"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert latest.samefile(archive)
+        assert not temporary.exists()
+        assert archive.stat().st_nlink == 2

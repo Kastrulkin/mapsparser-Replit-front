@@ -603,9 +603,11 @@ def _load_network_scope(cursor: Any, network_id: str, allowed_business_ids: list
 
 def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
     links_table = _table_exists(cursor, "businessmaplinks")
+    cards_table = _table_exists(cursor, "cards")
     parse_table = _table_exists(cursor, "mapparseresults")
+    services_table = _table_exists(cursor, "userservices")
     reviews_table = _table_exists(cursor, "externalbusinessreviews")
-    if not links_table and not parse_table:
+    if not links_table and not cards_table and not parse_table:
         return {"available": False}
     result: dict[str, Any] = {"available": True, "linked_locations": 0, "parsed_locations": 0, "services_count": 0, "reviews_count": 0, "unanswered_reviews": 0}
     if links_table:
@@ -616,7 +618,28 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
         row = cursor.fetchone()
         result["linked_locations"] = int(_row_value(row, "count") or 0)
         result["link_created_at"] = _row_value(row, "first_at")
-    if parse_table:
+    if cards_table:
+        cursor.execute(
+            """
+            WITH latest AS (
+                SELECT DISTINCT ON (business_id)
+                    business_id, created_at, updated_at, reviews_count
+                FROM cards
+                WHERE business_id::text = ANY(%s)
+                ORDER BY business_id, COALESCE(updated_at, created_at) DESC, version DESC
+            )
+            SELECT COUNT(*) AS parsed_locations,
+                   COALESCE(SUM(reviews_count), 0) AS reviews_count,
+                   MAX(COALESCE(updated_at, created_at)) AS latest_at
+            FROM latest
+            """,
+            (business_ids,),
+        )
+        row = cursor.fetchone()
+        result["parsed_locations"] = int(_row_value(row, "parsed_locations") or 0)
+        result["reviews_count"] = int(_row_value(row, "reviews_count") or 0)
+        result["latest_at"] = _row_value(row, "latest_at")
+    elif parse_table:
         cursor.execute(
             """
             WITH latest AS (
@@ -660,6 +683,23 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
             )
             location_row = cursor.fetchone()
             result["attention_location"] = _row_value(location_row, "name")
+    if services_table:
+        active_filter = (
+            "AND COALESCE(is_active, TRUE) = TRUE"
+            if _table_has_column(cursor, "userservices", "is_active")
+            else ""
+        )
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS services_count
+            FROM userservices
+            WHERE business_id::text = ANY(%s)
+              {active_filter}
+            """,
+            (business_ids,),
+        )
+        row = cursor.fetchone()
+        result["services_count"] = int(_row_value(row, "services_count") or 0)
     if reviews_table:
         current_filter = (
             "AND COALESCE(is_current, TRUE) = TRUE"
@@ -668,14 +708,31 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
         )
         cursor.execute(
             f"""
-            SELECT COUNT(*) AS reviews_count,
-                   COUNT(*) FILTER (WHERE COALESCE(NULLIF(TRIM(response_text), ''), '') IN ('', '—')) AS unanswered_reviews,
-                   MAX(COALESCE(published_at, created_at)) AS latest_at
-            FROM externalbusinessreviews
-            WHERE business_id::text = ANY(%s)
-              {current_filter}
+            WITH location_reviews AS (
+                SELECT business_id, COUNT(*) AS reviews_count,
+                       COUNT(*) FILTER (
+                           WHERE COALESCE(NULLIF(TRIM(response_text), ''), '') IN ('', '—')
+                       ) AS unanswered_reviews,
+                       MAX(COALESCE(published_at, created_at)) AS latest_at
+                FROM externalbusinessreviews
+                WHERE business_id::text = ANY(%s)
+                  {current_filter}
+                GROUP BY business_id
+            )
+            SELECT SUM(reviews_count) AS reviews_count,
+                   SUM(unanswered_reviews) AS unanswered_reviews,
+                   MAX(latest_at) AS latest_at,
+                   (
+                       SELECT b.name
+                       FROM location_reviews r
+                       JOIN businesses b ON b.id::text = r.business_id::text
+                       WHERE %s AND r.unanswered_reviews > 0
+                       ORDER BY r.unanswered_reviews DESC, b.name
+                       LIMIT 1
+                   ) AS attention_location
+            FROM location_reviews
             """,
-            (business_ids,),
+            (business_ids, len(business_ids) > 1),
         )
         row = cursor.fetchone()
         normalized_count = int(_row_value(row, "reviews_count") or 0)
@@ -683,23 +740,9 @@ def _load_maps(cursor: Any, business_ids: list[str]) -> dict[str, Any]:
             result["reviews_count"] = normalized_count
             result["unanswered_reviews"] = int(_row_value(row, "unanswered_reviews") or 0)
             result["latest_at"] = _row_value(row, "latest_at") or result.get("latest_at")
-            if len(business_ids) > 1 and int(result["unanswered_reviews"]) > 0:
-                cursor.execute(
-                    """
-                    SELECT b.name
-                    FROM externalbusinessreviews r
-                    JOIN businesses b ON b.id::text = r.business_id::text
-                    WHERE r.business_id::text = ANY(%s)
-                      AND COALESCE(NULLIF(TRIM(r.response_text), ''), '') IN ('', '—')
-                      AND COALESCE(r.is_current, TRUE) = TRUE
-                    GROUP BY b.id, b.name
-                    ORDER BY COUNT(*) DESC, b.name
-                    LIMIT 1
-                    """,
-                    (business_ids,),
-                )
-                location_row = cursor.fetchone()
-                result["attention_location"] = _row_value(location_row, "name") or result.get("attention_location")
+            attention_location = _row_value(row, "attention_location")
+            if attention_location:
+                result["attention_location"] = attention_location
     return result
 
 

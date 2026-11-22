@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { safeCheckoutReturn, downloadMiniAppFile, miniAppChannel, miniAppPath, miniWebApp, requestMiniAppMicrophone } from './miniAppPlatform';
+import { safeCheckoutReturn, downloadMiniAppFile, loadMiniAppSdk, miniAppChannel, miniAppPath, miniAppSdkUrl, miniWebApp, requestMiniAppMicrophone } from './miniAppPlatform';
 
 afterEach(() => { window.history.replaceState({}, '', '/'); delete window.WebApp; delete window.Telegram; });
 
@@ -65,4 +65,24 @@ it.each(['telegram', 'max'])('restores the same object navigation from %s launch
   if(platform==='max')window.WebApp={initDataUnsafe:{start_param:start}};
   else window.Telegram={WebApp:{initDataUnsafe:{start_param:start}}};
   expect(Object.fromEntries(miniAppLaunchParams())).toEqual(navigation);
+});
+
+it.each(['load', 'error', 'timeout'])('cleans up SDK listeners after %s', async outcome => {
+  vi.useFakeTimers();
+  const script = document.createElement('script');
+  script.src = miniAppSdkUrl();
+  document.head.appendChild(script);
+  const removeListener = vi.spyOn(script, 'removeEventListener');
+  try {
+    const loaded = loadMiniAppSdk();
+    if (outcome === 'timeout') await vi.advanceTimersByTimeAsync(5000);
+    else script.dispatchEvent(new Event(outcome));
+    await loaded;
+    expect(removeListener).toHaveBeenCalledWith('load', expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith('error', expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    script.remove();
+    vi.useRealTimers();
+  }
 });

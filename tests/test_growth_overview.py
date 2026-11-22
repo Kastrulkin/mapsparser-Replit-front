@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 
+import pytest
 from flask import Flask
 
 from api import growth_overview_api
+from services import growth_overview_service
 from services.growth_overview_service import (
     _aggregate_analytics_modules,
     _attach_scope_targets,
@@ -83,6 +85,95 @@ def test_unavailable_source_is_not_interpreted_as_zero_progress():
     assert partnerships["status"] == "unavailable"
     assert partnerships["progress"] == {"completed": 0, "total": 0}
     assert payload["summary"]["active_areas"] == 4
+
+
+def test_maps_loads_canonical_cards_when_legacy_parse_table_is_absent(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.row = None
+
+        def execute(self, query, params=()):
+            if "FROM businessmaplinks" in query:
+                self.row = {"count": 1, "first_at": NOW}
+            elif "FROM cards" in query:
+                self.row = {
+                    "parsed_locations": 1,
+                    "reviews_count": 730,
+                    "latest_at": NOW,
+                }
+            elif "FROM userservices" in query:
+                self.row = {"services_count": 42}
+            elif "FROM externalbusinessreviews" in query:
+                self.row = {
+                    "reviews_count": 822,
+                    "unanswered_reviews": 131,
+                    "latest_at": NOW,
+                }
+            else:
+                raise AssertionError(query)
+
+        def fetchone(self):
+            return self.row
+
+    available_tables = {
+        "businessmaplinks",
+        "cards",
+        "userservices",
+        "externalbusinessreviews",
+    }
+    monkeypatch.setattr(
+        growth_overview_service,
+        "_table_exists",
+        lambda _cursor, table: table in available_tables,
+    )
+    monkeypatch.setattr(growth_overview_service, "_table_has_column", lambda *_args: True)
+
+    maps = growth_overview_service._load_maps(Cursor(), ["business-1"])
+
+    assert maps["parsed_locations"] == 1
+    assert maps["services_count"] == 42
+    assert maps["reviews_count"] == 822
+    assert maps["unanswered_reviews"] == 131
+
+
+@pytest.mark.parametrize("has_current_flag", [False, True])
+def test_network_maps_uses_one_review_aggregation_for_counts_and_attention(
+    monkeypatch, has_current_flag,
+):
+    class Cursor:
+        review_queries = 0
+        row = None
+
+        def execute(self, query, params=()):
+            if "FROM cards" in query:
+                self.row = {"parsed_locations": 2, "reviews_count": 12, "latest_at": NOW}
+            elif "FROM externalbusinessreviews" in query:
+                self.review_queries += 1
+                assert ("is_current" in query) == has_current_flag
+                self.row = {
+                    "reviews_count": 8,
+                    "unanswered_reviews": 3,
+                    "latest_at": NOW,
+                    "attention_location": "Вторая локация",
+                }
+            else:
+                raise AssertionError(query)
+
+        def fetchone(self):
+            return self.row
+
+    monkeypatch.setattr(growth_overview_service, "_table_exists",
+                        lambda _cursor, table: table in {"cards", "externalbusinessreviews"})
+    monkeypatch.setattr(growth_overview_service, "_table_has_column",
+                        lambda *_args: has_current_flag)
+    cursor = Cursor()
+
+    maps = growth_overview_service._load_maps(cursor, ["business-1", "business-2"])
+
+    assert maps["reviews_count"] == 8
+    assert maps["unanswered_reviews"] == 3
+    assert maps["attention_location"] == "Вторая локация"
+    assert cursor.review_queries == 1
 
 
 def test_money_is_shown_only_for_confirmed_upsell_events():

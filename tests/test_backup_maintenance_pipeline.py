@@ -116,6 +116,21 @@ def test_compressed_globals_symlink_rejected(tmp_path):
     assert side.is_symlink() and outside.exists()
 
 
+def test_real_pipeline_skips_legacy_steps_when_verification_lock_is_busy(tmp_path):
+    folder = fixture_store(tmp_path)
+    legacy = tmp_path / 'backups' / 'ordinary.sql'
+    legacy.write_text('-- preserve until verification succeeds\n')
+
+    with (folder / '.lock').open('a') as lock:
+        retention.fcntl.flock(lock, retention.fcntl.LOCK_EX | retention.fcntl.LOCK_NB)
+        result = subprocess.run(['bash', 'scripts/run_storage_maintenance.sh'], cwd=tmp_path,
+                                capture_output=True, text=True, check=True)
+
+    assert legacy.exists()
+    assert not legacy.with_suffix('.sql.gz').exists()
+    assert json.loads(result.stdout)['status'] == 'already_running'
+
+
 def test_adopt_existing_compressed_seed_preserves_original_files(tmp_path, monkeypatch):
     seed = tmp_path / 'backups' / 'retention-20261019'
     seed.mkdir(parents=True)

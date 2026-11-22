@@ -92,15 +92,17 @@ def main() -> int:
         if args.apply:
             path.unlink()
 
-    remaining = [(path, timestamp) for path, timestamp in candidates if path in keep]
+    remaining = [path for path, _timestamp in candidates if path in keep]
     if remaining:
-        newest = max(remaining, key=lambda item: item[1])[0]
+        newest = max(remaining, key=lambda path: path.stat().st_mtime)
         latest = backup_dir / "latest.sql.gz"
         if args.apply:
             temporary = backup_dir / ".latest.sql.gz.tmp"
             temporary.unlink(missing_ok=True)
-            os.link(newest, temporary)
-            temporary.replace(latest)
+            # Renaming two links to the same inode leaves both names in place.
+            if latest.is_symlink() or not latest.is_file() or not latest.samefile(newest):
+                os.link(newest, temporary)
+                temporary.replace(latest)
         print(f"{'LINKED' if args.apply else 'WOULD_LINK'} {latest} -> {newest.name}")
 
     print(
