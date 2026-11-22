@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import time
 import zlib
@@ -65,7 +66,13 @@ def globals_sidecar(plain):
     return compressed
 
 
-def records(folder, now):
+def archive_identity(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def records(folder, now, *, checksums=None):
+    if checksums is None:
+        checksums = {}
     valid=[]; warnings=[]
     if not folder.exists(): return valid,warnings
     for manifest in folder.glob('db-*.verified.json'):
@@ -78,14 +85,24 @@ def records(folder, now):
             created=datetime.fromisoformat(record['created_at'])
             if created.tzinfo is None or created>now+timedelta(minutes=5): raise ValueError('bad date')
             if record.get('version')!=1 or record.get('full_archive_read') is not True: raise ValueError('unverified')
-            if path.is_symlink() or not path.is_file(): raise ValueError('not a regular dump')
-            stat=path.stat()
-            if stat.st_size!=record['size'] or sha(path)!=record['sha256']: raise ValueError('checksum mismatch')
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode): raise ValueError('not a regular dump')
+            identity = archive_identity(info)
+            if info.st_size != record['size']: raise ValueError('checksum mismatch')
+            cached = checksums.get(path)
+            if cached is not None and cached[0] == identity:
+                digest = cached[1]
+            else:
+                digest = sha(path)
+                if archive_identity(path.lstat()) != identity:
+                    raise ValueError('dump changed while hashing')
+                checksums[path] = (identity, digest)
+            if digest != record['sha256']: raise ValueError('checksum mismatch')
             globals_sidecar(folder/(name+'.globals.sql'))
             for suffix in ('.toc',):
                 side=folder/(name+suffix)
                 if side.is_symlink() or not side.is_file() or not side.stat().st_size: raise ValueError('missing sidecar')
-            record={**record,'created':created,'identity':(stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns),
+            record={**record,'created':created,'identity':identity,
                     'pinned':(folder/'.keep').exists() or (folder/(name+'.keep')).exists()}
             valid.append(record)
         except (ValueError,KeyError,TypeError,OSError) as error:
@@ -202,8 +219,9 @@ def rotate(folder,items,now):
     removed=[]
     for record in removal_plan(items,now):
         if (folder/'.keep').exists(): break
-        path=folder/record['name'];stat=path.lstat()
-        if path.is_symlink() or (stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns)!=record['identity']:
+        path = folder / record['name']
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or archive_identity(info) != record['identity']:
             raise ValueError('Snapshot changed since verification; nothing more will be deleted')
         if (folder/(record['name']+'.keep')).exists(): continue
         for suffix in ('.verified.json','.globals.sql','.globals.sql.gz','.toc','.stderr.log'):
@@ -217,6 +235,22 @@ def rotate(folder,items,now):
     return removed
 
 
+def check_publication_paths(folder):
+    pointer = folder / 'latest.dump'
+    temporary_pointer = folder / 'latest.dump.tmp'
+    summary = folder / 'last-success.json'
+    temporary_summary = folder / 'last-success.json.tmp'
+    if pointer.exists() and not pointer.is_symlink():
+        raise ValueError('Foreign latest.dump file')
+    if temporary_pointer.exists() or temporary_pointer.is_symlink():
+        raise ValueError('Stale latest pointer')
+    if summary.is_symlink() or (summary.exists() and not summary.is_file()):
+        raise ValueError('Foreign backup summary path')
+    if temporary_summary.exists() or temporary_summary.is_symlink():
+        raise ValueError('Stale backup summary temporary file')
+    return pointer, temporary_pointer
+
+
 def run(root,apply=False,seed=False,now=None):
     now=now or datetime.now(timezone.utc);folder=pool(root,create=apply)
     if not apply:
@@ -227,20 +261,25 @@ def run(root,apply=False,seed=False,now=None):
         try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: return {'status':'already_running'}
         os.umask(0o077)
-        items,warnings=records(folder,now)
+        check_publication_paths(folder)
+        # Reuse checksums only while this process holds the lock, and only
+        # for unchanged files. Re-read manifests, sidecars and pins each pass.
+        checksums = {}
+        items,warnings=records(folder,now,checksums=checksums)
         if seed:
-            adopt(root,folder);items,warnings=records(folder,now)
+            adopt(root,folder);items,warnings=records(folder,now,checksums=checksums)
         today=now.astimezone(ZoneInfo('Europe/Moscow')).date()
         created=False
         if not items or items[0]['created'].astimezone(ZoneInfo('Europe/Moscow')).date()!=today:
-            create_backup(root,folder,now,items);created=True
-            items,warnings=records(folder,now)
+            new_record = create_backup(root,folder,now,items)
+            items,warnings=records(folder,now,checksums=checksums)
+            if not any(item['name'] == new_record['name'] for item in items):
+                raise RuntimeError('New snapshot failed verification; rotation blocked')
+            created=True
         if not items: raise RuntimeError('No verified snapshot; rotation blocked')
+        pointer, temp = check_publication_paths(folder)
         removed=rotate(folder,items,now)
         latest=items[0]
-        pointer=folder/'latest.dump';temp=folder/'latest.dump.tmp'
-        if pointer.exists() and not pointer.is_symlink(): raise ValueError('Foreign latest.dump file')
-        if temp.exists() or temp.is_symlink(): raise ValueError('Stale latest pointer')
         temp.symlink_to(latest['name']);temp.replace(pointer)
         result={'status':'verified','created_new_dump':created,'latest':latest['name'],'sha256':latest['sha256'],
                 'removed':removed,'verified_retained':len(items)-len(removed),'warnings':warnings,

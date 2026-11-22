@@ -50,7 +50,26 @@ describe('SEOKeywordsTab localization', () => {
     expect(await screen.findByText('köpek bakımı')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'SEO negatif anahtar kelimeleri' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Negatif anahtar kelime ekle')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Güncellendi' })).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
     await waitFor(() => expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/));
+  });
+
+  it('labels the rendered update-date column in Russian', async () => {
+    window.localStorage.setItem('language', 'ru');
+    render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<SEOKeywordsTab businessId="demo-business" />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('columnheader', { name: 'Обновлено' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Показов в месяц' })).toBeInTheDocument();
   });
 });

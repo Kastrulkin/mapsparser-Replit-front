@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -105,3 +106,74 @@ def test_concurrent_writer_is_skipped(tmp_path):
     with (folder / '.lock').open('a') as lock:
         backup.fcntl.flock(lock, backup.fcntl.LOCK_EX | backup.fcntl.LOCK_NB)
         assert backup.run(tmp_path, apply=True, now=NOW)['status'] == 'already_running'
+
+
+@pytest.mark.parametrize('blocker', ['latest.dump', 'latest.dump.tmp', 'last-success.json.tmp', 'last-success.json'])
+def test_publication_blocker_preserves_rotation_candidates(tmp_path, blocker):
+    folder = backup.pool(tmp_path, True)
+    paths = [snapshot(folder, day) for day in (0, 1, 2)]
+    conflicting_file = folder / blocker
+    if blocker == 'last-success.json':
+        conflicting_file.mkdir()
+    else:
+        conflicting_file.write_text('unknown owner')
+
+    with pytest.raises(ValueError):
+        backup.run(tmp_path, apply=True, now=NOW)
+
+    assert all(path.is_file() for path in paths)
+    if blocker == 'last-success.json':
+        assert conflicting_file.is_dir()
+    else:
+        assert conflicting_file.read_text() == 'unknown owner'
+
+
+def test_new_backup_run_hashes_unchanged_previous_archives_only_once(tmp_path):
+    folder = backup.pool(tmp_path, True)
+    previous = [snapshot(folder, day) for day in (1, 2)]
+
+    def create_new(*_):
+        return {'name': snapshot(folder, 0).name}
+
+    with patch.object(backup, 'create_backup', side_effect=create_new):
+        with patch.object(backup, 'sha', wraps=backup.sha) as checksum:
+            result = backup.run(tmp_path, apply=True, now=NOW)
+
+    assert result['created_new_dump']
+    for path in previous:
+        assert sum(call.args == (path,) for call in checksum.call_args_list) == 1
+
+
+def test_archive_modified_during_backup_is_rehashed_even_with_same_size_and_mtime(tmp_path):
+    folder = backup.pool(tmp_path, True)
+    older = snapshot(folder, 2)
+    snapshot(folder, 1)
+
+    def create_new(*_):
+        before = older.stat()
+        older.write_bytes(b'y' * before.st_size)
+        os.utime(older, ns=(before.st_atime_ns, before.st_mtime_ns))
+        return {'name': snapshot(folder, 0).name}
+
+    with patch.object(backup, 'create_backup', side_effect=create_new):
+        result = backup.run(tmp_path, apply=True, now=NOW)
+
+    assert any(warning.startswith(older.name) and 'checksum mismatch' in warning for warning in result['warnings'])
+    assert older.is_file()
+
+
+def test_failed_verification_of_new_snapshot_preserves_old_archives(tmp_path):
+    folder = backup.pool(tmp_path, True)
+    previous = [snapshot(folder, day) for day in (1, 2, 3)]
+
+    def create_new(*_):
+        new_archive = snapshot(folder, 0)
+        new_archive.write_bytes(b'corrupted!')
+        return {'name': new_archive.name}
+
+    with patch.object(backup, 'create_backup', side_effect=create_new):
+        with pytest.raises(RuntimeError, match='New snapshot failed verification'):
+            backup.run(tmp_path, apply=True, now=NOW)
+
+    assert all(path.is_file() for path in previous)
+    assert not (folder / 'latest.dump').exists()
