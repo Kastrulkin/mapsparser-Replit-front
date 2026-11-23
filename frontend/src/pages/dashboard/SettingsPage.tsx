@@ -141,7 +141,7 @@ const LegacySettingsPage = () => {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" asChild>
-                <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
+                <Link to="/dashboard/content?section=calendar">Вернуться в контент-план</Link>
               </Button>
               <span className="text-xs font-medium text-sky-800">
                 Следующий безопасный шаг: предпросмотр → подтверждение → расписание.
@@ -187,7 +187,7 @@ const LegacySettingsPage = () => {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" asChild>
-                <Link to="/dashboard/card?tab=news&mode=plan">Вернуться в контент-план</Link>
+                <Link to="/dashboard/content?section=calendar">Вернуться в контент-план</Link>
               </Button>
               <span className="text-xs font-medium text-sky-800">
                 После подключения проверьте готовность API-каналов без публикации.

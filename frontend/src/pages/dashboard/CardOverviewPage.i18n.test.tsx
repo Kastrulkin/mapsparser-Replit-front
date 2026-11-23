@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LanguageProvider } from '@/i18n/LanguageContext';
@@ -20,6 +20,11 @@ const ContextRoute = () => (
     onBusinessChange: vi.fn(),
   }} />
 );
+
+const CurrentLocation = () => {
+  const { pathname, search, hash } = useLocation();
+  return <output>{pathname}{search}{hash}</output>;
+};
 
 describe('CardOverviewPage localization', () => {
   let finishYandexSummary: (() => void) | undefined;
@@ -125,6 +130,24 @@ describe('CardOverviewPage localization', () => {
     const copy = getCardOverviewPageCopy('tr');
     expect(copy.refreshAllHint).toBe('Eklenen tüm harita kayıtlarını yeniler. Kayıt verilerinin miktarına bağlı olarak yaklaşık 10 kredi tutar.');
     expect(copy.refreshAllHint).not.toContain('Refreshes all added map listings');
+  });
+
+  it('redirects an old map content-plan link to the calendar with its business and plan', async () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard/card?tab=news&mode=plan&business_id=demo-business&plan_id=plan-1#calendar']}>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route path="/dashboard/card" element={<CardOverviewPage />} />
+            </Route>
+            <Route path="/dashboard/content" element={<CurrentLocation />} />
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('/dashboard/content?business_id=demo-business&plan_id=plan-1&section=calendar#calendar')).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('opens the reviews workspace with the unanswered filter from the route', async () => {

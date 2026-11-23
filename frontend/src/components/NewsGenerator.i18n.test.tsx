@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,15 +25,19 @@ describe('NewsGenerator localization', () => {
             <Route element={<ContextRoute />}>
               <Route index element={<NewsGenerator services={[]} businessId="demo-business" />} />
             </Route>
+            <Route path="/dashboard/content" element={<h1>Content calendar</h1>} />
           </Routes>
         </LanguageProvider>
       </MemoryRouter>,
     );
 
     expect(await screen.findByText('Kaynak materyal')).toBeInTheDocument();
-    expect(await screen.findByText('İçerik planı')).toBeInTheDocument();
+    const planLink = screen.getByRole('link', { name: 'İçerik planı' });
+    expect(planLink).toHaveAttribute('href', '/dashboard/content?section=calendar');
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(container.textContent).not.toContain('Source Material');
     expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(planLink);
+    expect(await screen.findByRole('heading', { name: 'Content calendar' })).toBeInTheDocument();
   });
 });

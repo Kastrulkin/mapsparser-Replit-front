@@ -123,7 +123,7 @@ export const NextStepBanner = ({
             <p className="mt-1 text-sm leading-6 text-slate-700">{copy.nextStep.readyDescription}</p>
           </div>
           <Button type="button" variant="outline" asChild>
-            <Link to="/dashboard/card?tab=news&mode=plan">{copy.nextStep.openContentPlan}</Link>
+            <Link to="/dashboard/content?section=calendar">{copy.nextStep.openContentPlan}</Link>
           </Button>
         </div>
       </section>

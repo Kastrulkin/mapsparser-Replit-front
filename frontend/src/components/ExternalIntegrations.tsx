@@ -983,7 +983,7 @@ export const ExternalIntegrations: React.FC<ExternalIntegrationsProps> = ({
                   <span className="font-semibold text-sky-950">После подключения:</span>
                   <span>Вернуться в контент-план, нажмите “Проверить готовность”, затем пройдите предпросмотр → подтверждение → расписание.</span>
                   <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-2 text-[11px]" asChild>
-                    <Link to="/dashboard/card?tab=news&mode=plan">Открыть контент-план</Link>
+                    <Link to="/dashboard/content?section=calendar">Открыть контент-план</Link>
                   </Button>
                 </div>
                 <div

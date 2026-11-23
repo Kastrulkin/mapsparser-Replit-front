@@ -14,7 +14,6 @@ import {
 import type { ServiceTableItem } from '@/components/dashboard/CardServicesTable';
 import { CardServicesTable } from '@/components/dashboard/CardServicesTable';
 import {
-	DashboardActionPanel,
 	DashboardCompactMetricsRow,
 	DashboardPageHeader,
 	DashboardSection,
@@ -80,7 +79,7 @@ import {
 	X
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useOutletContext, useSearchParams } from 'react-router-dom';
 import { getCardOverviewPageCopy } from './cardOverviewPageCopy';
 
 type OperationsLearningMetric = { accepted_raw_pct?: number; edited_before_accept_pct?: number; accepted_total?: number; prompt_version?: string };
@@ -111,7 +110,18 @@ const toServicesSort = (value: string): ServicesSort => {
 };
 
 export const CardOverviewPage = () => {
-  const navigate = useNavigate();
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  if (params.get('tab')?.trim().toLowerCase() === 'news' && params.get('mode')?.trim().toLowerCase() === 'plan') {
+    params.delete('tab');
+    params.delete('mode');
+    if (!params.has('section')) params.set('section', 'calendar');
+    return <Navigate replace to={{ pathname: '/dashboard/content', search: params.toString(), hash }} />;
+  }
+  return <CardOverviewWorkspace />;
+};
+
+const CardOverviewWorkspace = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const servicesTableScrollRef = useRef<HTMLDivElement | null>(null);
   const context = useOutletContext<DashboardOutletContext>();
@@ -127,12 +137,9 @@ export const CardOverviewPage = () => {
   const mapsAccess = getCapabilityAccessForBusiness(currentBusiness, 'maps');
   const mapsLockedMessage = mapsAccess.message || pageCopy.automationLocked;
   const initialTabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
-  const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
   const [activeTab, setActiveTab] = useState<CardTabValue>(isCardTabValue(initialTabParam) ? initialTabParam : 'services');
   const initialSetup = useInitialBusinessSetup(currentBusinessId || null, !isDemoMode && activeTab === 'services');
-  const isContentPlanMode = activeTab === 'news' && initialModeParam === 'plan';
-  const initialNewsWorkspaceMode = isContentPlanMode ? 'plan' : 'news';
   const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
 
   // Состояния для рейтинга и отзывов
@@ -875,80 +882,33 @@ export const CardOverviewPage = () => {
 
       <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
         <DashboardPageHeader
-          icon={isContentPlanMode ? LayoutGrid : undefined}
-          title={isContentPlanMode ? (isRu ? 'Контент-план и посты' : 'Content plan and posts') : pageCopy.title}
-          description={isContentPlanMode
-            ? (isRu
-              ? 'Готовьте посты для карт и соцсетей, проверяйте каналы, утверждайте тексты и ставьте публикации в расписание.'
-              : 'Prepare posts for maps and social channels, check readiness, approve copy, and queue publications.')
-            : undefined}
+          title={pageCopy.title}
           actions={(
-            isContentPlanMode ? (
-              <>
+            <div className="flex flex-wrap items-start gap-2">
+              <div className="flex flex-col items-start gap-1">
                 <Button
                   type="button"
-                  onClick={() => navigate('/dashboard/settings?focus=telegram')}
-                  className="bg-slate-900 text-white hover:bg-slate-800"
+                  onClick={handleRefreshCardData}
+                  disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
+                  className="min-h-10"
+                  aria-describedby="card-refresh-cost"
                 >
-                  {isRu ? 'Настроить каналы' : 'Set up channels'}
+                  <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
+                  {refreshingCardData ? pageCopy.refreshing : refreshCardDataLabel}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate('/dashboard/card?tab=news')}
-                  className="border-slate-200 bg-white text-slate-800 hover:bg-slate-100"
-                >
-                  {isRu ? 'Обычный режим карточки' : 'Listing mode'}
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-start gap-2">
-                  <div className="flex flex-col items-start gap-1">
-                    <Button
-                      type="button"
-                      onClick={handleRefreshCardData}
-                      disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
-                      className="min-h-10"
-                      aria-describedby="card-refresh-cost"
-                    >
-                      <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
-                      {refreshingCardData ? pageCopy.refreshing : refreshCardDataLabel}
-                    </Button>
-                    <span id="card-refresh-cost" className="max-w-72 text-xs leading-4 text-muted-foreground">
-                      {refreshCardDataHint}
-                    </span>
-                  </div>
-                  <Button asChild variant="outline" className="min-h-10">
-                    <a href="/dashboard/progress?section=maps&audit=open" title={pageCopy.auditTitle}>
-                      <FileSearch className="mr-2 h-4 w-4" />
-                      {t.dashboard.card.progressTab}
-                    </a>
-                  </Button>
-                </div>
-              </>
-            )
+                <span id="card-refresh-cost" className="max-w-72 text-xs leading-4 text-muted-foreground">
+                  {refreshCardDataHint}
+                </span>
+              </div>
+              <Button asChild variant="outline" className="min-h-10">
+                <a href="/dashboard/progress?section=maps&audit=open" title={pageCopy.auditTitle}>
+                  <FileSearch className="mr-2 h-4 w-4" />
+                  {t.dashboard.card.progressTab}
+                </a>
+              </Button>
+            </div>
           )}
         />
-
-        {isContentPlanMode && (
-          <DashboardActionPanel
-            className="mt-6"
-            tone="sky"
-            title={isRu ? 'Рабочий режим публикаций' : 'Publishing workspace'}
-            description={isRu
-              ? 'Вы пришли прямо в контент-план. Сначала проверьте готовность каналов, затем откройте публикации на проверку, подтвердите тексты и поставьте их в расписание.'
-              : 'You opened the content plan directly. Check channel readiness, review prepared posts, approve copy, and queue them on schedule.'}
-            status={(
-              <div className="grid gap-2 text-sm sm:grid-cols-4">
-                <div><span className="font-semibold text-slate-950">1.</span> {isRu ? 'Готовность' : 'Readiness'}</div>
-                <div><span className="font-semibold text-slate-950">2.</span> {isRu ? 'Проверка' : 'Review'}</div>
-                <div><span className="font-semibold text-slate-950">3.</span> {isRu ? 'Расписание' : 'Schedule'}</div>
-                <div><span className="font-semibold text-slate-950">4.</span> {isRu ? 'Результат' : 'Result'}</div>
-              </div>
-            )}
-          />
-        )}
 
         {error && (
           <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
@@ -988,34 +948,32 @@ export const CardOverviewPage = () => {
           className="mt-5 min-w-0 space-y-5"
         >
           <div className="rounded-2xl border border-border bg-card shadow-sm">
-            {!isContentPlanMode && (
-              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3 sm:px-4">
-                {orderedMapSources.length > 0 && (
-                  <div role="group" aria-label={pageCopy.mapSources} className="flex flex-wrap gap-1">
-                    {['all', ...orderedMapSources].map((source) => (
-                      <Button
-                        key={source}
-                        type="button"
-                        variant={selectedSource === source ? 'default' : 'outline'}
-                        aria-pressed={selectedSource === source}
-                        onClick={() => setSelectedSource(source)}
-                        className="min-h-10 rounded-lg px-3"
-                      >
-                        {source === 'all' ? pageCopy.allMaps : source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-                <dl aria-busy={loadingSummary} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                  {mapMetrics.map(({ label, value }) => (
-                    <div key={label} className="flex items-baseline gap-1.5">
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
-                    </div>
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3 sm:px-4">
+              {orderedMapSources.length > 0 && (
+                <div role="group" aria-label={pageCopy.mapSources} className="flex flex-wrap gap-1">
+                  {['all', ...orderedMapSources].map((source) => (
+                    <Button
+                      key={source}
+                      type="button"
+                      variant={selectedSource === source ? 'default' : 'outline'}
+                      aria-pressed={selectedSource === source}
+                      onClick={() => setSelectedSource(source)}
+                      className="min-h-10 rounded-lg px-3"
+                    >
+                      {source === 'all' ? pageCopy.allMaps : source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
+                    </Button>
                   ))}
-                </dl>
-              </div>
-            )}
+                </div>
+              )}
+              <dl aria-busy={loadingSummary} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {mapMetrics.map(({ label, value }) => (
+                  <div key={label} className="flex items-baseline gap-1.5">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
             <TabsList
               aria-label={pageCopy.title}
               className="h-auto min-h-11 w-full flex-wrap justify-start gap-x-1 rounded-none bg-transparent p-0 px-2 sm:px-3"
@@ -1335,7 +1293,6 @@ export const CardOverviewPage = () => {
               businessId={currentBusinessId}
               externalPosts={externalPosts}
               selectedSource={selectedSource}
-              initialWorkspaceMode={initialNewsWorkspaceMode}
             />
           </TabsContent>
 
@@ -1343,7 +1300,7 @@ export const CardOverviewPage = () => {
             <KeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>
-        {user?.is_superadmin && !isContentPlanMode && (
+        {user?.is_superadmin && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <button
               type="button"

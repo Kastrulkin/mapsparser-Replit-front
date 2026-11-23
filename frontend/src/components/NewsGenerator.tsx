@@ -25,7 +25,7 @@ import {
 	Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -33,12 +33,9 @@ import { Textarea } from './ui/textarea';
 
 type ServiceLite = { id: string; name: string };
 type SeoKeywordLite = { keyword: string; views?: number };
-type NewsWorkspaceMode = 'news' | 'plan';
 
-export default function NewsGenerator({ services, businessId, externalPosts, initialWorkspaceMode = 'news' }: { services: ServiceLite[]; businessId?: string; externalPosts?: NewsPost[]; initialWorkspaceMode?: NewsWorkspaceMode }) {
-  const navigate = useNavigate();
+export default function NewsGenerator({ services, businessId, externalPosts }: { services: ServiceLite[]; businessId?: string; externalPosts?: NewsPost[] }) {
   const { user } = useOutletContext<DashboardOutletContext>();
-  const [workspaceMode, setWorkspaceMode] = useState<NewsWorkspaceMode>(initialWorkspaceMode);
   const [useService, setUseService] = useState(false);
   const [useTransaction, setUseTransaction] = useState(false);
   const [useSeoKeywords, setUseSeoKeywords] = useState(false);
@@ -65,13 +62,6 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
   const [abMode, setAbMode] = useState<'auto' | 'force_a' | 'force_b'>('auto');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const headerTitle = workspaceMode === 'plan'
-    ? newsCopy.planTitle
-    : t.dashboard.card.newsGenerator.title;
-  const headerSubtitle = workspaceMode === 'plan'
-    ? newsCopy.planSubtitle
-    : t.dashboard.card.newsGenerator.subtitle;
-
   const LANGUAGE_OPTIONS = [
     { value: 'ru', label: 'Русский' },
     { value: 'en', label: 'English' },
@@ -308,44 +298,15 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
         <div>
           <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Newspaper className="w-6 h-6 text-primary" />
-            {headerTitle}
+            {t.dashboard.card.newsGenerator.title}
           </h3>
-          <p className="text-gray-600 mt-1">{headerSubtitle}</p>
+          <p className="text-gray-600 mt-1">{t.dashboard.card.newsGenerator.subtitle}</p>
         </div>
+        <Button variant="outline" asChild>
+          <Link to="/dashboard/content?section=calendar">{newsCopy.planTab}</Link>
+        </Button>
       </div>
 
-      <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setWorkspaceMode('news')}
-          className={cn(
-            'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
-            workspaceMode === 'news' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          {t.dashboard.card.newsGenerator.title}
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceMode('plan')}
-          className={cn(
-            'rounded-xl px-4 py-2 text-sm font-medium transition-colors',
-            workspaceMode === 'plan' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-          )}
-        >
-          {newsCopy.planTab}
-        </button>
-      </div>
-
-      {workspaceMode === 'plan' ? (
-        <MapsPublicationsWidget
-          externalPosts={externalPosts}
-          onOpenContent={() => navigate('/dashboard/content')}
-        />
-      ) : null}
-
-      {workspaceMode === 'news' ? (
-      <>
       {/* Generator Panel */}
       <div className={cn(DESIGN_TOKENS.glass.default, "rounded-2xl p-6 bg-gradient-to-br from-white/80 to-blue-50/30")}>
 
@@ -814,62 +775,6 @@ export default function NewsGenerator({ services, businessId, externalPosts, ini
             </div>
           );
         })()}
-      </div>
-      </>
-      ) : null}
-    </div>
-  );
-}
-
-function MapsPublicationsWidget({ externalPosts, onOpenContent }: { externalPosts?: NewsPost[]; onOpenContent: () => void }) {
-  const visiblePosts = Array.isArray(externalPosts) ? externalPosts.slice(0, 3) : [];
-  const fallbackPosts = [
-    { id: 'sample-published', date: '3 июля', title: 'Публикация опубликована', state: 'done' },
-    { id: 'sample-planned', date: '10 июля', title: 'Публикация запланирована', state: 'done' },
-    { id: 'sample-review', date: 'завтра', title: 'Следующая публикация требует проверки', state: 'attention' },
-  ];
-  const posts = visiblePosts.length > 0
-    ? visiblePosts.map((post, index) => ({
-      id: String(post.id || index),
-      date: String(post.published_at || post.scheduled_for || post.created_at || 'скоро').slice(0, 10),
-      title: String(post.title || post.text || post.generated_text || 'Публикация для карты'),
-      state: post.approved || post.published_at ? 'done' : 'attention',
-    }))
-    : fallbackPosts;
-
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            <Calendar className="h-4 w-4" />
-            Публикации
-          </div>
-          <h4 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
-            Публикации теперь живут в разделе “Контент”
-          </h4>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Здесь остаётся быстрый обзор для Яндекс Карт. План, календарь, соцсети, проверка и размещение управляются в едином центре.
-          </p>
-        </div>
-        <Button type="button" onClick={onOpenContent} className="rounded-2xl bg-slate-950 px-5 py-6 text-white hover:bg-slate-800">
-          Все публикации
-          <ExternalLink className="ml-2 h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="mt-6 grid gap-3 md:grid-cols-3">
-        {posts.map((post) => (
-          <div key={post.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-              {post.state === 'done' ? <Check className="h-4 w-4 text-emerald-600" /> : <Sparkles className="h-4 w-4 text-amber-600" />}
-              {post.date}
-            </div>
-            <div className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">
-              {post.title}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
