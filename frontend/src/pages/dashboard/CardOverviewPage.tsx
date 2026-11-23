@@ -991,22 +991,19 @@ export const CardOverviewPage = () => {
             {!isContentPlanMode && (
               <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3 sm:px-4">
                 {orderedMapSources.length > 0 && (
-                  <div role="group" aria-label={pageCopy.mapSources} className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span aria-hidden="true" className="text-sm font-medium text-muted-foreground">{pageCopy.mapSources}</span>
-                    <div className="flex flex-wrap gap-1">
-                      {['all', ...orderedMapSources].map((source) => (
-                        <Button
-                          key={source}
-                          type="button"
-                          variant={selectedSource === source ? 'default' : 'outline'}
-                          aria-pressed={selectedSource === source}
-                          onClick={() => setSelectedSource(source)}
-                          className="min-h-10 rounded-lg px-3"
-                        >
-                          {source === 'all' ? pageCopy.allMaps : source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
-                        </Button>
-                      ))}
-                    </div>
+                  <div role="group" aria-label={pageCopy.mapSources} className="flex flex-wrap gap-1">
+                    {['all', ...orderedMapSources].map((source) => (
+                      <Button
+                        key={source}
+                        type="button"
+                        variant={selectedSource === source ? 'default' : 'outline'}
+                        aria-pressed={selectedSource === source}
+                        onClick={() => setSelectedSource(source)}
+                        className="min-h-10 rounded-lg px-3"
+                      >
+                        {source === 'all' ? pageCopy.allMaps : source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
+                      </Button>
+                    ))}
                   </div>
                 )}
                 <dl aria-busy={loadingSummary} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">

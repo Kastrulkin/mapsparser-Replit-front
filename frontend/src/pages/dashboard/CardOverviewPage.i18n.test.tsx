@@ -182,6 +182,7 @@ describe('CardOverviewPage localization', () => {
     );
 
     const platform = await screen.findByRole('group', { name: 'Площадка' });
+    expect(screen.queryByText('Площадка', { exact: true })).not.toBeInTheDocument();
     const all = within(platform).getByRole('button', { name: 'Все карты' });
     const yandex = within(platform).getByRole('button', { name: 'Яндекс' });
     const google = within(platform).getByRole('button', { name: 'Google' });
