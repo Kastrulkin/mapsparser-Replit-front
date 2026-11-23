@@ -31,7 +31,7 @@ describe('demo language coverage', () => {
     const englishCopy = getCardOverviewPageCopy('en');
 
     expect(localizedCopy.title).not.toBe(englishCopy.title);
-    expect(localizedCopy.subtitle).not.toBe(englishCopy.subtitle);
+    expect(localizedCopy.mapSources).not.toBe(englishCopy.mapSources);
   });
 
   it.each(nonRussianLanguages)('%s has localized copy for the reported demo workspaces', (language) => {

@@ -120,12 +120,23 @@ export const removeManualCompetitor = (businessId: string, competitorId: string)
 
 export const loadCardClientInfo = (businessId: string) => jsonRequest(`/api/client-info?business_id=${businessId}`);
 
-const normalizeMapSource = (source: unknown) => {
-  const normalized = String(source || '').trim().toLowerCase();
-  if (normalized === 'yandex_maps' || normalized === 'yandex_business' || normalized === 'apify_yandex') return 'yandex';
-  if (normalized === 'google_maps' || normalized === 'google_business') return 'google';
-  return normalized;
-};
+const mapSourceAliases = new Map<string, string>([
+  ['yandex', 'yandex'],
+  ['yandex_maps', 'yandex'],
+  ['yandex_business', 'yandex'],
+  ['apify_yandex', 'yandex'],
+  ['google', 'google'],
+  ['google_maps', 'google'],
+  ['google_business', 'google'],
+  ['apify_google', 'google'],
+  ['2gis', '2gis'],
+  ['two_gis', '2gis'],
+  ['apify_2gis', '2gis'],
+  ['apple', 'apple'],
+  ['apple_maps', 'apple'],
+  ['apple_business', 'apple'],
+  ['apify_apple', 'apple'],
+]);
 
 export const extractMapSources = (data: { mapLinks?: Array<{ url?: string }> } | null, externalPosts: Array<{ source?: string }>): MapSourcesResult => {
   const sources = new Set<string>();
@@ -153,7 +164,7 @@ export const extractMapSources = (data: { mapLinks?: Array<{ url?: string }> } |
   }
 
   externalPosts.forEach((post) => {
-    const source = normalizeMapSource(post?.source);
+    const source = mapSourceAliases.get(String(post?.source || '').trim().toLowerCase());
     if (source) sources.add(source);
   });
 

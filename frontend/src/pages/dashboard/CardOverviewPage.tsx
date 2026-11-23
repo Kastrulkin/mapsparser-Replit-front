@@ -74,7 +74,6 @@ import {
 	RefreshCw,
 	Search,
 	Sparkles,
-	Star,
 	TrendingUp,
 	Trophy,
 	Wand2,
@@ -137,10 +136,16 @@ export const CardOverviewPage = () => {
   const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
 
   // Состояния для рейтинга и отзывов
-  const [rating, setRating] = useState<number | null>(null);
-  const [reviewsTotal, setReviewsTotal] = useState<number>(0);
-  const [lastParseDate, setLastParseDate] = useState<string | null>(null);
-  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const summaryRequestId = useRef(0);
+  const [summary, setSummary] = useState<{
+    businessId: string;
+    source: string;
+    network: boolean;
+    rating: number | null;
+    reviewsTotal: number;
+    lastParseDate: string | null;
+    competitors: Competitor[];
+  } | null>(null);
   const [manualCompetitors, setManualCompetitors] = useState<ManualCompetitor[]>([]);
   const [manualCompetitorUrl, setManualCompetitorUrl] = useState('');
   const [manualCompetitorName, setManualCompetitorName] = useState('');
@@ -232,30 +237,34 @@ export const CardOverviewPage = () => {
   // Загрузка сводки (рейтинг, количество отзывов)
   const loadSummary = useLatestCallback(async () => {
     if (!currentBusinessId) return;
+    const requestId = ++summaryRequestId.current;
     setLoadingSummary(true);
     try {
       const { data } = await loadCardExternalSummary(currentBusinessId, isNetworkRepresentative, selectedSource);
-      if (data.success) {
-        setRating(data.rating);
-        setReviewsTotal(data.reviews_total || 0);
-        setLastParseDate(data.last_parse_date || null);
-        try {
-          if (isDemoMode) {
-            setCompetitors(demoShowcase.competitors);
-          } else if (data.competitors) {
-            setCompetitors(typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors);
-          } else {
-            setCompetitors([]);
-          }
-        } catch (e) {
-          console.error("Error parsing competitors:", e);
-          setCompetitors([]);
+      if (requestId !== summaryRequestId.current || !data.success) return;
+      let competitors: Competitor[] = [];
+      try {
+        if (isDemoMode) {
+          competitors = demoShowcase.competitors;
+        } else if (data.competitors) {
+          competitors = typeof data.competitors === 'string' ? JSON.parse(data.competitors) : data.competitors;
         }
+      } catch (error) {
+        console.error('Error parsing competitors:', error);
       }
-    } catch (e) {
-      console.error('Ошибка загрузки сводки:', e);
+      setSummary({
+        businessId: currentBusinessId,
+        source: selectedSource,
+        network: isNetworkRepresentative,
+        rating: data.rating ?? null,
+        reviewsTotal: data.reviews_total || 0,
+        lastParseDate: data.last_parse_date || null,
+        competitors,
+      });
+    } catch (error) {
+      console.error('Ошибка загрузки сводки:', error);
     } finally {
-      setLoadingSummary(false);
+      if (requestId === summaryRequestId.current) setLoadingSummary(false);
     }
   });
 
@@ -641,6 +650,23 @@ export const CardOverviewPage = () => {
     });
   }, [mapSources]);
 
+  const currentSummary = summary && summary.businessId === currentBusinessId
+    && summary.source === selectedSource
+    && summary.network === isNetworkRepresentative ? summary : null;
+  const { rating, reviewsTotal, lastParseDate = null, competitors = [] } = currentSummary ?? {};
+  const mapMetrics = [
+    { label: pageCopy.rating, value: rating != null ? Number(rating).toFixed(1) : '—' },
+    { label: pageCopy.reviews, value: reviewsTotal ?? '—' },
+    { label: pageCopy.lastRefresh, value: lastParseDate ? new Date(lastParseDate).toLocaleDateString(language) : '—' },
+  ];
+  const sectionTabs = [
+    { value: 'services', label: pageCopy.servicesTab, icon: List },
+    { value: 'reviews', label: pageCopy.reviewsTab, icon: MessageSquare },
+    { value: 'news', label: pageCopy.newsTab, icon: Newspaper },
+    { value: 'keywords', label: pageCopy.keywordsTab, icon: TrendingUp },
+    { value: 'competitors', label: pageCopy.competitorsTab, icon: Trophy },
+  ];
+
   const refreshAllMapsSelected = selectedSource === 'all';
   const refreshCardDataLabel = refreshAllMapsSelected ? pageCopy.refreshAll : pageCopy.refresh;
   const refreshCardDataHint = refreshAllMapsSelected ? pageCopy.refreshAllHint : pageCopy.refreshHint;
@@ -849,14 +875,13 @@ export const CardOverviewPage = () => {
 
       <div className={cn("transition-all duration-300", isNetworkMaster ? "pointer-events-none select-none blur-sm opacity-50" : "")}>
         <DashboardPageHeader
-          eyebrow={isContentPlanMode ? (isRu ? 'Посты и контент-план' : 'Posts and content plan') : pageCopy.eyebrow}
-          icon={LayoutGrid}
+          icon={isContentPlanMode ? LayoutGrid : undefined}
           title={isContentPlanMode ? (isRu ? 'Контент-план и посты' : 'Content plan and posts') : pageCopy.title}
           description={isContentPlanMode
             ? (isRu
               ? 'Готовьте посты для карт и соцсетей, проверяйте каналы, утверждайте тексты и ставьте публикации в расписание.'
               : 'Prepare posts for maps and social channels, check readiness, approve copy, and queue publications.')
-            : pageCopy.subtitle}
+            : undefined}
           actions={(
             isContentPlanMode ? (
               <>
@@ -884,31 +909,29 @@ export const CardOverviewPage = () => {
                       type="button"
                       onClick={handleRefreshCardData}
                       disabled={!currentBusinessId || refreshingCardData || !canTriggerRefresh}
-                      className="bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300"
-                      title={pageCopy.refreshTitle}
+                      className="min-h-10"
+                      aria-describedby="card-refresh-cost"
                     >
                       <RefreshCw className={cn("mr-2 h-4 w-4", refreshingCardData ? "animate-spin" : "")} />
                       {refreshingCardData ? pageCopy.refreshing : refreshCardDataLabel}
                     </Button>
-                    <span className="max-w-72 text-xs leading-4 text-slate-500">
+                    <span id="card-refresh-cost" className="max-w-72 text-xs leading-4 text-muted-foreground">
                       {refreshCardDataHint}
                     </span>
                   </div>
-                  <a
-                    href="/dashboard/progress?section=maps&audit=open"
-                    title={pageCopy.auditTitle}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-100"
-                  >
-                    <FileSearch className="w-4 h-4" />
-                    <span>{t.dashboard.card.progressTab}</span>
-                  </a>
+                  <Button asChild variant="outline" className="min-h-10">
+                    <a href="/dashboard/progress?section=maps&audit=open" title={pageCopy.auditTitle}>
+                      <FileSearch className="mr-2 h-4 w-4" />
+                      {t.dashboard.card.progressTab}
+                    </a>
+                  </Button>
                 </div>
               </>
             )
           )}
         />
 
-        {isContentPlanMode ? (
+        {isContentPlanMode && (
           <DashboardActionPanel
             className="mt-6"
             tone="sky"
@@ -925,38 +948,6 @@ export const CardOverviewPage = () => {
               </div>
             )}
           />
-        ) : (
-          <>
-            <DashboardCompactMetricsRow
-              className="mt-6"
-              hintPlacement="tooltip"
-              items={[
-                {
-                  label: pageCopy.rating,
-                  value: rating != null ? Number(rating).toFixed(1) : '—',
-                  hint: pageCopy.ratingHint,
-                },
-                {
-                  label: pageCopy.reviews,
-                  value: reviewsTotal,
-                  hint: pageCopy.reviewsHint,
-                },
-                {
-                  label: pageCopy.lastRefresh,
-                  value: lastParseDate
-                    ? new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')
-                    : '—',
-                  hint: pageCopy.lastRefreshHint,
-                },
-                {
-                  label: pageCopy.mapSources,
-                  value: mapSources.length || 0,
-                  hint: pageCopy.mapSourcesHint,
-                },
-              ]}
-            />
-
-          </>
         )}
 
         {error && (
@@ -970,37 +961,6 @@ export const CardOverviewPage = () => {
           <div className="bg-emerald-50/80 backdrop-blur-sm border border-emerald-200 text-emerald-700 px-6 py-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <p>{success}</p>
-          </div>
-        )}
-
-        {/* Map Source Switcher */}
-        {!isContentPlanMode && mapSources.length > 0 && (
-          <div className="my-6 inline-flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
-            <button
-              onClick={() => setSelectedSource('all')}
-              className={cn(
-                "rounded-xl px-4 py-2 text-sm font-medium transition-all",
-                selectedSource === 'all'
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-                  : "text-slate-500 hover:bg-white hover:text-slate-900"
-              )}
-            >
-              {pageCopy.allMaps}
-            </button>
-            {orderedMapSources.map(source => (
-              <button
-                key={source}
-                onClick={() => setSelectedSource(source)}
-                className={cn(
-                  "rounded-xl px-4 py-2 text-sm font-medium capitalize transition-all",
-                  selectedSource === source
-                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-                    : "text-slate-500 hover:bg-white hover:text-slate-900"
-                )}
-              >
-                {source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
-              </button>
-            ))}
           </div>
         )}
 
@@ -1025,30 +985,57 @@ export const CardOverviewPage = () => {
             }
             setSearchParams(nextParams, { replace: true });
           }}
-          className="space-y-8"
+          className="mt-5 min-w-0 space-y-5"
         >
-          <TabsList className="flex w-full justify-start overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/80 p-1.5 [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="services" data-tour-target="card-tab-services" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
-              <List className="w-4 h-4" />
-              {pageCopy.servicesTab}
-            </TabsTrigger>
-            <TabsTrigger value="reviews" data-tour-target="card-tab-reviews" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
-              <MessageSquare className="w-4 h-4" />
-              {pageCopy.reviewsTab}
-            </TabsTrigger>
-            <TabsTrigger value="news" data-tour-target="card-tab-news" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
-              <Newspaper className="w-4 h-4" />
-              {pageCopy.newsTab}
-            </TabsTrigger>
-            <TabsTrigger value="keywords" data-tour-target="card-tab-keywords" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
-              <TrendingUp className="w-4 h-4" />
-              {pageCopy.keywordsTab}
-            </TabsTrigger>
-            <TabsTrigger value="competitors" data-tour-target="card-tab-competitors" className="gap-2 rounded-xl px-5 py-2.5 text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm">
-              <Trophy className="w-4 h-4" />
-              {pageCopy.competitorsTab}
-            </TabsTrigger>
-          </TabsList>
+          <div className="rounded-2xl border border-border bg-card shadow-sm">
+            {!isContentPlanMode && (
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3 sm:px-4">
+                {orderedMapSources.length > 0 && (
+                  <div role="group" aria-label={pageCopy.mapSources} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span aria-hidden="true" className="text-sm font-medium text-muted-foreground">{pageCopy.mapSources}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {['all', ...orderedMapSources].map((source) => (
+                        <Button
+                          key={source}
+                          type="button"
+                          variant={selectedSource === source ? 'default' : 'outline'}
+                          aria-pressed={selectedSource === source}
+                          onClick={() => setSelectedSource(source)}
+                          className="min-h-10 rounded-lg px-3"
+                        >
+                          {source === 'all' ? pageCopy.allMaps : source === 'yandex' ? pageCopy.yandex : formatMapSourceTab(source, language)}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <dl aria-busy={loadingSummary} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  {mapMetrics.map(({ label, value }) => (
+                    <div key={label} className="flex items-baseline gap-1.5">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="font-semibold tabular-nums text-foreground">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            <TabsList
+              aria-label={pageCopy.title}
+              className="h-auto min-h-11 w-full flex-wrap justify-start gap-x-1 rounded-none bg-transparent p-0 px-2 sm:px-3"
+            >
+              {sectionTabs.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  data-tour-target={`card-tab-${value}`}
+                  className="min-h-11 gap-1.5 rounded-none border-b-2 border-transparent px-2.5 focus-visible:ring-inset focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none sm:px-3"
+                >
+                  <Icon aria-hidden="true" className="h-4 w-4" />
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           <TabsContent value="competitors" className="space-y-6">
             {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="competitors" />}
@@ -1069,75 +1056,9 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
-            {/* Rating Summary Card */}
-            <DashboardSection title={pageCopy.rating} description={pageCopy.ratingDescription}>
-                <div className="flex justify-between items-start mb-5">
-                  {lastParseDate && (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{pageCopy.lastRefresh}</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {new Date(lastParseDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
-                          day: 'numeric',
-                          month: 'long',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-8">
-                  {loadingSummary ? (
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
-                      {t.dashboard.subscription.processing}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex flex-col">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-700">
-                            {rating != null ? Number(rating).toFixed(1) : '—'}
-                          </span>
-                          <span className="text-gray-400 font-medium">/ 5.0</span>
-                        </div>
-                      </div>
-
-                      <div className="h-12 w-px bg-gray-200" />
-
-                      <div className="flex flex-col gap-1">
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={cn(
-                                "w-6 h-6",
-                                rating !== null && star <= Math.floor(rating)
-                                  ? "text-amber-400 fill-amber-400"
-                                  : rating !== null && star === Math.ceil(rating) && rating % 1 >= 0.5
-                                    ? "text-amber-400 fill-amber-400" // Half star logic could be better but simplified
-                                    : "text-gray-200 fill-gray-100"
-                              )}
-                            />
-                          ))}
-                        </div>
-                        <div className="text-gray-500 font-medium ml-1">
-                          {reviewsTotal} {t.dashboard.card.reviews}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-            </DashboardSection>
-
-            {/* Services Section */}
-            <DashboardSection contentClassName="space-y-5" dataTourTarget="card-services">
-              <DashboardActionPanel
-                title={pageCopy.servicesTitle}
-                description={pageCopy.servicesDescription}
-                tone="default"
-                actions={!showAddService ? (
+            <DashboardSection contentClassName="space-y-5 px-4 sm:px-6" dataTourTarget="card-services">
+              {!showAddService && (
+                <div className="flex flex-wrap items-center gap-2">
                   <TooltipProvider delayDuration={180}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1243,11 +1164,13 @@ export const CardOverviewPage = () => {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                ) : null}
-                status={problemRegenerationStatus ? (
-                  <span>{problemRegenerationStatus}</span>
-                ) : null}
-              />
+                </div>
+              )}
+              {problemRegenerationStatus && (
+                <p role="status" className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                  {problemRegenerationStatus}
+                </p>
+              )}
 
               {showAddService ? (
                 <CardServiceAddForm
@@ -1260,6 +1183,7 @@ export const CardOverviewPage = () => {
               ) : null}
 
               <DashboardCompactMetricsRow
+                className="grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5"
                 items={[
                   { label: pageCopy.total, value: servicesQualityAudit.summary.total },
                   { label: pageCopy.ready, value: servicesQualityAudit.summary.good, tone: 'positive' },

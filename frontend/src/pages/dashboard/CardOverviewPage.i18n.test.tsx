@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,12 +22,25 @@ const ContextRoute = () => (
 );
 
 describe('CardOverviewPage localization', () => {
+  let finishYandexSummary: (() => void) | undefined;
+
   beforeEach(() => {
+    finishYandexSummary = undefined;
     window.localStorage.clear();
     window.localStorage.setItem('language', 'el');
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('/external/summary')) return response({ success: true, rating: 4.6, reviews_total: 90, last_parse_date: '2026-06-24T20:22:00Z', competitors: [] });
+      if (url.includes('/external/summary')) {
+        if (url.includes('source=yandex')) {
+          return new Promise<Response>((resolve) => {
+            finishYandexSummary = () => resolve(response({ success: true, rating: 3.9, reviews_total: 25, competitors: [] }));
+          });
+        }
+        if (url.includes('source=google')) {
+          return response({ success: true, rating: 4.8, reviews_total: 65, competitors: [] });
+        }
+        return response({ success: true, rating: 4.6, reviews_total: 90, last_parse_date: '2026-06-24T20:22:00Z', competitors: [] });
+      }
       if (url.includes('/services/list')) return response({
         success: true,
         services: [{ id: 'demo-service', name: 'Стрижка собак', description: 'Аккуратная стрижка и уход за шерстью.', keywords: ['груминг собак'] }],
@@ -53,7 +66,7 @@ describe('CardOverviewPage localization', () => {
         businessName: 'Roga i Kopyta',
         mapLinks: window.localStorage.getItem('language') === 'tr'
           ? [{ url: 'https://yandex.example/demo' }, { url: 'https://2gis.example/demo' }]
-          : [{ url: 'https://yandex.example/demo' }],
+          : [{ url: 'https://yandex.example/demo' }, { url: 'https://www.google.com/maps/place/Demo' }],
       });
       if (url.includes('/network-locations')) return response({ success: true, locations: [] });
       return response({ success: true });
@@ -77,8 +90,8 @@ describe('CardOverviewPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Βαθμολογία' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('90 κριτικές')).toBeInTheDocument());
+    expect(await screen.findByText('Βαθμολογία')).toBeInTheDocument();
+    expect(await screen.findByText('90', { exact: true })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Υπηρεσίες' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Κριτικές' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Νέα' })).toBeInTheDocument();
@@ -153,9 +166,8 @@ describe('CardOverviewPage localization', () => {
     expect(screen.queryByText(/^Последнее обновление карточки:/)).not.toBeInTheDocument();
   });
 
-  it('shows listing metric hints only on interaction and dismisses them with Escape', async () => {
+  it('keeps the platform selector separate from section navigation and ignores an older platform response', async () => {
     window.localStorage.setItem('language', 'ru');
-    const copy = getCardOverviewPageCopy('ru');
 
     render(
       <MemoryRouter>
@@ -169,19 +181,35 @@ describe('CardOverviewPage localization', () => {
       </MemoryRouter>,
     );
 
-    const label = await screen.findByText(copy.mapSources);
-    const metric = label.parentElement!;
-    expect(metric).toHaveAttribute('tabindex', '0');
-    for (const hint of [copy.ratingHint, copy.reviewsHint, copy.lastRefreshHint, copy.mapSourcesHint]) {
-      expect(screen.queryByText(hint)).not.toBeInTheDocument();
-    }
+    const platform = await screen.findByRole('group', { name: 'Площадка' });
+    const all = within(platform).getByRole('button', { name: 'Все карты' });
+    const yandex = within(platform).getByRole('button', { name: 'Яндекс' });
+    const google = within(platform).getByRole('button', { name: 'Google' });
+    const sections = screen.getByRole('tablist', { name: 'Управление картами' });
+    const services = within(sections).getByRole('tab', { name: 'Услуги' });
 
-    fireEvent.focus(metric);
-    const tooltip = await screen.findByRole('tooltip');
-    expect(tooltip).toHaveTextContent(copy.mapSourcesHint);
-    expect(metric).toHaveAccessibleDescription(copy.mapSourcesHint);
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    expect(services).toHaveAttribute('aria-selected', 'true');
+    expect(platform.compareDocumentPosition(sections) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(await screen.findByText('4.6', { exact: true })).toBeInTheDocument();
+    expect(screen.getAllByText('Рейтинг', { exact: true })).toHaveLength(1);
 
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    fireEvent.click(yandex);
+    expect(yandex).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('4.6', { exact: true })).not.toBeInTheDocument();
+    await waitFor(() => expect(finishYandexSummary).toBeTypeOf('function'));
+
+    fireEvent.click(google);
+    expect(google).toHaveAttribute('aria-pressed', 'true');
+    expect(yandex).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findByText('4.8', { exact: true })).toBeInTheDocument();
+    await act(async () => { finishYandexSummary?.(); });
+    expect(screen.getByText('4.8', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('3.9', { exact: true })).not.toBeInTheDocument();
+    expect(services).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.click(all);
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByText('4.6', { exact: true })).toBeInTheDocument();
   });
 });

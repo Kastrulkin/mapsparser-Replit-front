@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { extractMapSources } from './cardOverviewApi';
 
 describe('extractMapSources', () => {
-  it('deduplicates technical source aliases into one tab per map provider', () => {
+  it('groups only map providers and deduplicates their source aliases', () => {
     const result = extractMapSources(
       {
         mapLinks: [
@@ -16,10 +16,15 @@ describe('extractMapSources', () => {
         { source: 'yandex_business' },
         { source: 'google_maps' },
         { source: 'google_business' },
+        { source: 'apify_2gis' },
+        { source: 'apple_maps' },
+        { source: 'LocalOS' },
+        { source: 'telegram_app' },
+        { source: 'vk' },
       ],
     );
 
-    expect(result.sources).toEqual(['yandex', 'google']);
+    expect(result.sources).toEqual(['yandex', 'google', '2gis', 'apple']);
     expect(result.hasConfiguredMapLink).toBe(true);
     expect(result.hasSupportedConfiguredMapLink).toBe(true);
   });
