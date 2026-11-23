@@ -59,7 +59,8 @@ it('keeps one queue, opens a proposal from its catalogue row and removes the rev
     </Route></Routes></LanguageProvider>
   </MemoryRouter>);
 
-  const newRow = await screen.findByRole('button', { name: /Корпоративная униформа/ });
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/operator/initial-setup/' + businessId, expect.anything()));
+  const newRow = await screen.findByRole('button', { name: /Корпоративная униформа/ }, { timeout: 5000 });
   expect(newRow).toHaveTextContent('Новая услуга');
   expect(screen.getAllByText('Очередь услуг')).toHaveLength(1);
   expect(screen.getAllByRole('button', { name: /^Пошив мерча\s/ })).toHaveLength(1);

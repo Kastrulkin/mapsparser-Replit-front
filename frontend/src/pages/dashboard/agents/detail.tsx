@@ -25,6 +25,7 @@ import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 import {
 	approvalActionLabels,
+	buildEmployeeDescription,
 	approvalDecisionTitle,
 	explainApproval,
 	formatLastRun,
@@ -928,7 +929,7 @@ export const AgentOverviewPanel = ({
   const previewReady = activationGate?.preview_run_status?.ready === true;
   const activationVersionId = activationGate?.active_version_id || blueprint.active_version_id || '';
   const builderPreview = getBlueprintBuilderPreview(detailsBlueprint || blueprint);
-  const taskAnswer = builderPreview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const taskAnswer = blueprint.metadata_json?.template_key === 'maps_initial_setup' ? buildEmployeeDescription(blueprint) : builderPreview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const readyAnswer = needsApproval
     ? 'ждёт решения человека'
     : !connectorsReady
@@ -1114,7 +1115,7 @@ export const AgentProductCockpit = ({
   const PrimaryIcon = needsApproval ? ShieldCheck : canActivate ? CheckCircle2 : needsConnections ? Database : canPreview ? Play : needsLogic ? Workflow : previewReady ? FileCheck2 : Play;
   const primaryAction = needsApproval ? onOpenResults : canActivate ? () => onActivateVersion(activationVersionId) : needsConnections ? onOpenConnections : canPreview ? onStartRun : needsLogic ? onOpenLogic : previewReady ? onOpenResults : onStartRun;
   const primaryVariant: 'default' | 'outline' = needsApproval || canActivate || needsConnections || canPreview || needsLogic ? 'default' : 'outline';
-  const task = preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
+  const task = blueprint.metadata_json?.template_key === 'maps_initial_setup' ? buildEmployeeDescription(blueprint) : preview?.understood_task || blueprint.description || blueprint.active_goal || blueprint.latest_goal || 'Настройте задачу агента.';
   const uniqueReadyTitles = Array.from(new Set(readyItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
   const uniqueMissingTitles = Array.from(new Set(missingItems.map((item) => item.title || connectorLabel(item.provider)).filter(Boolean)));
   const dataText = preview?.data_sources?.length

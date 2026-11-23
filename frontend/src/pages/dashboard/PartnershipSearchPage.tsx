@@ -525,6 +525,7 @@ const toPilotCohort = (value: string): PilotCohort => {
 export const PartnershipSearchPage: React.FC = () => {
   const { currentBusinessId, currentBusiness, businesses, user, controlScope, onControlScopeChange, onBusinessChange } = useOutletContext<DashboardOutletContext>();
   const currentBusinessRef = useRef(currentBusinessId);
+  const catalogQueryRef = useRef<HTMLInputElement>(null);
   const leadsRequestVersion = useRef(0);
   currentBusinessRef.current = currentBusinessId;
   const partnershipAccess = getCapabilityAccessForBusiness(currentBusiness, 'partnerships');
@@ -859,7 +860,7 @@ export const PartnershipSearchPage: React.FC = () => {
   }, [selectedLeadId]);
 
   const loadPartnershipJourneyActions = useLatestCallback(async () => {
-    if (!currentBusinessId) {
+    if (user?.demo_mode || !currentBusinessId) {
       setJourneyActions([]);
       return;
     }
@@ -2347,12 +2348,21 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
         </header>
         <section className="rounded-[24px] bg-white p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]">
-          <label className="text-sm font-semibold text-slate-700">Название, категория или город<input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLeads(query); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
+          <label className="text-sm font-semibold text-slate-700">Название, категория или город<input ref={catalogQueryRef} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadLeads(query); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm" /></label>
           <button type="button" onClick={() => void loadLeads(query)} className="mt-3 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition-transform active:scale-[0.96]">Найти партнёров</button>
         </section>
         {error ? <div role="alert" className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-900">{error}</div> : null}
+        {!loading && !error && items.length === 0 && (
+          <section role="status" className="rounded-2xl border border-dashed border-border bg-background p-6">
+            <h2 className="text-lg font-semibold">Партнёры пока не найдены</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {query.trim() ? 'Измените запрос или сбросьте поиск, чтобы посмотреть доступные публичные карточки.' : 'В бесплатном предпросмотре пока нет карточек. Попробуйте поиск по названию, категории или городу.'}
+            </p>
+            {query.trim() && <Button variant="outline" className="mt-4" onClick={() => { setQuery(''); void loadLeads(''); catalogQueryRef.current?.focus(); }}>Сбросить поиск</Button>}
+          </section>
+        )}
         {loading && items.length === 0 ? <div className="h-64 animate-pulse rounded-[28px] bg-slate-200/70" /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Каталог партнёров">{items.map((item) => <article key={item.id} className="rounded-[24px] bg-white p-5 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-lg font-semibold text-slate-950">{item.name || 'Локальный партнёр'}</h2><p className="mt-2 text-sm text-slate-500">{[item.category, item.city].filter(Boolean).join(' · ') || 'Категория уточняется'}</p>{item.rating ? <p className="mt-4 text-sm text-slate-600">Рейтинг <span className="tabular-nums font-semibold text-slate-950">{item.rating}</span>{item.reviews_count ? ` · ${item.reviews_count} отзывов` : ''}</p> : null}<button type="button" onClick={() => void toggleCatalogShortlist(item)} disabled={loading} className={`mt-5 min-h-11 w-full rounded-xl px-4 text-sm font-semibold transition-[background-color,color,transform] active:scale-[0.96] ${item.catalog_shortlisted ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-950 text-white'}`}>{item.catalog_shortlisted ? 'В shortlist' : 'Добавить в shortlist'}</button></article>)}</div>}
-        <section className="rounded-[24px] bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6"><div><h2 className="text-balance text-xl font-semibold">Готовы написать выбранным партнёрам?</h2><p className="mt-2 text-pretty text-sm text-slate-300">LocalOS подготовит персональные сообщения и сохранит ручное подтверждение отправки.</p></div><Link to="/dashboard/profile?focus=subscription&tier=professional#subscription" className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-slate-950 transition-transform active:scale-[0.96] sm:mt-0">Открыть «Привлечение»</Link></section>
+        <section className="rounded-[24px] bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-6"><div><h2 className="text-balance text-xl font-semibold">Готовы написать выбранным партнёрам?</h2><p className="mt-2 text-pretty text-sm text-slate-300">LocalOS подготовит персональные сообщения и сохранит ручное подтверждение отправки.</p></div><Link to="/dashboard/profile?focus=subscription&tier=professional&return_to=%2Fdashboard%2Fpartnerships#subscription" className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-slate-950 transition-transform active:scale-[0.96] sm:mt-0">Открыть «Привлечение»</Link></section>
       </div>
     );
   }
@@ -2427,7 +2437,7 @@ export const PartnershipSearchPage: React.FC = () => {
         {selectedSearchGroup.startsWith('task:') && items.length < leadTotalCount && <Button type="button" variant="outline" disabled={loading} onClick={() => void loadMoreSearchLeads()}>Загрузить ещё</Button>}
       </div>}
 
-      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} compact selectedTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onTasksChange={handleSearchTasksChange} onTaskConfirmed={(taskId) => changeSearchGroup(`task:${taskId}`)} />}
+      {currentBusinessId && <OutreachContinuation key={currentBusinessId} businessId={currentBusinessId} compact demoMode={Boolean(user?.demo_mode)} selectedTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : undefined} onTasksChange={handleSearchTasksChange} onTaskConfirmed={(taskId) => changeSearchGroup(`task:${taskId}`)} />}
 
       {currentBusinessId && journeyActions.length ? <details><summary className="min-h-10 cursor-pointer py-2 text-sm text-muted-foreground">Требуют внимания · {journeyActions.length}</summary><section aria-label="Текущий шаг по партнёрствам" className="space-y-3">{journeyActions.slice(0, 2).map((action) => <JourneyActionCard key={action.id} action={action} businessId={currentBusinessId} onUpdated={() => void loadPartnershipJourneyActions()} />)}</section></details> : null}
 

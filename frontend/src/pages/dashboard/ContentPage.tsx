@@ -119,7 +119,7 @@ type ContentBrief = {
 };
 type GenerationAlternative = { id?: string; angle?: string; text?: string; score?: number; quality_passed?: boolean };
 type GenerationDetails = {
-  status?: 'generated' | 'needs_context' | 'failed';
+  status?: 'generated' | 'alternatives_ready' | 'needs_context' | 'failed';
   message?: string;
   source?: string;
   action?: {
@@ -227,6 +227,7 @@ type SocialSummary = {
 
 type PhotoAsset = {
   id?: string;
+  source?: string;
   original_url?: string;
   category?: string;
   quality_score?: number;
@@ -1195,7 +1196,9 @@ function ContentWorkspace() {
     const response = await fetch(`${API_URL}/api/media-intelligence/photos/${encodeURIComponent(assetId)}/file?variant=original`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
-    if (!response.ok) throw new Error('Не удалось получить исходное фото');
+    if (!response.ok) throw new Error(asset.source === 'disk_reference'
+      ? 'Не удалось открыть оригинал. Проверьте доступ к подключённой папке.'
+      : 'Не удалось получить исходное фото');
     const blob = await response.blob();
     if (!blob.type.startsWith('image/')) throw new Error('Исходный файл не является изображением');
     return blob;
@@ -1204,6 +1207,8 @@ function ContentWorkspace() {
   const photoFileExtension = (blob: Blob) => {
     if (blob.type === 'image/png') return 'png';
     if (blob.type === 'image/webp') return 'webp';
+    if (blob.type === 'image/heic') return 'heic';
+    if (blob.type === 'image/heif') return 'heif';
     return 'jpg';
   };
 
@@ -1218,15 +1223,17 @@ function ContentWorkspace() {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   };
 
-  const downloadOriginalPhoto = async (asset: PhotoAsset) => {
+  const downloadOriginalPhoto = async (asset: PhotoAsset, inLibrary = false) => {
+    const showError = inLibrary ? setMediaError : setError;
+    const showMessage = inLibrary ? setMediaActionMessage : setActionMessage;
     setBusyAction('photo-download');
-    setError('');
+    showError('');
+    showMessage('');
     try {
-      const blob = await loadOriginalPhotoBlob(asset);
-      savePhotoBlob(asset, blob);
-      setActionMessage('Исходное фото скачано без уменьшения качества.');
+      savePhotoBlob(asset, await loadOriginalPhotoBlob(asset));
+      showMessage('Исходное фото скачано без уменьшения качества.');
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать фото');
+      showError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать фото');
     } finally {
       setBusyAction('');
     }
@@ -1549,17 +1556,21 @@ function ContentWorkspace() {
     }
   };
 
-  const generateSelectedDraft = async () => {
+  const generateSelectedDraft = async (additionalVariants = false) => {
     if (!selectedItem) return;
+    if (additionalVariants && String(draftEdits[selectedItem.id] ?? selectedItem.draft_text ?? '') !== String(selectedItem.draft_text || '')) {
+      setError('Сначала сохраните изменения текста, затем запросите другие варианты.');
+      return;
+    }
     const startedAt = Date.now();
-    setBusyAction('generate-draft');
+    setBusyAction(additionalVariants ? 'generate-alternatives' : 'generate-draft');
     setDraftGenerationReady(false);
     setError('');
     setActionMessage('');
     try {
       const response = await newAuth.makeRequest(`/content-plans/items/${encodeURIComponent(selectedItem.id)}/generate-draft`, {
         method: 'POST',
-        body: JSON.stringify({ language: 'ru' }),
+        body: JSON.stringify({ language: 'ru', ...(additionalVariants ? { additional_variants: true, expected_draft_text: selectedItem.draft_text || '', request_id: crypto.randomUUID() } : {}) }),
       });
       const plan = response.plan || null;
       setCurrentPlan(plan);
@@ -2649,7 +2660,7 @@ function ContentWorkspace() {
               return (
                 <div key={asset.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
                   {imageSrc ? (
-                    <AuthenticatedImage src={imageSrc} alt="Фото бизнеса" className="h-48 w-full object-cover ring-1 ring-black/10" />
+                    <AuthenticatedImage src={imageSrc} alt="Фото бизнеса" lazy={asset.source === 'disk_reference'} className="h-48 w-full object-cover ring-1 ring-black/10" />
                   ) : (
                     <div className="flex h-48 items-center justify-center bg-slate-100 text-slate-400">
                       <ImageIcon className="h-8 w-8" />
@@ -2667,6 +2678,21 @@ function ContentWorkspace() {
                         {quality > 0 ? `${quality}%` : 'новое'}
                       </span>
                     </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(asset.suitable_platforms || []).slice(0, 4).map((platform) => (
+                        <span key={platform} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                          {formatPlatformLabel(platform)}
+                        </span>
+                      ))}
+                      {(asset.suitable_platforms || []).length === 0 ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">каналы появятся после анализа</span>
+                      ) : null}
+                    </div>
+                    {asset.source === 'disk_reference' && <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Оригинал в облаке компании</p>
+                      <Button type="button" variant="outline" size="sm" disabled={Boolean(busyAction)}
+                        onClick={() => void downloadOriginalPhoto(asset, true)}>Скачать оригинал</Button>
+                    </div>}
                     <div className="flex flex-wrap gap-1.5">
                       {(asset.suitable_platforms || []).slice(0, 4).map((platform) => (
                         <span key={platform} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
@@ -2926,7 +2952,7 @@ function ContentWorkspace() {
                     <Button
                       type="button"
                       variant={hasDraftText ? 'outline' : 'default'}
-                      onClick={generateSelectedDraft}
+                      onClick={() => void generateSelectedDraft()}
                       disabled={Boolean(busyAction)}
                       className={cn('rounded-2xl', !hasDraftText ? 'bg-slate-950 text-white hover:bg-slate-800' : '')}
                     >
@@ -2989,6 +3015,15 @@ function ContentWorkspace() {
                     aria-label="Текст публикации"
                     placeholder="Текст публикации"
                   />
+                  {hasDraftText ? (
+                    <div className="space-y-2">
+                      <Button type="button" variant="outline" disabled={Boolean(busyAction) || hasUnsavedItemChanges} onClick={() => void generateSelectedDraft(true)}>
+                        {busyAction === 'generate-alternatives' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                        {busyAction === 'generate-alternatives' ? 'Готовим варианты...' : 'Подготовить ещё 2 варианта'}
+                      </Button>
+                      <p className="text-sm text-slate-500">{hasUnsavedItemChanges ? 'Сначала сохраните изменения материала.' : 'Отдельный AI-запрос. Текущий текст останется без изменений; новый вариант можно выбрать после проверки.'}</p>
+                    </div>
+                  ) : null}
                   {generationAlternatives.length > 1 ? (
                     <details className="rounded-2xl bg-white shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
                       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-slate-800">
@@ -3800,9 +3835,10 @@ function PublicationPhotoPreview({ src }: { src: string }) {
   );
 }
 
-function AuthenticatedImage({ src, alt, className, onFailure }: { src: string; alt: string; className?: string; onFailure?: (failed: boolean) => void }) {
+function AuthenticatedImage({ src, alt, className, lazy = false, onFailure }: { src: string; alt: string; className?: string; lazy?: boolean; onFailure?: (failed: boolean) => void }) {
   const [resolvedSrc, setResolvedSrc] = useState(() => (src.startsWith('/api/') ? '' : src));
   const [failed, setFailed] = useState(false);
+  const placeholderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setFailed(false);
@@ -3812,8 +3848,9 @@ function AuthenticatedImage({ src, alt, className, onFailure }: { src: string; a
     let cancelled = false;
     let objectUrl = '';
     const controller = new AbortController();
-    const deadline = window.setTimeout(() => controller.abort(), 15000);
+    let deadline: number | undefined;
     const loadImage = async () => {
+      deadline = window.setTimeout(() => controller.abort(), 15000);
       try {
         const token = newAuth.getToken() || '';
         const response = await fetch(`${API_URL}${src}`, { signal: controller.signal,
@@ -3827,17 +3864,25 @@ function AuthenticatedImage({ src, alt, className, onFailure }: { src: string; a
         if (!cancelled) { setFailed(true); onFailure?.(true); }
       } finally { window.clearTimeout(deadline); }
     };
-    void loadImage();
+    const placeholder = placeholderRef.current;
+    const observer = lazy && placeholder && typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver(entries => {
+          if (!entries.some(entry => entry.isIntersecting)) return;
+          observer?.disconnect();
+          void loadImage();
+        }, { rootMargin: '200px' }) : null;
+    if (observer && placeholder) observer.observe(placeholder);
+    else void loadImage();
     return () => {
-      cancelled = true; controller.abort(); window.clearTimeout(deadline);
+      cancelled = true; observer?.disconnect(); controller.abort(); window.clearTimeout(deadline);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src, onFailure]);
+  }, [src, lazy, onFailure]);
 
   if (failed || !resolvedSrc) return (
-    <div role={failed ? 'alert' : 'status'} className={cn('flex min-h-32 items-center justify-center gap-2 bg-muted p-3 text-center text-sm text-muted-foreground', className)}>
+    <div ref={placeholderRef} role={failed ? 'alert' : 'status'} className={cn('flex min-h-32 items-center justify-center gap-2 bg-muted p-3 text-center text-sm text-muted-foreground', className)}>
       <ImageIcon className="h-5 w-5 shrink-0" />
-      <span>{failed ? 'Не удалось загрузить фото. Проверьте соединение и повторите.' : 'Загружаем фото…'}</span>
+      <span>{failed ? 'Не удалось загрузить фото. Проверьте доступ к файлу и повторите.' : 'Загружаем фото…'}</span>
     </div>
   );
   return <img src={resolvedSrc} alt={alt} className={className} onError={() => { setFailed(true); onFailure?.(true); }} />;

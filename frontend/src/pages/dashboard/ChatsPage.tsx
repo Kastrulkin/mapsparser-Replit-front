@@ -1,3 +1,4 @@
+import { ClientDialogueGraph } from './agents/ClientDialogueGraph';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -409,7 +410,7 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4" />
                 <div className="flex-1">
-                  <div className="font-medium">{agent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}</div>
+                  <div className="font-medium">{agent.name || (agent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent)}</div>
                   <div className="text-xs text-gray-500">
                     {agent.type === 'marketing' ? copy.marketingAgent : copy.bookingAgent}
                   </div>
@@ -424,7 +425,7 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
       <div className={`w-full shrink-0 bg-white rounded-lg border border-gray-200 flex-col lg:w-80 ${isSandbox ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedAgent ? `${copy.chats}: ${selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent}` : copy.chats}
+            {selectedAgent ? `${copy.chats}: ${selectedAgent.name || (selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent)}` : copy.chats}
           </h2>
         </div>
         <ScrollArea className="flex-1">
@@ -472,7 +473,7 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">{copy.sandboxTitle}</h3>
                 <div className="text-sm text-gray-500">
-                  {copy.sandboxSubtitle}: {selectedAgent ? (selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent) : copy.noAgent}
+                  {copy.sandboxSubtitle}: {selectedAgent ? (selectedAgent.name || (selectedAgent.type === 'booking' ? copy.bookingAgent : copy.marketingAgent)) : copy.noAgent}
                 </div>
               </div>
             </div>
@@ -610,9 +611,11 @@ const ChatsWorkspace = ({ testing = false }: { testing?: boolean }) => {
               </div>
             </div>
 
+            <ClientDialogueGraph key={currentBusinessId+selectedConversation.id} businessId={currentBusinessId} conversationId={selectedConversation.id}/>
+
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4">
-                {messages.map((msg) => (
+                {messages.filter(msg => msg.message_type !== 'dialogue_state').map((msg) => (
                   <div
                     key={msg.id}
                     className={`flex ${msg.sender === 'client' ? 'justify-start' : 'justify-end'

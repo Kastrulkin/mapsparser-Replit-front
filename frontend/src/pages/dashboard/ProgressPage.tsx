@@ -118,6 +118,8 @@ type GrowthOverview = ManagedCardGrowth & {
   focus_action: GrowthAction | null;
   areas: GrowthArea[];
   recent_achievements: GrowthAchievement[];
+  recent_results?: GrowthAchievement[];
+  as_of?: string;
   growth_loop?: {
     mission_id?: string;
     focus?: GrowthAction;
@@ -303,7 +305,8 @@ export const ProgressPage = () => {
           milestones: Array.isArray(area.milestones) ? area.milestones : [],
           metrics: Array.isArray(area.metrics) ? area.metrics : [],
         })),
-        recent_achievements: Array.isArray(data.recent_achievements) ? data.recent_achievements : [],
+        recent_achievements: Array.isArray(data.recent_achievements) ? data.recent_achievements : Array.isArray(data.recent_results) ? data.recent_results : [],
+        generated_at: data.generated_at || data.as_of || '',
         problem_locations: Array.isArray(data.problem_locations) ? data.problem_locations : [],
         analytics_modules: Array.isArray(data.analytics_modules) ? data.analytics_modules : [],
         scope: data.scope ? { ...data.scope, locations: Array.isArray(data.scope.locations) ? data.scope.locations : [] } : data.scope,
@@ -318,7 +321,7 @@ export const ProgressPage = () => {
 
     }).catch((requestError) => {
       if (controller.signal.aborted) return;
-      if (requestError instanceof HttpError && (requestError.status === 401 || requestError.status === 403)) {
+      if (requestError instanceof HttpError && [401, 403, 404].includes(requestError.status ?? 0)) {
         setOverviewData(null);
         setOverviewBusinessId(null);
         setExpandedArea(null);

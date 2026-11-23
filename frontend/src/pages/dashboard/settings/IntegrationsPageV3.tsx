@@ -22,6 +22,7 @@ import {
 
 import FinanceCrmPanel from '@/components/FinanceCrmPanel';
 import { TrelloConnectionPanel } from '@/components/TrelloConnectionPanel';
+import { YouGileConnectionPanel } from '@/components/YouGileConnectionPanel';
 import TelegramConnection from '@/components/TelegramConnection';
 import { TelegramBotCredentials } from '@/components/TelegramBotCredentials';
 import { TelegramResearchSetup } from '@/components/TelegramResearchSetup';
@@ -80,6 +81,7 @@ type IntegrationsPageV3Props = {
 };
 
 type RegistryLoadState = {
+  yougileStatus?: { connected?: boolean; configured?: boolean; needs_reauthorization?: boolean } | null;
   trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   telegramOwnerLinked?: boolean | null;
   telegramPublishStatus?: {
@@ -138,6 +140,7 @@ const typeCopy: Record<ConnectionType, string> = {
 };
 
 const serviceDescriptions: Record<string, string> = {
+  yougile: 'Подключите команду, выберите доску и колонку для поручений. Перед изменением задачи LocalOS покажет результат на проверку.',
   telegram: 'Привяжите бот LocalOS для управления аккаунтом и отдельно выберите канал/чат, куда будут уходить согласованные посты.',
   whatsapp: 'Сохраните номер и WABA-доступ, когда канал готов к отправке сообщений клиентам.',
   outreach_email: 'С этой почты LocalOS отправляет одобренные письма и проверяет ответы',
@@ -297,7 +300,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMod
       setLoadError(null);
       const headers = authHeaders();
       try {
-        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders, outreachSenders, trelloStatus] = await Promise.all([
+        const [ownerStatus, telegramStatus, readiness, accounts, crmProviders, outreachSenders, trelloStatus, yougileStatus] = await Promise.all([
           fetchJson(`/api/telegram/bind/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/telegram-bot/status?business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/social-posts/channel-readiness`, { headers }),
@@ -307,11 +310,13 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMod
             ? '/api/outreach/sender-accounts?scope_type=platform'
             : `/api/outreach/sender-accounts?scope_type=business&business_id=${encodeURIComponent(currentBusinessId)}`, { headers }),
           fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/trello/status`, { headers }).catch(() => null),
+          fetchJson(`/api/business/${encodeURIComponent(currentBusinessId)}/yougile/status`, { headers }).catch(() => null),
         ]);
 
         if (cancelled) return;
 
         setLoadState({
+          yougileStatus: yougileStatus?.response.ok ? yougileStatus.data : null,
           trelloStatus: trelloStatus?.response.ok ? trelloStatus.data : null,
           telegramOwnerLinked: ownerStatus.response.ok ? Boolean(ownerStatus.data.is_linked) : false,
           telegramPublishStatus: telegramStatus.response.ok && telegramStatus.data.success ? {
@@ -343,6 +348,7 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMod
 
   const services = useMemo(() => mapIntegrationsState({
     trelloStatus: loadState.trelloStatus,
+    yougileStatus: loadState.yougileStatus,
     business: currentBusiness || null,
     telegramOwnerLinked: loadState.telegramOwnerLinked,
     telegramPublishStatus: loadState.telegramPublishStatus,
@@ -742,6 +748,11 @@ export const IntegrationsPageV3 = ({ currentBusinessId, currentBusiness, demoMod
           <TelegramResearchSetup businessId={currentBusinessId} mode="connection" scopeType={senderScope} />
         </>
       );
+    }
+
+    if (service.id === 'yougile') {
+      return currentBusinessId ? <YouGileConnectionPanel key={currentBusinessId} businessId={currentBusinessId} onChanged={refresh} />
+        : <p className="text-sm text-muted-foreground">Сначала выберите бизнес.</p>;
     }
 
     if (service.id === 'trello') {

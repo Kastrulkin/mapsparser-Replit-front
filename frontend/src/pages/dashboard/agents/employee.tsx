@@ -821,9 +821,9 @@ export const AgentRunProgressPanel = ({
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold uppercase text-slate-400">{animation.kind === 'test' ? 'Безопасный тест' : 'Рабочий запуск'}</div>
             <h2 className="mt-1 text-2xl font-semibold leading-8 [text-wrap:balance]">{failed ? 'Работа остановилась' : 'Агент выполняет задачу'}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300 [text-wrap:pretty]">{failed ? animation.error : currentStep}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300 [text-wrap:pretty]">{failed ? (animation.error === 'blocked' ? 'Подготовка остановлена. Посмотрите причину в сохранённом результате; автоматического повтора нет.' : animation.error) : currentStep}</p>
           </div>
-          <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-300">{animation.progress}%</span>
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-300">{failed ? 'Остановлено' : `${animation.progress}%`}</span>
         </div>
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
           <div
@@ -835,7 +835,7 @@ export const AgentRunProgressPanel = ({
       <div className="px-5 py-5 sm:px-7">
         <ol className="grid gap-2">
           {animation.steps.map((step, index) => {
-            const done = animation.status === 'finishing' || index < (animation.serverCompletedSteps || 0);
+            const done = (!failed && animation.status === 'finishing') || index < Math.min(animation.serverCompletedSteps || 0, failed ? animation.stepIndex : animation.steps.length);
             const current = index === animation.stepIndex;
             return (
               <li
@@ -1093,7 +1093,7 @@ export const EmployeeTestResultPanel = ({
   const [evaluationError, setEvaluationError] = useState('');
   const chargedCredits = Number(activeRun?.run_billing?.actual_credits || activeRun?.run_billing?.charge_credits || 0);
   const mapReport = getMapCardReport(result.resultPayload);
-  const mapResultTitle = mapReport?.kind === 'preparation' ? 'Пакет оформления карточек' : 'Результат проверки карточек';
+  const mapResultTitle = mapReport?.status === 'blocked' ? 'Подготовка не завершена' : mapReport?.kind === 'preparation' ? 'Пакет оформления карточек' : 'Результат проверки карточек';
   const labels = approvalActionLabels(pendingApproval);
   const isBlocked = result.state === 'blocker';
   const canApprove = Boolean(pendingApproval && !isBlocked);
@@ -1163,7 +1163,7 @@ export const EmployeeTestResultPanel = ({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{isWorkRun ? 'Результат работы' : 'Результат проверки'}</div>
           <h2 className="mt-2 max-w-3xl text-2xl font-semibold leading-8 text-slate-950 [text-wrap:balance]">{mapReport ? mapResultTitle : result.summary}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 [text-wrap:pretty]">
-            {mapReport ? (mapReport.kind === 'preparation' ? 'Выберите площадку, проверьте тексты и подготовьте перенос в её кабинет.' : 'Посмотрите, что требует внимания. Подробности и источники раскрываются отдельно.') : 'Это только бизнес-результат. Технические подробности находятся в расширенных настройках.'}
+            {mapReport ? (mapReport.status === 'blocked' ? String(mapReport.summary || 'AI-подготовка не выполнена. Проверьте причину перед повтором.') : mapReport.kind === 'preparation' ? 'Выберите площадку, проверьте тексты и подготовьте перенос в её кабинет.' : 'Посмотрите, что требует внимания. Подробности и источники раскрываются отдельно.') : 'Это только бизнес-результат. Технические подробности находятся в расширенных настройках.'}
           </p>
         </div>
         {pendingApproval?.approval_type === 'drafts' ? <ApprovalPayloadSummary approval={pendingApproval} /> : null}

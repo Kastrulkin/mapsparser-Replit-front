@@ -18,6 +18,7 @@ interface NetworkDashboardPageProps {
 
 interface NetworkDashboardContext {
     currentBusinessId?: string | null;
+    user?: { demo_mode?: boolean };
     onBusinessChange?: (businessId: string) => void;
     onControlScopeChange?: (scope: ControlScope) => void;
 }
@@ -78,6 +79,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
     const navigate = useNavigate();
     const dashboardContext = useOutletContext<NetworkDashboardContext>();
     const resolvedBusinessId = businessId || dashboardContext.currentBusinessId || null;
+    const demoMode = Boolean(dashboardContext.user?.demo_mode);
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
     const [periodPreset, setPeriodPreset] = useState<TimelinePeriodPreset>('all');
 
@@ -157,7 +159,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                 });
 
                 const [healthRes, historyRes, alertsRes] = await Promise.all([
-                    fetch(
+                    demoMode ? Promise.resolve(null) : fetch(
                         isNetworkView
                             ? `/api/network/health?network_id=${encodeURIComponent(networkId)}`
                             : `/api/network/health?business_id=${resolvedBusinessId}`,
@@ -174,7 +176,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                         })(),
                         { headers }
                     ),
-                    fetch(
+                    demoMode ? Promise.resolve(null) : fetch(
                         isNetworkView
                             ? `/api/network/locations-alerts?network_id=${encodeURIComponent(networkId)}`
                             : `/api/network/locations-alerts?business_id=${resolvedBusinessId}`,
@@ -182,9 +184,13 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
                     ),
                 ]);
 
-                const healthJson: HealthResponse = await healthRes.json().catch(() => ({ success: false }));
+                const healthJson: HealthResponse = healthRes
+                    ? await healthRes.json().catch(() => ({ success: false }))
+                    : { success: false };
                 const historyJson: MetricsHistoryResponse = await historyRes.json().catch(() => ({ history: [] }));
-                const alertsJson: LocationAlertsResponse = await alertsRes.json().catch(() => ({ success: false }));
+                const alertsJson: LocationAlertsResponse = alertsRes
+                    ? await alertsRes.json().catch(() => ({ success: false }))
+                    : { success: false };
                 const attentionByBusiness = new Map(
                     (alertsJson.data?.locations || []).map((location) => [location.business_id, location]),
                 );
@@ -242,7 +248,7 @@ export const NetworkDashboardPage: React.FC<NetworkDashboardPageProps> = ({ embe
         };
 
         loadDashboard();
-    }, [metricsHistoryQuery, resolvedBusinessId]);
+    }, [demoMode, metricsHistoryQuery, resolvedBusinessId]);
 
     const stats: NetworkStats = useMemo(() => {
         const totalSalons = salons.length;

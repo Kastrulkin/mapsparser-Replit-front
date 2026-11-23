@@ -39,7 +39,7 @@ describe('ChatsPage localization', () => {
     HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it('localizes the agent type and empty chat list in German', async () => {
+  it('shows the saved agent name with its localized type and empty chat list in German', async () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/dashboard/chats']}>
         <LanguageProvider>
@@ -52,8 +52,8 @@ describe('ChatsPage localization', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('button', { name: /Kundentermine/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Gespräche: Kundentermine' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Studio Nord Booking.*Kundentermine/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Gespräche: Studio Nord Booking' })).toBeInTheDocument();
     expect(await screen.findByText('Keine aktiven Chats')).toBeInTheDocument();
     expect(screen.getByText('Wählen Sie einen Chat oder Testbereich aus')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/[А-Яа-яЁё]/);

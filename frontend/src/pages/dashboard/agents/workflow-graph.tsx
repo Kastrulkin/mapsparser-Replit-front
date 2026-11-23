@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Background,
   Controls,
   MarkerType,
   ReactFlow,
+  useNodesInitialized,
+  useReactFlow,
   type Edge,
   type Node,
 } from '@xyflow/react';
@@ -14,6 +16,19 @@ import type { AgentExecutionContractStep } from './types';
 
 type WorkflowGraphProps = {
   steps: AgentExecutionContractStep[];
+  graphNodes?: Node[];
+  graphEdges?: Edge[];
+  focusNodeIds?: string[];
+};
+
+const GraphInitialFocus = ({ ids }: { ids: string[] }) => {
+  const initialized = useNodesInitialized();
+  const { fitView } = useReactFlow();
+  const key = ids.join('|');
+  useEffect(() => {
+    if (initialized && key) void fitView({ nodes: key.split('|').map(id => ({ id })), padding: 0.25, minZoom: 0.7, maxZoom: 1.4 });
+  }, [initialized, key, fitView]);
+  return null;
 };
 
 const stepTone = (step: AgentExecutionContractStep) => {
@@ -44,7 +59,7 @@ const WorkflowStepNode = ({ step, index }: { step: AgentExecutionContractStep; i
   </div>
 );
 
-export const AgentWorkflowGraph = ({ steps }: WorkflowGraphProps) => {
+export const AgentWorkflowGraph = ({ steps, graphNodes, graphEdges, focusNodeIds }: WorkflowGraphProps) => {
   const nodes = useMemo<Node[]>(
     () => steps.map((step, index) => ({
       id: step.key || `step-${index}`,
@@ -68,16 +83,16 @@ export const AgentWorkflowGraph = ({ steps }: WorkflowGraphProps) => {
     [steps],
   );
 
-  if (!steps.length) return null;
+  if (!steps.length && !graphNodes?.length) return null;
 
   return (
     <div className="overflow-hidden rounded-3xl bg-slate-50 p-2 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
       <div className="h-[360px] overflow-hidden rounded-2xl bg-white">
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={graphNodes || nodes}
+          edges={graphEdges ? graphEdges.map(edge=>({...edge,markerEnd:{type:MarkerType.ArrowClosed}})) : edges}
           fitView
-          fitViewOptions={{ padding: 0.18 }}
+          fitViewOptions={{ padding: 0.18, ...(focusNodeIds?.length ? {nodes:focusNodeIds.map(id=>({id}))} : {}) }}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
@@ -85,6 +100,7 @@ export const AgentWorkflowGraph = ({ steps }: WorkflowGraphProps) => {
           maxZoom={1.4}
           proOptions={{ hideAttribution: true }}
         >
+          {focusNodeIds?.length ? <GraphInitialFocus ids={focusNodeIds}/> : null}
           <Background gap={24} size={1} color="#e2e8f0" />
           <Controls showInteractive={false} position="bottom-right" />
         </ReactFlow>

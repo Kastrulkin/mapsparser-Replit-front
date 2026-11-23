@@ -264,7 +264,7 @@ export const TodayPage = () => {
     cta_url: journeyAction.access?.allowed === false ? journeyAction.access.cta_target?.url || '/dashboard/profile' : `${screenRoute(journeyAction.cta_target?.screen || ({ maps: 'cards', content: 'content', partnership: 'partnerships', influencer: 'influencers', automation: 'agents', average_ticket: 'average_ticket', upgrade: 'settings' }[journeyAction.flow_type]))}${screenRoute(journeyAction.cta_target?.screen || ({ maps: 'cards', average_ticket: 'average_ticket' }[journeyAction.flow_type])).includes('?') ? '&' : '?'}journey_action=${encodeURIComponent(journeyAction.id)}`,
   } : null;
   const availableFlows = overview?.preference?.available_flows || flowOrder;
-  const unavailableSources = Object.entries(overview?.work_source_states || {}).filter(([, state]) => state?.status === 'error' || state?.status === 'unavailable');
+  const unavailableSources = Object.entries(overview?.work_source_states || {}).filter(([flow, state]) => state?.status === 'error' || (state?.status === 'unavailable' && availableFlows.some(available => available === flow)));
   const starterFlow = availableFlows.find(flow => emptyPrimaryMissions[flow]);
   const starterMission = !unavailableSources.length && !sections.decisions.length && !sections.continuing.length && !sections.results.length && starterFlow ? emptyPrimaryMissions[starterFlow] : null;
   const nextMission = journeyMission || displayedMission || starterMission;
@@ -361,7 +361,7 @@ export const TodayPage = () => {
       <DashboardPageHeader title={copy.title} description={ui.description} icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />{copy.refresh}</Button>} />
       {formatDate(language, overview?.as_of, overview?.timezone) ? <p className="text-xs text-muted-foreground">{ui.reportDate}: {formatDate(language, overview?.as_of, overview?.timezone)}{!validTimezone(overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</p> : null}
       {error && overview ? <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-950"><span>{copy.retryHint}</span><Button type="button" variant="outline" onClick={load} disabled={loading}>{copy.retry}</Button></div> : null}
-      {unavailableSources.length ? <p role="status" className="text-sm text-muted-foreground">{ui.sourceUnavailable}: {unavailableSources.map(([flow]) => flowLabels[language][availableFlows.find(value => value === flow) || 'overview']).join(', ')}</p> : null}
+      {unavailableSources.length ? <p role="status" className="text-sm text-muted-foreground">{ui.sourceUnavailable}: {unavailableSources.map(([flow]) => { const knownFlow = flowOrder.find(value => value === flow); return knownFlow ? flowLabels[language][knownFlow] : ui.data; }).join(', ')}</p> : null}
       <section aria-label={ui.next} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
         <p className="text-sm font-medium text-muted-foreground">{ui.next}</p>
         <h2 className="mt-2 break-words text-xl font-semibold text-foreground">{primaryItem ? localizedGrowthText(language, primaryItem.title) : nextMission?.title || copy.openProgress}</h2>

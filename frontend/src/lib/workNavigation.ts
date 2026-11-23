@@ -19,7 +19,7 @@ export const workDestinations: WorkDestination[] = [
 ];
 const labels: Record<Language, string[]> = {
  kk: ['Бүгін','Чат арқылы басқару','Карталар мен пікірлер','Контент','Серіктестіктер','Инфлюенсерлер','Орташа чек','Автоматтандыру','Нәтижелер','Қаржы','Бизнес және команда','Баптаулар мен қосылымдар','Тағы','Күнделікті жұмыс','Бағыттар','Бақылау','Қызметтік бөлім','Мәзір','Чатта талқылау','Жұмысты ашу','Тапсырмаға оралу','Негізгі бағытты таңдау','Дереккөз көрсетілмеген'],
- ru: ['Сегодня','Управление через чат','Карты и отзывы','Контент','Партнёрства','Инфлюенсеры','Средний чек','Автоматизация','Результаты','Финансы','Бизнес и команда','Настройки и подключения','Ещё','Ежедневная работа','Направления','Контроль','Служебная область','Меню','Обсудить в чате','Открыть работу','Вернуться к задаче','Выбрать фокус','Источник не указан'],
+ ru: ['Сегодня','Чат с LocalOS','Карты и отзывы','Контент','Партнёрства','Инфлюенсеры','Средний чек','Автоматизация','Результаты','Финансы','Бизнес и команда','Настройки и подключения','Ещё','Ежедневная работа','Направления','Контроль','Служебная область','Меню','Обсудить в чате','Открыть работу','Вернуться к задаче','Выбрать фокус','Источник не указан'],
  en: ['Today','Manage through chat','Maps and reviews','Content','Partnerships','Creators','Average ticket','Automation','Results','Finance','Business and team','Settings and connections','More','Daily work','Directions','Monitoring','Administration','Menu','Discuss in chat','Open work','Return to task','Choose focus','Source not specified'],
  fr: ['Aujourd’hui','Gérer par chat','Cartes et avis','Contenu','Partenariats','Créateurs','Panier moyen','Automatisation','Résultats','Finances','Entreprise et équipe','Paramètres et connexions','Plus','Travail quotidien','Domaines','Suivi','Administration','Menu','Discuter dans le chat','Ouvrir le travail','Revenir à la tâche','Choisir la priorité','Source non précisée'],
  es: ['Hoy','Gestionar por chat','Mapas y reseñas','Contenido','Alianzas','Creadores','Ticket medio','Automatización','Resultados','Finanzas','Negocio y equipo','Ajustes y conexiones','Más','Trabajo diario','Áreas','Seguimiento','Administración','Menú','Hablar por chat','Abrir trabajo','Volver a la tarea','Elegir prioridad','Fuente no indicada'],
@@ -53,4 +53,17 @@ export const workChatRoute = (route: string, businessId: string, actionId?: stri
  const params = new URLSearchParams({ business_id: businessId, work_ref: target.pathname + target.search + target.hash });
  if (actionId) params.set('journey_action', actionId);
  return '/dashboard/operator?' + params;
+};
+
+
+export const selectedWorkObject = (value: string | null | undefined, businessId: string | null | undefined): {type: 'content_item' | 'partner'; id: string} | undefined => {
+ const safe = safeWorkReturn(value);
+ if (!safe || !businessId) return undefined;
+ const target = new URL(safe, 'https://localos.pro');
+ if (target.searchParams.get('business_id') !== businessId) return undefined;
+ const id = target.searchParams.get('item_id') || '';
+ if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return undefined;
+ if (target.pathname === '/dashboard/partnerships') return {type: 'partner', id};
+ if (target.pathname === '/dashboard/content') return {type: 'content_item', id};
+ return undefined;
 };

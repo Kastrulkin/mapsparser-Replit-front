@@ -10,25 +10,25 @@ describe('GrowthLoopPanel', () => {
     const onOpenImport = vi.fn();
     render(<GrowthLoopPanel dataHealth={{ status: 'stale', age_days: 19 }} growthLoop={{ analytics_level: { label: 'Нужны данные', next_unlock: 'Загрузите свежую сводку.' }, rhythm: { label: 'Ритм формируется', active_weeks: 1 } }} onOpenImport={onOpenImport} />);
 
-    expect(screen.getByText('Нужна свежая сводка')).toBeVisible();
-    expect(screen.getByText('История собирается')).toBeVisible();
+    expect(screen.getByText('Обновите показатели бизнеса')).toBeVisible();
+    expect(screen.getByText('История показателей собирается')).toBeVisible();
     expect(screen.getByText('Расчёты нужно обновить')).toBeVisible();
-    await userEvent.click(screen.getByRole('button', { name: 'Загрузить финансовую сводку' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Внести показатели' }));
     expect(onOpenImport).toHaveBeenCalledOnce();
   });
 
-  it('does not add another action once data is fresh', () => {
+  it('offers one explicit action to add the next figures when data is fresh', () => {
     render(<GrowthLoopPanel dataHealth={{ status: 'fresh', age_days: 1 }} growthLoop={{ analytics_level: { label: 'Готово к решениям' }, rhythm: { label: 'Регулярный ритм', active_weeks: 4 } }} onOpenImport={vi.fn()} />);
 
     expect(screen.getByText('Данные актуальны')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Внести показатели' })).toHaveLength(1);
   });
 
   it('does not duplicate the import action when it is already the main mission', () => {
     render(<GrowthLoopPanel dataHealth={{ status: 'missing' }} showImportAction={false} onOpenImport={vi.fn()} />);
 
-    expect(screen.getByText('Сводок пока нет')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
+    expect(screen.getByText('Показателей пока нет')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Внести показатели' })).not.toBeInTheDocument();
   });
 
   it('shows at most five problem locations with their rhythm and analytics unlock', async () => {
@@ -44,11 +44,11 @@ describe('GrowthLoopPanel', () => {
 
     expect(screen.getByText('Данные по точкам')).toBeVisible();
     expect(screen.getByText('6 точек')).toBeVisible();
-    expect(screen.getAllByText('Добавьте первую недельную сводку.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Добавьте показатели за неделю.').length).toBeGreaterThan(0);
     expect(screen.getByText('Продажи и средний чек')).toBeVisible();
-    expect(screen.getByText('Обновите сводку')).toBeVisible();
+    expect(screen.getByText('Обновите показатели')).toBeVisible();
     expect(screen.queryByText('Точка 6')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Загрузить финансовую сводку' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Внести показатели' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Точка 1/ }));
     expect(onOpenLocation).toHaveBeenCalledWith('business-1', 'finance_import');

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -151,5 +151,37 @@ describe('CardOverviewPage localization', () => {
 
     expect(await screen.findByRole('button', { name: 'Настройки' })).toBeInTheDocument();
     expect(screen.queryByText(/^Последнее обновление карточки:/)).not.toBeInTheDocument();
+  });
+
+  it('shows listing metric hints only on interaction and dismisses them with Escape', async () => {
+    window.localStorage.setItem('language', 'ru');
+    const copy = getCardOverviewPageCopy('ru');
+
+    render(
+      <MemoryRouter>
+        <LanguageProvider>
+          <Routes>
+            <Route element={<ContextRoute />}>
+              <Route index element={<CardOverviewPage />} />
+            </Route>
+          </Routes>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    const label = await screen.findByText(copy.mapSources);
+    const metric = label.parentElement!;
+    expect(metric).toHaveAttribute('tabindex', '0');
+    for (const hint of [copy.ratingHint, copy.reviewsHint, copy.lastRefreshHint, copy.mapSourcesHint]) {
+      expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    }
+
+    fireEvent.focus(metric);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent(copy.mapSourcesHint);
+    expect(metric).toHaveAccessibleDescription(copy.mapSourcesHint);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
   });
 });

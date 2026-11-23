@@ -558,21 +558,11 @@ export const AIAgentsManagement = ({ mode = 'admin', businessId = null }: AIAgen
               </div>
               <div>
                 <p className="text-sm font-medium mb-1">Личность:</p>
-                <p className="text-sm text-gray-600">{agent.personality || 'Не указана'}</p>
+                <p className="text-sm text-gray-600">{agent.identity || agent.personality || 'Стандартная роль помощника'}</p>
               </div>
               <div>
-                <p className="text-sm font-medium mb-1">Стейты:</p>
-                <div className="flex flex-wrap gap-2">
-                  {agent.workflow && Array.isArray(agent.workflow) && agent.workflow.length > 0 ? (
-                    agent.workflow.map((state) => (
-                      <Badge key={state.name} variant="outline">
-                        {state.name}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-sm text-gray-400">Нет стейтов</span>
-                  )}
-                </div>
+                <p className="text-sm font-medium mb-1">Сценарий общения:</p>
+                <p className="text-sm text-gray-600">{agent.task ? 'Задачи и правила настроены. Этапами диалога управляет LocalOS.' : 'Стандартный сценарий общения.'}</p>
               </div>
               <div className="flex gap-2">
                 {agent.can_edit === false && isBusinessMode ? (

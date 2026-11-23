@@ -1,11 +1,20 @@
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
-import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { newAuth } from '@/lib/auth_new';
 import { pickNetworkRepresentative } from '@/lib/networkRepresentative';
 import { localizeDemoBusinessName, operatorPageCopyForLanguage } from '@/pages/dashboard/operatorPageCopy';
 import { Building2, ChevronDown, MapPin } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+const unavailableLocationCopy: Record<Language, string> = {
+    ru: 'Недоступно для выбора в этом аккаунте', en: 'Unavailable for this account',
+    fr: 'Indisponible pour ce compte', es: 'No disponible para esta cuenta',
+    el: 'Μη διαθέσιμο για αυτόν τον λογαριασμό', de: 'Für dieses Konto nicht verfügbar',
+    th: 'ไม่พร้อมใช้งานสำหรับบัญชีนี้', ar: 'غير متاح لهذا الحساب',
+    ha: 'Ba ya samuwa ga wannan asusun', tr: 'Bu hesap için kullanılamıyor',
+    hy: 'Այս հաշվի համար հասանելի չէ', kk: 'Бұл аккаунт үшін қолжетімсіз',
+};
 
 interface NetworkLocation {
     id: string;
@@ -19,11 +28,13 @@ interface NetworkLocation {
 interface NetworkLocationsSwitcherProps {
     currentBusinessId?: string;
     onLocationChange: (businessId: string) => void;
+    allowedLocationIds?: string[];
 }
 
 export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> = ({
     currentBusinessId,
     onLocationChange,
+    allowedLocationIds,
 }) => {
     const { language } = useLanguage();
     const copy = operatorPageCopyForLanguage(language).location;
@@ -32,6 +43,8 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
     const [selectedLocation, setSelectedLocation] = useState<NetworkLocation | null>(null);
     const [loading, setLoading] = useState(true);
     const switcherRef = useRef<HTMLDivElement | null>(null);
+    const requestVersion = useRef(0);
+    const canSelectLocation = (id: string) => !allowedLocationIds || allowedLocationIds.includes(id);
     const closeSwitcher = useCallback(() => setIsOpen(false), []);
     useClickOutside(switcherRef, closeSwitcher, { enabled: isOpen });
 
@@ -70,6 +83,9 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
             return;
         }
 
+        const version = ++requestVersion.current;
+        setLocations([]);
+        setSelectedLocation(null);
         try {
             setLoading(true);
             const token = newAuth.getToken();
@@ -80,28 +96,31 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                 }
             });
 
+            if (version !== requestVersion.current) return;
             if (response.ok) {
                 const data = await response.json();
+                if (version !== requestVersion.current) return;
                 const networkLocations = data.locations || [];
                 setLocations(networkLocations);
 
                 // Устанавливаем текущую локацию
                 const current = networkLocations.find((loc: NetworkLocation) => loc.id === currentBusinessId);
-                setSelectedLocation(current || networkLocations[0] || null);
+                setSelectedLocation(current || null);
             }
         } catch (error) {
-            console.error('Error loading network locations:', error);
+            if (version === requestVersion.current) console.error('Error loading network locations:', error);
         } finally {
-            setLoading(false);
+            if (version === requestVersion.current) setLoading(false);
         }
     });
 
     useEffect(() => {
         loadNetworkLocations();
+        return () => { requestVersion.current += 1; };
     }, [currentBusinessId, loadNetworkLocations]);
 
     const handleLocationSelect = (location: NetworkLocation) => {
-        setSelectedLocation(location);
+        if (!canSelectLocation(location.id)) return;
         onLocationChange(location.id);
         setIsOpen(false);
     };
@@ -145,8 +164,10 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                     {locations.map((location) => (
                         <button
                             key={location.id}
+                            type="button"
+                            disabled={!canSelectLocation(location.id)}
                             onClick={() => handleLocationSelect(location)}
-                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start space-x-3 transition-colors ${selectedLocation?.id === location.id ? 'bg-blue-50' : ''
+                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 flex items-start space-x-3 transition-colors ${selectedLocation?.id === location.id ? 'bg-blue-50' : ''
                                 }`}
                         >
                             <Building2 className={`w-5 h-5 mt-0.5 flex-shrink-0 ${selectedLocation?.id === location.id ? 'text-blue-600' : 'text-gray-400'
@@ -156,6 +177,7 @@ export const NetworkLocationsSwitcher: React.FC<NetworkLocationsSwitcherProps> =
                                         }`}>
                                     {getLocationLabel(location)}
                                 </div>
+                                {!canSelectLocation(location.id) && <p className="mt-1 text-xs text-muted-foreground">{unavailableLocationCopy[language]}</p>}
                                 {getLocationSubtitle(location) && (
                                     <div className="text-xs text-gray-500 mt-0.5">
                                         {getLocationSubtitle(location)}

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
 import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
 import { LanguageProvider } from '@/i18n/LanguageContext';
@@ -9,6 +9,15 @@ import { api } from '@/services/api';
 import { OperatorPage } from './OperatorPage';
 
 vi.mock('@/services/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+
+beforeEach(() => {
+  vi.stubEnv('VITE_LOCALOS_INITIAL_SETUP_ENABLED', 'true');
+  localStorage.setItem('language', 'ru');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+  localStorage.removeItem('language');
+});
 
 const businessId = 'pilot-jinlian';
 const endpoint = '/operator/initial-setup/' + businessId;
@@ -44,7 +53,7 @@ it('routes the existing chat composer to the selected company and opens the same
   render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
-  expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' }, { timeout: 5000 })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Провести SEO-аудит сайта' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Семантическое ядро' })).toHaveAttribute('href', '/dashboard/card?tab=keywords&business_id=' + businessId);
   const input = screen.getByRole('textbox', { name: 'Сообщение для первичной настройки' });

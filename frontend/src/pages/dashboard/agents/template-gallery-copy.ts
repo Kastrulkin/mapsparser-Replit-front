@@ -127,9 +127,9 @@ export const getAgentTemplateGalleryCopy = (language: Language) => agentTemplate
 
 export const getLocalizedAgentTemplateContent = (template: AgentTemplate, language: Language) => {
   if (language === 'ru') {
-    return { name: template.name, business_result: template.business_result };
+    return { name: template.name, business_result: template.key === 'maps_initial_setup' ? 'Пакет оформления карт: Google — отправка поддерживаемых правок через API после подтверждения; Яндекс и 2ГИС — ручной перенос.' : template.business_result };
   }
   return template.localized_content?.[language]
     || template.localized_content?.en
-    || { name: template.name, business_result: template.business_result };
+    || { name: template.name, business_result: template.key === 'maps_initial_setup' ? 'Пакет оформления карт: Google — отправка поддерживаемых правок через API после подтверждения; Яндекс и 2ГИС — ручной перенос.' : template.business_result };
 };

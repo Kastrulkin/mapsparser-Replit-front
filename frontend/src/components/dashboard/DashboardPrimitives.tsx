@@ -1,6 +1,7 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 type DashboardPageHeaderProps = {
@@ -63,35 +64,50 @@ export type DashboardMetricItem = {
 export const DashboardCompactMetricsRow: React.FC<{
   items: DashboardMetricItem[];
   className?: string;
-}> = ({ items, className }) => (
-  <div className={cn("grid gap-3 md:grid-cols-2 xl:grid-cols-4", className)}>
-    {items.map((item) => (
-      <div
-        key={item.label}
-        className={cn(
-          "rounded-2xl border px-4 py-4 shadow-sm",
-          item.tone === 'positive'
-            ? "border-emerald-200/70 bg-emerald-50/80"
-            : item.tone === 'warning'
-              ? "border-amber-200/80 bg-amber-50/80"
-              : "border-slate-200/80 bg-white/90"
-        )}
-      >
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-          {item.label}
-        </div>
-        <div className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-          {item.value}
-        </div>
-        {item.hint ? (
-          <div className="mt-1 text-sm leading-6 text-slate-600">
-            {item.hint}
+  hintPlacement?: 'inline' | 'tooltip';
+}> = ({ items, className, hintPlacement = 'inline' }) => {
+  const row = (
+    <div className={cn("grid gap-3 md:grid-cols-2 xl:grid-cols-4", className)}>
+      {items.map((item) => {
+        const tooltip = hintPlacement === 'tooltip' ? item.hint : undefined;
+        const card = (
+          <div
+            className={cn(
+              "rounded-2xl border px-4 py-4 shadow-sm",
+              item.tone === 'positive'
+                ? "border-emerald-200/70 bg-emerald-50/80"
+                : item.tone === 'warning'
+                  ? "border-amber-200/80 bg-amber-50/80"
+                  : "border-slate-200/80 bg-white/90",
+              tooltip && "cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            )}
+          >
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {item.label}
+            </div>
+            <div className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+              {item.value}
+            </div>
+            {hintPlacement === 'inline' && item.hint ? (
+              <div className="mt-1 text-sm leading-6 text-slate-600">
+                {item.hint}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
-    ))}
-  </div>
-);
+        );
+
+        return tooltip ? (
+          <Tooltip key={item.label}>
+            <TooltipTrigger asChild tabIndex={0}>{card}</TooltipTrigger>
+            <TooltipContent className="max-w-xs">{tooltip}</TooltipContent>
+          </Tooltip>
+        ) : <React.Fragment key={item.label}>{card}</React.Fragment>;
+      })}
+    </div>
+  );
+
+  return hintPlacement === 'tooltip' ? <TooltipProvider delayDuration={200}>{row}</TooltipProvider> : row;
+};
 
 export const DashboardActionPanel: React.FC<{
   title: string;

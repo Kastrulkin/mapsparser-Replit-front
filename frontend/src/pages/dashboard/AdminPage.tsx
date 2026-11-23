@@ -86,7 +86,7 @@ interface UserWithBusinesses {
   name?: string;
   phone?: string;
   is_superadmin?: boolean;
-  is_active?: number;
+  is_active?: number | boolean;
   password_setup_required?: boolean;
   has_password_setup_token?: boolean;
   direct_businesses: Business[];
@@ -664,6 +664,7 @@ const AdminTabFallback = () => (
 
 export const AdminPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const dashboard = useOutletContext<DashboardOutletContext | null>();
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<AdminTabId>(() => (
     isAdminTabId(requestedTab) ? requestedTab : 'businesses'
@@ -730,9 +731,9 @@ export const AdminPage: React.FC = () => {
   });
   const navigate = useNavigate();
   const { toast } = useToast();
-  const dashboard = useOutletContext<DashboardOutletContext | undefined>();
   const [initialSetupAccess, setInitialSetupAccess] = useState<{ business_ids: string[]; lead_ids: string[] } | null>(null);
   useEffect(() => {
+    if (import.meta.env.VITE_LOCALOS_INITIAL_SETUP_ENABLED !== 'true') return;
     let current = true;
     void newAuth.makeRequest('/operator/initial-setup/availability').then(result => {
       if (current && result?.available === true && Array.isArray(result.business_ids) && Array.isArray(result.lead_ids)) {
@@ -744,9 +745,9 @@ export const AdminPage: React.FC = () => {
   const canSetUpBusiness = (id: string) => Boolean(initialSetupAccess && (!initialSetupAccess.business_ids.length || initialSetupAccess.business_ids.includes(id)));
   const openInitialSetup = (id: string) => navigate('/dashboard/operator?setup=1&business_id=' + encodeURIComponent(id));
 
-  const loadUsers = useCallback(async () => {
+  const loadUsers = useCallback(async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await newAuth.makeRequest('/admin/users-with-businesses');
 
       if (data.success) {
@@ -770,7 +771,7 @@ export const AdminPage: React.FC = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [navigate, toast]);
 
@@ -1149,7 +1150,7 @@ export const AdminPage: React.FC = () => {
 
   const handleCreateSuccess = async (businessId: string) => {
     toast({ title: 'Бизнес создан' });
-    void loadUsers();
+    void loadUsers(false);
     await dashboard?.reloadBusinesses();
     if (canSetUpBusiness(businessId)) openInitialSetup(businessId);
   };
@@ -1198,7 +1199,7 @@ export const AdminPage: React.FC = () => {
     let leadBusinessCount = 0;
 
     users.forEach((user) => {
-      if (user.is_active === 0) {
+      if (user.is_active === 0 || user.is_active === false) {
         pausedUserCount += 1;
       }
 
@@ -2084,6 +2085,11 @@ export const AdminPage: React.FC = () => {
                 />
               ) : (
                 filteredUsers.map((user) => {
+                  const userPaused = user.is_active === 0 || user.is_active === false;
+                  const passwordActionTitle = user.password_setup_required === undefined
+                    ? 'Статус пароля неизвестен'
+                    : !user.password_setup_required ? 'Пароль уже установлен'
+                    : userPaused ? 'Пользователь приостановлен' : 'Отправить ссылку установки пароля';
                   const allBusinesses: BusinessListItem[] = [];
 
                   // Добавляем прямые бизнесы (включая заблокированные)
@@ -2254,7 +2260,7 @@ export const AdminPage: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className={`break-words text-lg font-semibold ${user.is_active === 0 ? 'text-slate-400 line-through' : 'text-slate-950'}`}>
+                                <h3 className={`break-words text-lg font-semibold ${userPaused ? 'text-slate-400 line-through' : 'text-slate-950'}`}>
                                   {user.name || user.email}
                                 </h3>
                                 {user.is_superadmin && (
@@ -2262,12 +2268,12 @@ export const AdminPage: React.FC = () => {
                                     Админ
                                   </span>
                                 )}
-                                {user.is_active === 0 && (
+                                {userPaused && (
                                   <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
                                     Приостановлен
                                   </span>
                                 )}
-                                {user.password_setup_required && user.is_active !== 0 && (
+                                {user.password_setup_required && !userPaused && (
                                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
                                     Нужен пароль
                                   </span>
@@ -2287,11 +2293,11 @@ export const AdminPage: React.FC = () => {
                                 className="h-8 w-8 rounded-full p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-950"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handlePauseUser(user.id, user.email, user.is_active !== 0);
+                                  handlePauseUser(user.id, user.email, !userPaused);
                                 }}
-                                title={user.is_active === 0 ? "Возобновить пользователя" : "Приостановить пользователя"}
+                                title={userPaused ? "Возобновить пользователя" : "Приостановить пользователя"}
                               >
-                                {user.is_active === 0 ? (
+                                {userPaused ? (
                                   <User className="h-4 w-4" />
                                 ) : (
                                   <Ban className="h-4 w-4" />
@@ -2305,8 +2311,8 @@ export const AdminPage: React.FC = () => {
                                   e.stopPropagation();
                                   handleSendPasswordSetup(user.id, user.email);
                                 }}
-                                disabled={!user.password_setup_required || user.is_active === 0}
-                                title={user.password_setup_required ? "Отправить ссылку установки пароля" : "Пароль уже установлен"}
+                                disabled={!user.password_setup_required || userPaused}
+                                title={passwordActionTitle}
                               >
                                 <KeyRound className="h-4 w-4" />
                               </Button>

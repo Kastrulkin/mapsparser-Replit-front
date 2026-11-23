@@ -160,6 +160,8 @@ export type Tab = 'today' | 'tasks' | 'feed' | 'reviews' | 'progress' | 'operato
 
 export type TelegramWebApp = {
   close?: () => void;
+  onEvent?: (event: 'activated' | 'deactivated', callback: () => void) => void;
+  offEvent?: (event: 'activated' | 'deactivated', callback: () => void) => void;
   downloadFile?: (params: { url: string; file_name: string }) => void;
   isVersionAtLeast?: (version: string) => boolean;
   initData?: string;
@@ -180,6 +182,7 @@ export type ReviewsProps = {
 };
 
 export type ModuleScreenProps = {
+  handoffReopenRevision?: number;
   focusNewsDraftId?: string;
   onContentEditingChange?: (editing: boolean) => void;
   journalInitialView?: 'journal' | 'day_brief';

@@ -11,7 +11,7 @@ import type { SearchTaskGroup } from './partnershipSearchGroups';
 type Config = { requirements?: string[]; search_geography?: string[]; mode?: 'find_only' | 'prepare_only' | 'auto_send'; billing_mode?: 'fixed_per_call' | 'shared_balance_actual'; search_call_cap_cents?: number; target_count?: number; agency_country?: string; sold_destination?: string; max_qualification_calls?: number; max_draft_attempts?: number; riderra_shortage_only?: boolean; evidence_terms: string[]; language: string; audience: string; offer: string; queries: { query: string; city: string }[]; max_search_calls: number; max_candidates: number; batch_size: number; search_budget_cents: number };
 type Task = { presentation?: GroupPresentation; id: string; display_name?: string; created_at?: string; updated_at?: string; report?: { found?: number; imported?: number; awaiting_check?: number; checking?: number; checked?: number; verification_failed?: number; excluded?: number; duplicates?: number; eligible: number; shortfall?: number; prepared: number; queued?: number; confirmed_sent?: number; replies?: number; delivery_uncertain?: number; ai_needs_review?: number; credit_limit?: number; credit_estimate_only?: boolean; credits_charged?: number }; revision: string; stage: string; status: string; config: Config; state: { history?: { action: string; at?: string }[]; started?: boolean; search_calls?: number; lead_ids?: string[]; blocker?: string; inflight_search?: boolean; search_credit_reservation_id?: string; qualifications?: Record<string, { status: string; reason?: string }>; campaign_results?: Record<string, { status: string; campaign_id?: string; lead_id?: string; reason_code?: string }> } };
 
-export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange, onTaskConfirmed, compact = false }: { businessId: string; selectedTaskId?: string; compact?: boolean; onTasksChange?: (tasks: SearchTaskGroup[]) => void; onTaskConfirmed?: (taskId: string) => void }) {
+export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange, onTaskConfirmed, compact = false, demoMode = false }: { businessId: string; selectedTaskId?: string; compact?: boolean; demoMode?: boolean; onTasksChange?: (tasks: SearchTaskGroup[]) => void; onTaskConfirmed?: (taskId: string) => void }) {
   const [enabled, setEnabled] = useState(false);
   const [supportsShortage, setSupportsShortage] = useState(false);
   const [shortageOnly, setShortageOnly] = useState(false);
@@ -44,6 +44,10 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     return newAuth.makeRequest(`/partnership/continuations?business_id=${encodeURIComponent(businessId)}`);
   }, [businessId]);
   useEffect(() => {
+    if (demoMode) {
+      onTasksChange?.([]);
+      return;
+    }
     let active = true;
     let working = false;
     let hasData = false;
@@ -68,7 +72,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     document.addEventListener('visibilitychange', focusRefresh);
     window.addEventListener('focus', focusRefresh);
     return () => { scope.current += 1; active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', focusRefresh); window.removeEventListener('focus', focusRefresh); };
-  }, [load, onTasksChange]);
+  }, [demoMode, load, onTasksChange]);
   const mutate = async (path: string, body: object) => {
     const epoch = scope.current;
     setBusy(true); setError('');
@@ -122,6 +126,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     } catch { if (epoch === scope.current) setError('Поиск не запущен. Обновите условия или проверьте доступный баланс.'); }
     finally { if (epoch === scope.current) setBusy(false); }
   };
+  if (demoMode) return null;
   if (!enabled) return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
   return <section aria-labelledby="outreach-continuation-title" className="space-y-3 rounded-lg border p-4">
     <h2 hidden={compact} id="outreach-continuation-title" className="text-lg font-semibold">Поиск компаний и обращения</h2>

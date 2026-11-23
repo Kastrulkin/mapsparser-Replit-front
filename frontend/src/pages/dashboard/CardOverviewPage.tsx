@@ -929,6 +929,7 @@ export const CardOverviewPage = () => {
           <>
             <DashboardCompactMetricsRow
               className="mt-6"
+              hintPlacement="tooltip"
               items={[
                 {
                   label: pageCopy.rating,

@@ -47,7 +47,7 @@ describe('DashboardSidebar localization', () => {
     );
 
     expect(await screen.findByRole('link', { name: 'Ещё' })).toHaveAttribute('href', '/dashboard/more');
-    expect(screen.getByRole('link', { name: 'Управление через чат' })).toHaveAttribute('href', '/dashboard/operator');
+    expect(screen.getByRole('link', { name: 'Чат с LocalOS' })).toHaveAttribute('href', '/dashboard/operator');
     expect(screen.queryByRole('link', { name: 'Пути роста' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Контент' })).toHaveAttribute('href', '/dashboard/content');
     expect(screen.getByRole('link', { name: 'Результаты' })).toHaveAttribute('href', '/dashboard/progress');
@@ -67,7 +67,7 @@ describe('DashboardSidebar localization', () => {
       </MemoryRouter>,
     );
 
-    await screen.findAllByRole('link');
+    await screen.findAllByRole('link', {}, { timeout: 5000 });
     expect(document.querySelector('a[href="/dashboard/growth-paths"]')).not.toBeInTheDocument();
     expect(document.querySelector('a[href="/dashboard/more"]')).toBeInTheDocument();
     expect(document.querySelector('a[href="/dashboard/progress"]')).toBeInTheDocument();

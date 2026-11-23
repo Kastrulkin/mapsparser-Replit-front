@@ -21,7 +21,8 @@ export const readMobileJson = async <T,>(response: Response): Promise<T> => {
     };
     const blocked = payload?.operator_result?.blocked_reasons;
     const detail = Array.isArray(blocked) ? blocked.map((reason) => reasons[String(reason)]).filter(Boolean).join(' ') : '';
-    throw new Error(detail || payload?.error || 'Не удалось выполнить запрос.');
+    const explanation = typeof payload?.operator_result?.chat_response === 'string' ? payload.operator_result.chat_response : '';
+    throw new Error(detail || payload?.error || explanation || 'Не удалось выполнить запрос.');
   }
   return payload;
 };

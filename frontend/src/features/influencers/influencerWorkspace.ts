@@ -11,6 +11,7 @@ export type InfluencerCreator = {
   display_name: string;
   description?: string;
   profile_type?: string;
+  identity_status?: string;
   platform?: string;
   platforms?: string[];
   public_url?: string;
@@ -140,6 +141,17 @@ const influencerTopicLabels: Record<string, string> = {
   home_design: 'Дом и интерьер',
   sports_fitness: 'Спорт и фитнес',
   business: 'Бизнес',
+  auto_transport: 'Авто и транспорт',
+  deals_and_promotions: 'Акции и скидки',
+  news_and_information: 'Новости и аналитика',
+  dance: 'Танцы',
+  urbanism: 'Городская среда',
 };
 
 export const influencerTopicLabel = (topic?: string) => influencerTopicLabels[topic || ''] || topic || 'Не указана';
+
+export const influencerProfileTypeLabel = (profileType?: string, identityStatus?: string) => {
+  if (identityStatus === 'needs_review') return 'Тип требует проверки';
+  const labels: Record<string, string> = { author: 'Автор', channel: 'Канал', community: 'Сообщество', media: 'СМИ', aggregator: 'Подборки' };
+  return labels[profileType || ''] || 'Площадка';
+};

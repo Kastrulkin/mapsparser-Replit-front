@@ -16,6 +16,7 @@ import {
 import type React from 'react';
 import { useState } from 'react';
 import { MapCardReport } from './map-card-report';
+import { MapCardInitialAudit } from './map-card-initial-audit';
 import { getMapCardReport } from './map-card-report.logic';
 import { MapCardTransfer } from './map-card-transfer';
 import { buildJournalFromSections, buildStepStatusMap, compactValue, findJournalDetailValue, findJournalEntryForGenericStage, formatPayloadItem, formatPayloadValue, getGenericStageDetail, getGenericStageStatus, hasCompleteDraftApprovalSnapshot, previewNextStepActionLabel, previewSimulationTone, toRecordOrNull } from './runs.logic';
@@ -605,6 +606,7 @@ export const HumanResultView = ({
   const mapReport = getMapCardReport(result);
   if (mapReport) {
     if (mapReport.kind === 'preparation' && mapReport.preview !== true && mapReport.legacy_report !== true && runId) return <>
+      <MapCardInitialAudit key={`initial-${runId}`} runId={runId} />
       <MapCardTransfer key={runId} result={mapReport} runId={runId} />
       <details className="mt-4"><summary className="cursor-pointer text-sm font-medium">Исходный отчёт, наблюдения и рекомендации</summary><div className="mt-3"><MapCardReport key={runId} result={mapReport} /></div></details>
     </>;

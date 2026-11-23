@@ -21,6 +21,6 @@ describe('Telegram utility menu', () => {
  it('explains a locked utility and calls the existing paywall',async()=>{
   const locked=vi.fn();const open=vi.fn();
   render(<GrowthNavigation navigation={[{key:'work_journal',label:'Journal',status:'read_only',reason:'Нужен тариф'}]} onOpen={open} onOpenProgress={vi.fn()} onLocked={locked} onRestartTour={vi.fn()}/>);
-  await userEvent.click(screen.getByRole('button',{name:/Рабочий журнал/})); expect(open).not.toHaveBeenCalled();expect(locked).toHaveBeenCalledWith(expect.objectContaining({key:'work_journal'}));
+  await userEvent.click(screen.getByRole('button',{name:/Планёрка и журнал/})); expect(open).not.toHaveBeenCalled();expect(locked).toHaveBeenCalledWith(expect.objectContaining({key:'work_journal'}));
  });
 });

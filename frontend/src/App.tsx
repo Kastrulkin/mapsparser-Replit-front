@@ -211,11 +211,6 @@ const CreatorPortalPage = lazy(() =>
     default: module.CreatorPortalPage,
   })),
 );
-const OperatorPage = lazy(() =>
-  import("./pages/dashboard/OperatorPage").then((module) => ({
-    default: module.OperatorPage,
-  })),
-);
 const TelegramRadarPage = lazy(() =>
   import("./pages/dashboard/TelegramRadarPage").then((module) => ({
     default: module.TelegramRadarPage,
@@ -381,7 +376,7 @@ const AppShell = () => {
             <Route path="promotion/influencers" element={<WorkRouteAlias path="/dashboard/influencers" />} />
             <Route path="growth-paths" element={<DemoRoute area="growth"><GrowthPathsPage /></DemoRoute>} />
             <Route path="more" element={<MorePage />} />
-            <Route path="operator" element={<DemoRoute area="operator"><JourneyWorkspaceFocus><OperatorPage /></JourneyWorkspaceFocus></DemoRoute>} />
+            <Route path="operator" element={<DemoRoute area="operator"><JourneyWorkspaceFocus>{null}</JourneyWorkspaceFocus></DemoRoute>} />
             <Route path="telegram-radar" element={<TelegramRadarPage />} />
             <Route path="agents" element={<JourneyWorkspaceFocus><AgentBlueprintsPage /></JourneyWorkspaceFocus>} />
             <Route path="bookings" element={<Navigate to="/dashboard/progress" replace />} />

@@ -1002,6 +1002,7 @@ export const buildEmployeeDescription = (
   blueprint: AgentBlueprint,
   details?: AgentBlueprintDetails | null,
 ) => {
+  if (blueprint.metadata_json?.template_key === 'maps_initial_setup') return 'Первый запуск: разовая проверка карточек по ссылкам, чек-лист и черновики правок. Сохранённые проверки используются повторно. Google — через API после подтверждения; Яндекс и 2ГИС — ручной перенос. Платное чтение требует отдельного согласования.';
   const preview = getBlueprintBuilderPreview(details?.blueprint || blueprint);
   return preview?.understood_task
     || blueprint.description

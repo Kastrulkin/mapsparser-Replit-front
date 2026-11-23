@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/services/api';
 import { recordValue } from './normalization';
+import { MapGooglePublication } from './map-google-publication';
 
 type Service = { name: string; price: string; description: string };
 type PlatformState = { fields: Record<string, string>; services: Service[]; steps: Record<string, boolean> };
 type Progress = { revision: number; platforms: Record<string, PlatformState> };
 const platforms = [
-  { id: 'google', name: 'Google', url: 'https://business.google.com/', data: 'В профиле компании откройте «Изменить профиль». Перенесите подтверждённые данные и часы работы.', services: 'Откройте раздел услуг в профиле компании. Добавляйте позиции вручную: универсальный импорт этого файла в Google не подключён.', photos: 'Откройте фотографии профиля компании. Добавьте реальные фотографии и выберите логотип и обложку.' },
+  { id: 'google', name: 'Google', url: 'https://business.google.com/', data: 'Подготовьте подтверждённые данные для сравнения с Google. Адрес и часы работы переносите вручную через «Изменить профиль».', services: 'Подготовьте услуги и точные цены. На шаге «Перенос» их можно отправить через API, если Google разрешает менять услуги этой карточки; иначе добавьте их вручную.', photos: 'Откройте фотографии профиля компании. Добавьте реальные фотографии и выберите логотип и обложку.' },
   { id: 'yandex', name: 'Яндекс', url: 'https://yandex.ru/sprav/', data: 'Откройте компанию в Яндекс Бизнесе → О компании → Данные. Перенесите контакты, адрес, часы работы и доступные для вашей рубрики сведения.', services: 'О компании → Товары и услуги → Загрузить XLS/YML → XLS. Загрузите заполненный XLSX и проверьте предпросмотр. Новый прайс-лист может заменить старый: сначала сохраните его копию.', photos: 'О компании → Фото и видео. Загрузите фотографии в подходящие категории, выберите логотип и главное фото.' },
   { id: '2gis', name: '2ГИС', url: 'https://account.2gis.com/', data: 'Откройте свою компанию в личном кабинете 2ГИС. Проверьте основные сведения, рубрики, контакты, часы работы, вход и этаж. Если доступа нет, выберите «Получить доступ».', services: 'Товары и услуги → Добавить → Из файла. Загрузите CSV, проверьте сопоставление столбцов и предпросмотр. При необходимости используйте шаблон из кабинета.', photos: 'В личном кабинете компании откройте фотографии. Загрузите выбранные изображения и проверьте обложку карточки.' },
 ];
@@ -27,12 +28,24 @@ const safeLink = (value: unknown) => {
   if (typeof value !== 'string') return '';
   try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; }
 };
-const descriptionDraft = (result: Record<string, unknown>, provider: string) => {
+const editorialItems = (result: Record<string, unknown>, provider: string) => {
   const editorial = recordValue(result.editorial);
   const aliases: Record<string, string> = { google: 'google', yandex: 'yandex', 'яндекс': 'yandex', '2gis': '2gis', '2гис': '2gis' };
-  const candidate = [...objects(editorial?.items), ...objects(editorial?.drafts)].find((item) => aliases[String(item.platform || item.provider || '').toLowerCase()] === provider);
+  return [...objects(editorial?.items), ...objects(editorial?.drafts)].filter((item) => aliases[String(item.platform || item.provider || '').toLowerCase()] === provider);
+};
+const descriptionDraft = (result: Record<string, unknown>, provider: string) => {
+  const candidate = editorialItems(result, provider).find((item) => typeof recordValue(item.fields)?.description === 'string' && String(recordValue(item.fields)?.description).trim());
   const fields = recordValue(candidate?.fields);
   return typeof fields?.description === 'string' ? fields.description : '';
+};
+const serviceDrafts = (result: Record<string, unknown>, provider: string): Service[] => {
+  const seen = new Set<string>();
+  return editorialItems(result, provider).flatMap((item) => objects(item.services)).flatMap((service) => {
+    if (typeof service.name !== 'string' || !service.name.trim()) return [];
+    const name = service.name.trim().slice(0, 250); const key = name.toLocaleLowerCase();
+    if (seen.has(key)) return []; seen.add(key);
+    return [{ name, description: typeof service.description === 'string' ? service.description.trim().slice(0, 1000) : '', price: '' }];
+  }).slice(0, 30);
 };
 const defaults = (result: Record<string, unknown>, provider: string): PlatformState => {
   const card = objects(result.cards).find((item) => item.provider === provider);
@@ -109,13 +122,17 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
     update({ ...state, steps });
   };
   const setService = (index: number, key: keyof Service, value: string) => update({ ...state, services: state.services.map((item, position) => position === index ? { ...item, [key]: value } : item), steps: { ...state.steps, services: false, submission: false, verification: false } });
+  const proposals = serviceDrafts(result, provider);
+  const existingNames = new Set(state.services.map((item) => item.name.trim().toLocaleLowerCase()));
+  const additions = proposals.filter((item) => !existingNames.has(item.name.toLocaleLowerCase())).slice(0, Math.max(0, 100 - state.services.length));
   const ready = stages.slice(0, 3).every((item) => state.steps[item.id]);
   const inputClass = 'mt-1 min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   if (loading) return <section aria-label="Мастер оформления"><p role="status">Загружаем сохранённый прогресс…</p></section>;
   return <section aria-label="Мастер оформления" className="space-y-4 rounded-2xl border border-border bg-background p-4 sm:p-5">
-    <div><h3 className="text-lg font-semibold">Оформить карточки по шагам</h3><p className="mt-1 text-sm text-muted-foreground">Проверьте пакет, перенесите его в кабинет площадки и отдельно проверьте публикацию. Отметки сохраняются для этого запуска. Внешних изменений LocalOS здесь не выполняет.</p></div>
+    <div><h3 className="text-lg font-semibold">Оформить карточки по шагам</h3><p className="mt-1 text-sm text-muted-foreground">Проверьте пакет и отдельно проверьте публикацию. Google: поддерживаемые правки можно отправить через API после вашего подтверждения. Яндекс и 2ГИС: ручной перенос. Отметки сохраняются для этого запуска.</p></div>
     <div className="flex flex-wrap gap-2" role="group" aria-label="Площадка оформления">{available.map((item) => <Button key={item.id} variant={provider === item.id ? 'default' : 'outline'} disabled={busy} aria-pressed={provider === item.id} onClick={() => void navigate(item.id, 0)}>{item.name}</Button>)}</div>
-    <p className="text-sm font-medium">{platform.name}: {state.steps.verification ? 'Публикация проверена вами вручную' : state.steps.submission ? 'Передано на проверку площадки' : ready ? 'Пакет готов к ручному переносу' : 'Подготовка пакета'} · {stages.filter((item) => state.steps[item.id]).length} из 5 шагов</p>
+    <p className="text-sm font-medium">{platform.name}: {state.steps.verification ? 'Публикация проверена вами вручную' : state.steps.submission ? 'Передано на проверку площадки' : ready ? 'Пакет готов к переносу' : 'Подготовка пакета'} · {stages.filter((item) => state.steps[item.id]).length} из 5 шагов</p>
+    {provider === 'google' ? <MapGooglePublication key={runId} runId={runId} submission={stage === 3} revision={progress.revision} dirty={dirty} ready={ready} hasServices={state.services.length > 0} /> : <p className="rounded-xl bg-muted p-3 text-sm"><strong>{platform.name} — ручной перенос.</strong> Скопируйте тексты, скачайте файлы и загрузите их в кабинет площадки. LocalOS не отправляет изменения в эту площадку.</p>}
     <nav aria-label="Шаги оформления" className="flex flex-wrap gap-2">{stages.map((item, index) => <Button key={item.id} variant={stage === index ? 'secondary' : 'ghost'} size="sm" aria-current={stage === index ? 'step' : undefined} disabled={busy} onClick={() => void navigate(provider, index)}>{state.steps[item.id] ? '✓ ' : `${index + 1}. `}{item.title}</Button>)}</nav>
     {error ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>{error}</p><Button variant="outline" size="sm" onClick={() => void load()} disabled={busy}>Загрузить сохранённое</Button><p className="text-muted-foreground">Повторная загрузка заменит несохранённые правки на экране.</p></div> : null}
     {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
@@ -133,6 +150,7 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
       {stage === 1 ? <>
         <p className="text-sm text-muted-foreground">{platform.services}</p>
         {!state.services.length ? <p className="text-sm">Подтверждённых услуг нет. Скачайте пустой шаблон или добавьте данные владельца. Цены не подставляются автоматически.</p> : null}
+        {proposals.length ? <section aria-label="Предложения услуг" className="space-y-3 rounded-xl border border-border bg-muted/40 p-3"><h5 className="text-sm font-semibold">AI-черновики услуг — требуют проверки владельцем</h5><p className="text-sm text-muted-foreground">Это предложения из результата агента. Они не добавлены в профиль компании и не опубликованы. Цены оставлены пустыми: заполните их по подтверждённым данным.</p>{proposals.map((service) => <div key={service.name} className="text-sm"><p className="font-medium">{service.name}</p><p className="whitespace-pre-wrap break-words">{service.description}</p></div>)}<Button variant="outline" disabled={busy || !additions.length} onClick={() => update({ ...state, services: [...state.services, ...additions], steps: { ...state.steps, services: false, submission: false, verification: false } })}>{additions.length ? 'Добавить черновики услуг в пакет' : 'Черновики уже в пакете'}</Button></section> : null}
         {state.services.map((service, index) => <fieldset key={index} className="space-y-2 rounded-xl border border-border p-3"><legend className="px-1 text-sm font-medium">Услуга {index + 1}</legend>{(['name', 'price', 'description']).map((key) => <label key={key} className="block text-sm">{key === 'name' ? 'Название услуги' : key === 'price' ? 'Точная цена, ₽' : 'Описание услуги'}<input className={inputClass} aria-label={`${key === 'name' ? 'Название услуги' : key === 'price' ? 'Цена услуги' : 'Описание услуги'} ${index + 1}`} disabled={busy} value={key === 'name' ? service.name : key === 'price' ? service.price : service.description} onChange={(event) => { if (key === 'name' || key === 'price' || key === 'description') setService(index, key, event.target.value); }} /></label>)}<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => void copy(`${service.name}\n${service.price}\n${service.description}`)}>Скопировать услугу {index + 1}</Button><Button variant="ghost" size="sm" disabled={busy} onClick={() => update({ ...state, services: state.services.filter((_, position) => index !== position), steps: { ...state.steps, services: false, submission: false, verification: false } })}>Убрать строку {index + 1}</Button></div></fieldset>)}
         <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy || state.services.length >= 100} onClick={() => update({ ...state, services: [...state.services, { name: '', price: '', description: '' }], steps: { ...state.steps, services: false, submission: false, verification: false } })}>Добавить услугу в пакет</Button>{provider !== 'google' ? <Button variant="outline" disabled={busy} onClick={() => void download('services')}>{state.services.length ? 'Скачать услуги' : 'Скачать пустой шаблон'} ({provider === 'yandex' ? 'XLSX' : 'CSV'})</Button> : null}</div>
       </> : null}
@@ -142,7 +160,7 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
         {objects(result.photos).filter((photo) => safeLink(photo.original_url)).length ? <div className="grid gap-3 sm:grid-cols-2">{objects(result.photos).filter((photo) => safeLink(photo.original_url)).map((photo, index) => <a key={String(photo.id || index)} className="rounded-lg border border-border p-3 text-sm underline" href={safeLink(photo.original_url)} download target="_blank" rel="noopener noreferrer">Скачать / открыть фото {index + 1}{photo.category ? ` · ${(photoLabels[String(photo.category)] || 'Фотография')}` : ''}</a>)}</div> : <p className="text-sm">Доступных фотографий нет. Добавьте фотографии в медиатеку и подготовьте новый пакет.</p>}
       </> : null}
       {stage === 3 ? <>
-        <p className="text-sm">Откройте кабинет {platform.name}, выберите нужную компанию и перенесите проверенный пакет. Публикацию подтверждаете в кабинете площадки самостоятельно.</p>
+        <p className="text-sm">{provider === 'google' ? 'Поддерживаемые правки отправляются через блок Google выше. Адрес, часы работы и фотографии перенесите вручную в нужную карточку; остальные поля также можно перенести вручную.' : `Откройте кабинет ${platform.name}, выберите нужную компанию и перенесите проверенный пакет. Публикацию подтверждаете в кабинете площадки самостоятельно.`}</p>
         {!ready ? <p role="alert" className="text-sm text-muted-foreground">Сначала подтвердите шаги «Данные», «Услуги» и «Фотографии».</p> : null}
         <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><a href={platform.url} target="_blank" rel="noopener noreferrer">Открыть кабинет {platform.name}</a></Button><Button variant="outline" disabled={busy} onClick={() => void download('instructions')}>Скачать пакет текстов (TXT)</Button></div>
         <p className="text-sm text-muted-foreground">Отметьте перенос только после отправки изменений в кабинете. Модерация и появление в публичной карточке — отдельный этап.</p>
@@ -152,7 +170,7 @@ export const MapCardTransfer = ({ result, runId }: { result: Record<string, unkn
         {safeLink(card?.url) ? <Button asChild variant="outline"><a href={safeLink(card?.url)} target="_blank" rel="noopener noreferrer">Открыть публичную карточку</a></Button> : <p className="text-sm text-muted-foreground">Публичная ссылка не подтверждена. Укажите её в разделе «Карты и отзывы», затем подготовьте новый пакет для проверки.</p>}
         <p className="text-sm">Для независимой проверки откройте «Проверка карточек на картах» в списке задач. Автоматическая визуальная проверка пока недоступна. Эта отметка фиксирует только вашу ручную проверку.</p>
       </> : null}
-      <label className="flex items-start gap-3 rounded-xl bg-muted p-3 text-sm"><input className="mt-1 h-4 w-4" type="checkbox" checked={Boolean(state.steps[currentStage.id])} disabled={busy || (stage === 3 && !ready) || (stage === 4 && !state.steps.submission)} onChange={(event) => toggleStage(event.target.checked)} /><span>{currentStage.confirmation}</span></label>
+      <label className="flex items-start gap-3 rounded-xl bg-muted p-3 text-sm"><input className="mt-1 h-4 w-4" type="checkbox" checked={Boolean(state.steps[currentStage.id])} disabled={busy || (stage === 3 && !ready) || (stage === 4 && !state.steps.submission)} onChange={(event) => toggleStage(event.target.checked)} /><span>{provider === 'google' && stage === 3 ? 'Я проверил результат отправки Google через API и/или вручную перенёс оставшиеся сведения и фотографии' : currentStage.confirmation}</span></label>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><span className="text-xs text-muted-foreground">{dirty ? 'Есть несохранённые изменения' : 'Прогресс этого пакета'}</span><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy || !dirty} onClick={() => void save()}>Сохранить прогресс</Button>{stage < stages.length - 1 ? <Button disabled={busy} onClick={() => void navigate(provider, stage + 1)}>Далее</Button> : <Button disabled={busy} onClick={() => void navigate(available[(available.findIndex((item) => item.id === provider) + 1) % available.length]?.id || provider, 0)}>К следующей площадке</Button>}</div></div>
   </section>;

@@ -3,12 +3,14 @@ import { usePreparedCabinet } from './usePreparedCabinet';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { workNavigationCopy } from '@/lib/workNavigation';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Button } from '@/components/ui/button';
 import { WorkReturnNotice } from '@/components/WorkReturnNotice';
 import { demoScopedBusinesses, resolveDashboardBusinessScope } from '../lib/dashboardBusinessScope';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
 import type { BusinessRecord } from '@/types/business';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Link, Navigate, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { HttpError, newAuth, type User } from '../lib/auth_new';
 import { getCapabilityAccessForBusiness, type SubscriptionCapability } from '../lib/subscriptionAccess';
 import { DashboardHeader } from './DashboardHeader';
@@ -16,6 +18,10 @@ import { DashboardSidebar } from './DashboardSidebar';
 import { DemoModeBanner, GuidedTourProvider } from './guided-tour/GuidedTourProvider';
 
 type DashboardBusiness = BusinessRecord;
+
+const OperatorWorkspace = lazy(() => import('@/pages/dashboard/OperatorPage').then(module => ({
+  default: module.OperatorWorkspace,
+})));
 
 const selectedBusinessStorageKey = (demoMode: boolean) => (
   demoMode ? 'demo_selectedBusinessId' : 'selectedBusinessId'
@@ -97,6 +103,16 @@ const LockedSectionPreview = ({ section, currentTierName, paywallHref }: { secti
 
 export const DashboardLayout = () => {
   const location = useLocation();
+  const chatRoute = Boolean(useMatch('/dashboard/operator'));
+  const { language } = useLanguage();
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatStarted, setChatStarted] = useState(false);
+  const [chatRetry, setChatRetry] = useState(0);
+  const chatTrigger = useRef<HTMLButtonElement>(null);
+  const closeChat = () => {
+    setChatOpen(false);
+    chatTrigger.current?.focus();
+  };
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -317,6 +333,12 @@ export const DashboardLayout = () => {
     }
   };
 
+  const canUseOperator = Boolean(user && !user.demo_mode &&
+    (user.is_superadmin || getCapabilityAccessForBusiness(currentBusiness, 'operator').allowed));
+  useEffect(() => {
+    if (chatRoute && canUseOperator) setChatStarted(true);
+  }, [chatRoute, canUseOperator]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)]">
@@ -333,7 +355,8 @@ export const DashboardLayout = () => {
   }
 
   const lockedPaidSection = paidDashboardSections.find((section) => (
-    location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
+    (chatRoute && section.capability === 'operator' && section.path === '/dashboard/operator') ||
+      location.pathname === section.path || location.pathname.startsWith(`${section.path}/`)
   ));
   const ownsBlockAccess = location.pathname === '/dashboard/influencers'
     || location.pathname === '/dashboard/partnerships'
@@ -341,6 +364,12 @@ export const DashboardLayout = () => {
     || location.pathname === '/dashboard/promotion';
   const sectionAccess = lockedPaidSection ? getCapabilityAccessForBusiness(currentBusiness, lockedPaidSection.capability) : null;
   const shouldLockPaidSection = Boolean(lockedPaidSection && !ownsBlockAccess && !user.demo_mode && !user.is_superadmin && !sectionAccess?.allowed);
+  const canOpenChat = canUseOperator && Boolean(currentBusinessId || controlScope?.kind === 'platform');
+  const fullChat = chatRoute && canUseOperator;
+  const dockedChat = !chatRoute && canOpenChat && chatOpen;
+  const chatVisible = fullChat || dockedChat;
+  const scopeKey = `${currentBusinessId || 'none'}:${controlScope?.kind || 'none'}:${controlScope?.id || 'none'}`;
+  const operatorContext = { user, currentBusinessId, currentBusiness, controlScope };
   const paywallReturnTo = `${location.pathname}${location.search}`;
   const paywallHref = `/dashboard/profile?focus=subscription&tier=${encodeURIComponent(sectionAccess?.requiredTier || 'starter')}&return_to=${encodeURIComponent(paywallReturnTo)}#subscription`;
 
@@ -354,7 +383,7 @@ export const DashboardLayout = () => {
         unreadMenus={prepared.unreadMenus}
         webTrackingAvailable={currentBusiness?.web_tracking_available === true}
       />
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'}`}>
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'md:pl-24' : 'md:pl-72'} ${dockedChat ? 'min-[1440px]:pr-96' : ''}`}>
         <DashboardHeader
           businesses={businesses}
           currentBusinessId={currentBusinessId}
@@ -364,6 +393,17 @@ export const DashboardLayout = () => {
           onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}
           user={user}
+          chatPanel={!chatRoute && canOpenChat ? {
+            open: dockedChat,
+            triggerRef: chatTrigger,
+            onToggle: () => {
+              if (dockedChat) closeChat();
+              else {
+                setChatStarted(true);
+                setChatOpen(true);
+              }
+            },
+          } : undefined}
         />
         {user.demo_mode ? <DemoModeBanner /> : null}
         <main className="flex-1 p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6"><WorkReturnNotice />
@@ -390,8 +430,36 @@ export const DashboardLayout = () => {
                   paywallHref={paywallHref}
                 />
               ) : (
-                <Outlet key={`${currentBusinessId || 'none'}:${controlScope?.kind || 'none'}:${controlScope?.id || 'none'}`} context={{ user, demoMode: Boolean(user.demo_mode), currentBusinessId, currentBusiness, businesses, controlScope, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
+                <Outlet key={scopeKey} context={{ ...operatorContext, demoMode: Boolean(user.demo_mode), businesses, onControlScopeChange: selectControlScope, updateBusiness, reloadBusinesses, setBusinesses, onBusinessChange: handleBusinessChange }} />
               )}
+              {(fullChat || canOpenChat) && <div
+                id="dashboard-chat-panel"
+                hidden={!chatVisible}
+                role={fullChat ? undefined : 'region'}
+                aria-label={fullChat ? undefined : language === 'ru' ? 'Боковой чат' : 'Chat panel'}
+                className={fullChat ? 'mt-4' : dockedChat ? 'fixed inset-y-0 right-0 z-40 hidden w-96 border-l border-border bg-background shadow-xl md:block' : 'hidden'}
+                onKeyDown={event => {
+                  if (dockedChat && event.key === 'Escape' && !event.defaultPrevented) {
+                    event.stopPropagation();
+                    closeChat();
+                  }
+                }}
+              >
+                {(fullChat || chatStarted) && <ErrorBoundary key={`${scopeKey}:${chatRetry}`} fallback={<div className="space-y-3 p-4">
+                  <p role="alert">{language === 'ru' ? 'Не удалось открыть чат.' : 'Could not open chat.'}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => setChatRetry(value => value + 1)}>{workCoherenceCopy(language).retry}</Button>
+                    {dockedChat && <Button size="sm" variant="ghost" onClick={closeChat}>{language === 'ru' ? 'Свернуть чат' : 'Collapse chat'}</Button>}
+                  </div>
+                </div>}>
+                  <Suspense fallback={<div className="flex items-center justify-between gap-2 p-4 text-sm text-muted-foreground">
+                    <p role="status">{language === 'ru' ? 'Открываем чат…' : 'Opening chat…'}</p>
+                    {dockedChat && <Button size="sm" variant="ghost" onClick={closeChat}>{language === 'ru' ? 'Свернуть чат' : 'Collapse chat'}</Button>}
+                  </div>}>
+                    <OperatorWorkspace context={operatorContext} panel={!fullChat} visible={chatVisible} onCollapse={closeChat} />
+                  </Suspense>
+                </ErrorBoundary>}
+              </div>}
             </div>
           </div>
         </main>

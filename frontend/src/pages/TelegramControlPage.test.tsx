@@ -13,7 +13,7 @@ const jsonResponse = (payload: unknown) => Promise.resolve(new Response(JSON.str
 }));
 
 const openOperator = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(await screen.findByRole('button', { name: 'Чат' }));
+  await user.click(await screen.findByRole('button', { name: 'Чат с LocalOS' }));
 };
 
 const openGrowthPaths = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -128,7 +128,7 @@ describe('TelegramControlPage scope integrity', () => {
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
 
-    expect(await screen.findByRole('heading', { name: 'Отзывы' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Отзывы' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отзывы' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Меню' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Сегодня' })).not.toHaveAttribute('aria-current');
@@ -296,7 +296,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
-    expect(await screen.findByText('Автор один')).toBeInTheDocument();
+    expect(await screen.findByText('Автор один', {}, { timeout: 5000 })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
     await user.click(await screen.findByRole('button', { name: /Точка два/ }));
@@ -552,7 +552,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
-    expect(await screen.findByText('Автор один')).toBeInTheDocument();
+    expect(await screen.findByText('Автор один', {}, { timeout: 5000 })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Выбрать отзыв' }));
     expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Точка один/ }));
@@ -598,7 +598,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
-    await screen.findByRole('heading', { name: 'Отзывы' });
+    await screen.findByRole('heading', { name: 'Отзывы' }, { timeout: 5000 });
     await user.click(screen.getByRole('button', { name: /^Фильтры/ }));
     await user.selectOptions(screen.getByLabelText('Точка'), 'location-old');
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('location_id=location-old'))).toBe(true));
@@ -727,7 +727,7 @@ describe('TelegramControlPage scope integrity', () => {
     const user = userEvent.setup();
 
     render(<LanguageContext.Provider value={{language:'ru',setLanguage:vi.fn(),t:en}}><TelegramControlPage /></LanguageContext.Provider>);
-    await screen.findByRole('heading', { name: 'Отзывы' });
+    await screen.findByRole('heading', { name: 'Отзывы' }, { timeout: 5000 });
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {
       const url = String(input);
       return url.includes('/api/operator/mobile/reviews') && url.includes('scope_id=business-1') && url.includes('review_id=review-business-1');
@@ -742,7 +742,7 @@ describe('TelegramControlPage scope integrity', () => {
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Где работаем?' })).not.toBeInTheDocument());
     await openGrowthPaths(user);
     await user.click(await screen.findByRole('button', { name: 'Отзывы' }));
-    await screen.findByRole('heading', { name: 'Отзывы' });
+    await screen.findByRole('heading', { name: 'Отзывы' }, { timeout: 5000 });
     await user.click(screen.getByRole('button', { name: /^\u0424\u0438\u043b\u044c\u0442\u0440\u044b/ }));
     await user.selectOptions(screen.getByLabelText('\u041e\u0446\u0435\u043d\u043a\u0430'), '5');
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => {

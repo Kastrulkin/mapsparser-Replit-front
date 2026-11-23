@@ -49,6 +49,7 @@ export type OutreachSenderAccountSummary = {
 };
 
 export type IntegrationsRegistryRawState = {
+  yougileStatus?: { connected?: boolean; configured?: boolean; needs_reauthorization?: boolean } | null;
   trelloStatus?: { connected?: boolean; needs_reauthorization?: boolean } | null;
   business?: SettingsHubBusiness | null;
   telegramOwnerLinked?: boolean | null;
@@ -164,6 +165,15 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
 
   return [
     {
+      id: 'yougile', name: 'YouGile', tag: 'Задачи',
+      description: 'Задачи команды, исполнители и сроки. Создание и завершение после проверки.',
+      connectionType: 'api_key',
+      status: rawState.yougileStatus?.needs_reauthorization ? 'action_required' : rawState.yougileStatus?.configured ? 'connected' : rawState.yougileStatus?.connected ? 'action_required' : 'not_connected',
+      nextAction: rawState.yougileStatus?.configured ? 'Посмотрите задачи или подготовьте поручение.' : rawState.yougileStatus?.connected ? 'Выберите рабочую доску и колонку.' : 'Подключите свою команду YouGile.',
+      primaryAction: { label: rawState.yougileStatus?.connected ? 'Открыть' : 'Подключить', type: 'drawer', target: 'yougile' },
+      hasLogs: false, hasHelp: true,
+    },
+    {
       id: 'trello', name: 'Trello', tag: 'Задачи',
       description: 'Чтение выбранных досок, карточек и сроков. Обновление по кнопке.',
       connectionType: 'oauth',
@@ -261,8 +271,8 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
     {
       id: 'google_business',
       name: 'Google Business',
-      tag: 'Публикации',
-      description: 'Карточка компании, отзывы и посты Google.',
+      tag: 'Карты',
+      description: 'Карточка Google: чтение и правки через API после подтверждения.',
       connectionType: 'oauth',
       status: googleBusinessConnected ? 'connected' : googleBusinessAccount ? 'action_required' : 'not_connected',
       nextAction: googleBusinessConnected ? 'Карточка выбрана.' : 'Подключите Google-аккаунт и выберите карточку компании.',
@@ -308,8 +318,8 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
     },
     {
       id: 'yandex_maps',
-      name: 'Yandex Maps',
-      tag: 'Публикации',
+      name: 'Яндекс Карты',
+      tag: 'Карты',
       description: 'Тексты для карт с ручным финальным шагом.',
       connectionType: 'manual',
       status: socialConnectionStatus(yandexReadiness, 'manual'),
@@ -320,8 +330,8 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
     },
     {
       id: '2gis',
-      name: '2GIS',
-      tag: 'Публикации',
+      name: '2ГИС',
+      tag: 'Карты',
       description: 'Подготовка материалов для карточки 2GIS.',
       connectionType: 'manual',
       status: socialConnectionStatus(twoGisReadiness, 'manual'),
