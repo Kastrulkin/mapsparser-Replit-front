@@ -1,5 +1,6 @@
 """Setup chat, queue and durable results on an explicitly disposable PostgreSQL."""
 import importlib
+import json
 import os
 
 import psycopg2
@@ -54,10 +55,18 @@ def pilot(monkeypatch):
         CREATE TABLE businessmaplinks(id text PRIMARY KEY, user_id text, business_id text, url text, map_type text,
             created_at timestamptz DEFAULT now());
         CREATE TABLE userservices(id text PRIMARY KEY, user_id text, business_id text, name text, description text,
-            category text, optimized_name text, optimized_description text, source text, is_active boolean,
+            category text, optimized_name text, optimized_description text, keywords text, source text, is_active boolean,
             created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
         CREATE TABLE cards(id text PRIMARY KEY, business_id text, url text, title text, products text, rating real,
             reviews_count int, is_latest boolean, created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
+        CREATE TABLE businesstypes(id text, type_key text, label text, description text);
+        CREATE TABLE wordstatkeywords(id text PRIMARY KEY, keyword text UNIQUE, views integer,
+            category text, updated_at timestamptz DEFAULT now());
+        CREATE TABLE wordstatkeywordsexcluded(id text PRIMARY KEY, business_id text, keyword text);
+        CREATE TABLE wordstatkeywordscustom(id text PRIMARY KEY, business_id text, keyword text, views integer,
+            category text, updated_at timestamptz DEFAULT now(), created_at timestamptz DEFAULT now(), UNIQUE (business_id, keyword));
+        CREATE TABLE seonegativekeywords(id text PRIMARY KEY, business_id text, phrase text, scope text,
+            category text, is_active boolean, created_at timestamptz DEFAULT now());
         CREATE TABLE operatoractions(id text PRIMARY KEY);
         CREATE TABLE prospectingleads(id text PRIMARY KEY, business_id text, name text, address text, city text,
             country_code text, category text, phone text, email text, source_url text);
@@ -160,7 +169,7 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     state = client.get(SETUP + JINLIAN).get_json()['setup']
     assert state['comparisons'][0]['ours']['rating'].startswith('4.6')
     assert state['comparisons'][0]['their_services'] == ['Soy scoop']
-    monkeypatch.setattr(setup, '_wordstat', lambda cursor, business, actor, service: (
+    monkeypatch.setattr(setup, '_wordstat', lambda cursor, business, service, city, search: (
         [{'text': 'Vegan ice cream Bangkok', 'views': 140, 'source': 'Wordstat', 'dated': '2026-11-01'}]
         if service['name'] == 'Vegan ice cream' else []
     ))
@@ -204,6 +213,109 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     assert dict(cursor.fetchone()) == {
         'name': 'Vegan ice cream', 'optimized_name': 'Vegan ice cream — Bangkok', 'description': 'Wholesale orders',
     }
+
+
+def test_prepare_searches_wordstat_for_each_service_and_saves_after_review(pilot, monkeypatch):
+    from wordstat_client import WordstatClient
+    from wordstat_config import config
+
+    client, conn = pilot
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE userservices SET keywords='["ручная фраза"]' WHERE id='s';
+        INSERT INTO wordstatkeywordscustom (id,business_id,keyword,views,category)
+          VALUES ('current','pilot-jinlian','vegan ice cream Bangkok',140,'other'),
+                 ('foreign','pilot-hamik','vegan ice cream',999,'other');
+        INSERT INTO wordstatkeywordsexcluded VALUES ('exclude','pilot-jinlian','пошив мерча срочно');
+        INSERT INTO seonegativekeywords(id,business_id,phrase,scope,category,is_active)
+          VALUES ('minus','pilot-jinlian','бесплатно','global','',true);
+    """)
+    conn.commit()
+    calls = []
+
+    def get_queries(self, seeds, region):
+        calls.append(seeds)
+        assert seeds == ['пошив брендированного мерча']
+        return [{'topRequests': [
+            {'phrase': 'мерч на заказ', 'count': '518'},
+            {'phrase': 'пошив мерча', 'count': '181'},
+            {'phrase': 'пошив одежды', 'count': '9000'},
+            {'phrase': 'пошив мерча срочно', 'count': '1000'},
+            {'phrase': 'пошив мерча бесплатно', 'count': '1000'},
+            {'phrase': 'пошив брендированного мерча', 'count': '0'},
+        ]}]
+
+    monkeypatch.setattr(config, 'is_configured', lambda: True)
+    monkeypatch.setattr(WordstatClient, 'get_popular_queries', get_queries)
+    state = action(client, JINLIAN, 'start')
+    assert process_next(conn)['state'] == 'ready'
+    state = client.get(SETUP + JINLIAN).get_json()['setup']
+    state = action(client, JINLIAN, 'remove', state, key=state['sources'][0]['key'])
+    state = action(client, JINLIAN, 'message', state, message='Услуга: Пошив брендированного мерча')
+    state = action(client, JINLIAN, 'prepare', state)
+    original = next(item for item in state['services'] if item['original'] == 'Vegan ice cream')
+    new_service = next(item for item in state['services'] if item['original'] == 'Пошив брендированного мерча')
+    assert calls == [['пошив брендированного мерча']]
+    assert [(item['text'], item['views']) for item in original['keywords']] == [('vegan ice cream Bangkok', 140)]
+    assert [(item['text'], item['views']) for item in new_service['keywords']] == [('мерч на заказ', 518), ('пошив мерча', 181)]
+    cursor.execute('SELECT name,keywords FROM userservices WHERE business_id=%s', (JINLIAN,))
+    assert cursor.fetchall() == [{'name': 'Vegan ice cream', 'keywords': '["ручная фраза"]'}]
+    conn.commit()
+
+    state = action(client, JINLIAN, 'service', state, key=new_service['key'])
+    state = action(client, JINLIAN, 'service', state, key=original['key'])
+    action(client, JINLIAN, 'service', state, key=original['key'])
+    cursor.execute('SELECT name,keywords FROM userservices WHERE business_id=%s', (JINLIAN,))
+    assert {row['name']: json.loads(row['keywords']) for row in cursor.fetchall()} == {
+        'Vegan ice cream': ['ручная фраза', 'vegan ice cream Bangkok'],
+        'Пошив брендированного мерча': ['мерч на заказ', 'пошив мерча'],
+    }
+
+
+def test_prepare_finds_low_frequency_stored_queries_outside_the_global_top(pilot, monkeypatch):
+    client, conn = pilot
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO wordstatkeywords(id,keyword,views,category)
+        SELECT 'generic-' || n, 'популярный запрос ' || n, 10000, 'other'
+        FROM generate_series(1,5001) n;
+        INSERT INTO wordstatkeywords(id,keyword,views,category)
+        VALUES ('relevant','пошив мерча',41,'other');
+    """)
+    conn.commit()
+    monkeypatch.setattr(setup._SetupWordstatSearch, 'lookup', lambda *_: pytest.fail('Stored evidence should suffice'))
+
+    state = action(client, HAMIK, 'start')
+    state = action(client, HAMIK, 'message', state, message='Услуга: Пошив брендированного мерча')
+    state = action(client, HAMIK, 'prepare', state)
+    assert [(item['text'], item['views']) for item in state['services'][0]['keywords']] == [('пошив мерча', 41)]
+
+
+def test_prepare_keeps_unmeasured_topics_when_wordstat_is_unavailable(pilot, monkeypatch):
+    from wordstat_client import WordstatClient, WordstatTemporaryUnavailable
+    from wordstat_config import config
+
+    client, conn = pilot
+    calls = []
+
+    def unavailable(self, seeds, region):
+        calls.append(seeds)
+        raise WordstatTemporaryUnavailable('quota')
+
+    monkeypatch.setattr(config, 'is_configured', lambda: True)
+    monkeypatch.setattr(WordstatClient, 'get_popular_queries', unavailable)
+    state = action(client, HAMIK, 'start')
+    state = action(client, HAMIK, 'message', state, message='Услуга: Пошив мерча')
+    state = action(client, HAMIK, 'message', state, message='Услуга: Ремонт обуви')
+    state = action(client, HAMIK, 'prepare', state)
+    assert calls == [['пошив мерча']]
+    assert state['seo_prepared']
+    assert len(state['services']) == 2
+    assert all(item['views'] is None for service in state['services'] for item in service['keywords'])
+    action(client, HAMIK, 'service', state, key=state['services'][0]['key'])
+    cursor = conn.cursor()
+    cursor.execute("SELECT keywords FROM userservices WHERE business_id=%s AND is_active", (HAMIK,))
+    assert [json.loads(item['keywords']) for item in cursor.fetchall()] == [[]]
 
 
 def test_seo_reviews_large_existing_catalog_without_changing_services(pilot, monkeypatch):

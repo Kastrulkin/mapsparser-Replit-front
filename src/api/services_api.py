@@ -13,6 +13,7 @@ from core.service_keyword_enrichment import (
     enrich_service_keywords_from_wordstat,
     match_saved_wordstat_keywords,
     merge_service_wordstat_keywords,
+    parse_service_keywords,
 )
 from core.service_problem_regeneration import (
     SERVICE_REGENERATION_BATCH_LIMIT,
@@ -151,18 +152,6 @@ def _normalize_learning_text(value):
     return " ".join(str(value or "").strip().lower().replace("ё", "е").split())
 
 
-def _parse_service_keywords(raw_keywords):
-    if not raw_keywords:
-        return []
-    try:
-        parsed_keywords = json.loads(raw_keywords) if isinstance(raw_keywords, str) else raw_keywords
-        if isinstance(parsed_keywords, list):
-            return parsed_keywords
-    except Exception:
-        pass
-    return [item.strip() for item in str(raw_keywords).split(',') if item.strip()]
-
-
 def _service_row_to_dict(row, col_names):
     if hasattr(row, 'keys'):
         return dict(row)
@@ -206,7 +195,7 @@ def _load_active_services_for_business(cursor, business_id):
     services = []
     for row in rows:
         service = _service_row_to_dict(row, col_names)
-        service['keywords'] = _parse_service_keywords(service.get('keywords'))
+        service['keywords'] = parse_service_keywords(service.get('keywords'))
         services.append(service)
     _attach_service_regeneration_metadata(cursor, services)
     return services
@@ -695,7 +684,7 @@ def _apply_regenerated_service(service, optimized):
         if not row:
             raise ValueError("Услуга больше недоступна")
         keywords = merge_service_wordstat_keywords(
-            _parse_service_keywords(_cell(row, "keywords", _cell(row, 1))),
+            parse_service_keywords(_cell(row, "keywords", _cell(row, 1))),
             match_saved_wordstat_keywords(
                 cursor,
                 service.get("business_id"),
@@ -887,7 +876,7 @@ def _run_service_regeneration_job(job_id, token):
                 "id": service_id,
                 "name": item.get("name"),
                 "description": item.get("description"),
-                "keywords": _parse_service_keywords(item.get("keywords")),
+                "keywords": parse_service_keywords(item.get("keywords")),
             }
             after_service.update(next_data)
             after_audit = build_services_quality_audit([after_service])
@@ -1430,7 +1419,7 @@ def get_services():
                         if service_dict.get('price') is None:
                             service_dict['price'] = ''
 
-                        service_dict['keywords'] = _parse_service_keywords(service_dict.get('keywords'))
+                        service_dict['keywords'] = parse_service_keywords(service_dict.get('keywords'))
                         service_dict['source'] = service_dict.get('source') or 'external'
                         service_dict['is_external'] = True
                         external_services.append(service_dict)
@@ -1492,7 +1481,7 @@ def get_services():
             for k in list(service_dict.keys()):
                 if service_dict[k] is None and k in ('description', 'category', 'name', 'price', 'keywords'):
                     service_dict[k] = '' if k != 'keywords' else []
-            service_dict['keywords'] = _parse_service_keywords(service_dict.get('keywords'))
+            service_dict['keywords'] = parse_service_keywords(service_dict.get('keywords'))
             if aggregate_network:
                 service_key = (
                     str(service_dict.get('category') or '').strip().lower(),
@@ -1629,7 +1618,7 @@ def get_services_seo_audit():
                 service = dict(row)
             else:
                 service = dict(zip(col_names, row)) if col_names else {}
-            service['keywords'] = _parse_service_keywords(service.get('keywords'))
+            service['keywords'] = parse_service_keywords(service.get('keywords'))
             services.append(service)
 
         try:
@@ -1768,7 +1757,7 @@ def enrich_problematic_service_keywords():
         for service in services:
             if len(selected) >= limit:
                 break
-            if _parse_service_keywords(service.get("keywords")):
+            if parse_service_keywords(service.get("keywords")):
                 continue
             selected.append(service)
 
@@ -2104,7 +2093,7 @@ def update_service(service_id):
                 db.close()
                 return jsonify({"error": "Услуга не найдена"}), 404
             keywords = merge_service_wordstat_keywords(
-                _parse_service_keywords(_cell(row, "keywords", _cell(row, 6))),
+                parse_service_keywords(_cell(row, "keywords", _cell(row, 6))),
                 match_saved_wordstat_keywords(
                     cursor, service_business_id, previous_data["name"],
                 ),
@@ -2247,7 +2236,7 @@ def update_service(service_id):
             "success": True,
             "service_id": service_id,
             "business_id": service_business_id,
-            "keywords": _parse_service_keywords(keywords_str),
+            "keywords": parse_service_keywords(keywords_str),
         })
     except Exception as e:
         if db is not None:

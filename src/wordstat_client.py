@@ -20,6 +20,49 @@ class WordstatTemporaryUnavailable(Exception):
     """External Wordstat API is temporarily unavailable or misconfigured upstream."""
 
 
+def extract_popular_queries(api_payload):
+    if not api_payload:
+        return []
+
+    blocks = api_payload if isinstance(api_payload, list) else [api_payload]
+    rows = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        for section in ("results", "topRequests", "top_requests", "associations", "alsoSearch"):
+            section_items = block.get(section) or []
+            if not isinstance(section_items, list):
+                continue
+            for raw_item in section_items:
+                if not isinstance(raw_item, dict):
+                    continue
+                text = str(
+                    raw_item.get("text")
+                    or raw_item.get("phrase")
+                    or raw_item.get("query")
+                    or raw_item.get("key")
+                    or ""
+                ).strip()
+                if not text:
+                    continue
+                count = raw_item.get("count") or raw_item.get("shows") or raw_item.get("clicks") or 0
+                try:
+                    count = int(count)
+                except Exception:
+                    count = 0
+                rows.append({"keyword": text, "views": count})
+
+    by_keyword = {}
+    for item in rows:
+        key = item["keyword"].lower().replace("ё", "е")
+        if not key:
+            continue
+        previous = by_keyword.get(key)
+        if not previous or int(item.get("views") or 0) > int(previous.get("views") or 0):
+            by_keyword[key] = item
+    return list(by_keyword.values())
+
+
 class WordstatClient:
     """Клиент для работы с API Яндекс.Вордстат"""
     
@@ -37,6 +80,7 @@ class WordstatClient:
         self.oauth_url = "https://oauth.yandex.ru"
         self.access_token = None
         self.token_expires_at = None
+        self.request_timeout = 30
         self.api_key = (api_key or "").strip()
         self.folder_id = (folder_id or "").strip()
 
@@ -84,7 +128,7 @@ class WordstatClient:
         url = f"{self.base_url}/{endpoint}"
         
         try:
-            response = requests.post(url, headers=headers, json=(payload or {}), timeout=30)
+            response = requests.post(url, headers=headers, json=(payload or {}), timeout=self.request_timeout)
             
             if response.status_code == 429:
                 retry_after = int(response.headers.get('Retry-After', 60))
@@ -123,7 +167,7 @@ class WordstatClient:
         body['folderId'] = self.folder_id
 
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=30)
+            response = requests.post(url, headers=headers, json=body, timeout=self.request_timeout)
             if response.status_code == 429:
                 retry_after = int(response.headers.get('Retry-After', 60))
                 raise WordstatTemporaryUnavailable(

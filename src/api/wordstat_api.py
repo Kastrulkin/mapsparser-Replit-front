@@ -16,7 +16,12 @@ from core.db_helpers import assert_schema_columns
 from core.helpers import get_business_owner_id
 from core.seo_keywords import collect_ranked_keywords
 from service_categorizer import categorizer
-from wordstat_client import WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE, WordstatClient, WordstatTemporaryUnavailable
+from wordstat_client import (
+    WORDSTAT_TEMPORARILY_UNAVAILABLE_MESSAGE,
+    WordstatClient,
+    WordstatTemporaryUnavailable,
+    extract_popular_queries,
+)
 from wordstat_config import config
 
 wordstat_bp = Blueprint('wordstat_api', __name__, url_prefix='/api/wordstat')
@@ -338,7 +343,7 @@ def _refresh_business_wordstat_keywords(cursor, business_id: str):
             summary["skipped_targets"] += 1
             continue
         payload = client.get_popular_queries(seeds, config.default_region)
-        rows = _extract_live_wordstat_queries(payload)
+        rows = extract_popular_queries(payload)
         summary["fetched"] += len(rows)
         filtered_rows = _filter_business_wordstat_rows(rows, relevance_terms)
         categorized = []
@@ -364,49 +369,6 @@ def _refresh_business_wordstat_keywords(cursor, business_id: str):
     return summary
 
 
-def _extract_live_wordstat_queries(api_payload):
-    if not api_payload:
-        return []
-
-    blocks = api_payload if isinstance(api_payload, list) else [api_payload]
-    rows = []
-    for block in blocks:
-        if not isinstance(block, dict):
-            continue
-        for section in ("results", "topRequests", "top_requests", "associations", "alsoSearch"):
-            section_items = block.get(section) or []
-            if not isinstance(section_items, list):
-                continue
-            for raw_item in section_items:
-                if not isinstance(raw_item, dict):
-                    continue
-                text = str(
-                    raw_item.get("text")
-                    or raw_item.get("phrase")
-                    or raw_item.get("query")
-                    or raw_item.get("key")
-                    or ""
-                ).strip()
-                if not text:
-                    continue
-                count = raw_item.get("count") or raw_item.get("shows") or raw_item.get("clicks") or 0
-                try:
-                    count = int(count)
-                except Exception:
-                    count = 0
-                rows.append({"keyword": text, "views": count})
-
-    by_keyword = {}
-    for item in rows:
-        key = _normalize_keyword_search_text(item.get("keyword") or "")
-        if not key:
-            continue
-        previous = by_keyword.get(key)
-        if not previous or int(item.get("views") or 0) > int(previous.get("views") or 0):
-            by_keyword[key] = item
-    return list(by_keyword.values())
-
-
 def _categorize_wordstat_keyword(keyword: str) -> str:
     try:
         category, confidence, _matched = categorizer.categorize_service(keyword)
@@ -429,7 +391,7 @@ def _load_live_wordstat_search(query: str, limit: int) -> list[dict]:
     except WordstatTemporaryUnavailable as error:
         print(f"Wordstat live search unavailable: {error}", flush=True)
         live_payload = None
-    rows = _extract_live_wordstat_queries(live_payload)
+    rows = extract_popular_queries(live_payload)
     normalized_query = _normalize_keyword_search_text(query)
     if not rows and normalized_query:
         rows = [{"keyword": query, "views": 0}]

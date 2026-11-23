@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from typing import Any
 
 from core.service_duplicate_grouping import attach_duplicate_group_metadata
@@ -8,6 +10,8 @@ from core.service_safe_wordstat import (
     build_safe_seed_queries,
     detect_service_keyword_category,
     filter_wordstat_candidates,
+    is_unsafe_query,
+    normalize_query_text,
 )
 
 
@@ -68,6 +72,84 @@ def merge_service_wordstat_keywords(existing: list[str], matched: list[str]) -> 
         if key not in seen:
             result.append(keyword)
             seen.add(key)
+    return result
+
+
+def parse_service_keywords(raw_keywords: Any) -> list[str]:
+    if not raw_keywords:
+        return []
+    if isinstance(raw_keywords, list):
+        return raw_keywords
+    if isinstance(raw_keywords, str):
+        try:
+            parsed = json.loads(raw_keywords)
+        except ValueError:
+            pass
+        else:
+            if isinstance(parsed, list):
+                return parsed
+    return [item.strip() for item in str(raw_keywords).split(",") if item.strip()]
+
+
+def find_service_wordstat_evidence(
+    cursor: Any, business_id: str, name: str, city: str = "", *, candidates: list[dict] | None = None,
+) -> list[dict]:
+    """Find measured phrases supported by the service title and its own local context."""
+    ignored = _QUERY_MODIFIERS | set(tokenize_keyword_text(city))
+    title_terms = set(tokenize_keyword_text(name)) - ignored
+    if not title_terms:
+        return []
+    if candidates is None:
+        cursor.execute(
+            """
+            SELECT keyword, views, category, updated_at FROM (
+                SELECT keyword, views, category, updated_at, 0 AS priority
+                FROM wordstatkeywordscustom
+                WHERE business_id = %s AND views > 0
+                UNION ALL
+                SELECT keyword, views, category, updated_at, 1 AS priority
+                FROM (
+                    SELECT keyword, views, category, updated_at
+                    FROM wordstatkeywords
+                    WHERE views > 0 AND LOWER(REPLACE(keyword, 'ё', 'е')) LIKE ANY(%s)
+                    ORDER BY views DESC, keyword
+                    LIMIT 150
+                ) matching_global
+            ) matching
+            ORDER BY priority, views DESC, keyword
+            """,
+            (business_id, [f"%{term}%" for term in sorted(title_terms)]),
+        )
+        candidates = [dict(item) for item in cursor.fetchall()]
+
+    cursor.execute("SELECT keyword FROM wordstatkeywordsexcluded WHERE business_id = %s", (business_id,))
+    excluded = {normalize_query_text(row["keyword"]) for row in cursor.fetchall()}
+    cursor.execute(
+        "SELECT phrase, scope, category FROM seonegativekeywords WHERE business_id = %s AND is_active IS TRUE",
+        (business_id,),
+    )
+    negative = [
+        (normalize_query_text(row["phrase"]), row["scope"], str(row["category"] or "").casefold())
+        for row in cursor.fetchall()
+    ]
+    result = []
+    seen = set()
+    for candidate in candidates:
+        keyword = str(candidate["keyword"] or "").strip()
+        normalized = normalize_query_text(keyword)
+        terms = set(tokenize_keyword_text(keyword)) - ignored
+        if not terms or not terms <= title_terms or normalized in excluded or normalized in seen:
+            continue
+        if is_unsafe_query(keyword)[0] or not candidate["views"] or candidate["views"] <= 0:
+            continue
+        category = str(candidate.get("category") or "").casefold()
+        if any(phrase and phrase in normalized and (scope != "category" or key == category)
+               for phrase, scope, key in negative):
+            continue
+        result.append(candidate)
+        seen.add(normalized)
+        if len(result) == 5:
+            break
     return result
 
 

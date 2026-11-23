@@ -171,7 +171,7 @@ function ViewLinks({ businessId }: { businessId: string }) {
 
 function Keywords({ state }: { state: Setup }) {
   return <div className="space-y-3">
-    <p className="text-sm text-muted-foreground">Город компании · {state.profile.city || 'не указан'}. Частотность Wordstat — из сохранённых данных. Регион частотности источника может отличаться.</p>
+    <p className="text-sm text-muted-foreground">Город компании · {state.profile.city || 'не указан'}. Частотность из Wordstat. Регион поиска может отличаться от города компании.</p>
     {[...(state.category_keywords?.length ? [{ key: 'activity-type', original: state.activity_type ?? 'Вид деятельности', keywords: state.category_keywords }] : []), ...state.services].map(item => <details className="rounded-lg border p-3" key={item.key}>
       <summary className="cursor-pointer font-medium">{item.original}</summary>
       <ul className="mt-2 space-y-2 text-sm">

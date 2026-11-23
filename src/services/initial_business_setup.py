@@ -5,9 +5,17 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
+from time import monotonic
 
 from psycopg2.extras import Json
 
+from core.service_keyword_enrichment import (
+    find_service_wordstat_evidence, merge_service_wordstat_keywords, parse_service_keywords,
+)
+from core.service_safe_wordstat import normalize_query_text
+from service_categorizer import categorizer
+from wordstat_client import WordstatClient, WordstatTemporaryUnavailable, extract_popular_queries
+from wordstat_config import config
 from services.initial_setup_sources import clean, dated, read_map, read_social, read_website, source_url
 from services.website_seo_audit import unavailable as audit_unavailable
 
@@ -16,6 +24,9 @@ JOB_KIND = 'initial_setup_source'
 CURRENT_FIELDS = ('name', 'address', 'city', 'country', 'business_type', 'website', 'contact_phone', 'contact_email')
 MAX_SOURCES = 18
 MAX_ANALYZED_SERVICES = 120
+MAX_WORDSTAT_LOOKUPS = 8
+WORDSTAT_LOOKUP_WINDOW = 8
+WORDSTAT_REQUEST_TIMEOUT = 2.5
 
 
 class Conflict(ValueError):
@@ -276,28 +287,57 @@ def process_source(claimed):
         db.rollback_and_close()
 
 
-def _wordstat(cursor, business_id, actor_id, service):
-    from core.seo_keywords import collect_ranked_keywords
-    from services.operator_search_demand import relevant_candidates
+class _SetupWordstatSearch:
+    def __init__(self):
+        self.client = WordstatClient.from_config(config) if config.is_configured() else None
+        if self.client and config.oauth_token:
+            self.client.set_access_token(config.oauth_token)
+        self.results = {}
+        self.deadline = None
 
-    cursor.execute('SAVEPOINT setup_wordstat')
-    try:
-        ranked = collect_ranked_keywords(cursor, business_id, actor_id, service_name=service['name'],
-                                         service_description=service.get('description'), limit=100,
-                                         fallback_global_when_empty_terms=False)
-        candidates = relevant_candidates(ranked.get('items') or [], [service])
-        cursor.execute('RELEASE SAVEPOINT setup_wordstat')
-    except Exception:
-        cursor.execute('ROLLBACK TO SAVEPOINT setup_wordstat')
-        cursor.execute('RELEASE SAVEPOINT setup_wordstat')
-        raise
-    keywords = []
-    for item in candidates[:5]:
-        word = clean(item.get('keyword'), 220)
-        if word and item.get('source') != 'safe_seed':
-            keywords.append({'text': word, 'views': item.get('views'), 'source': 'Wordstat',
-                             'dated': str(item.get('updated_at') or '')[:10]})
-    return keywords
+    def lookup(self, name):
+        if not self.client or re.search(r'https?://|@|(?:\d[\s()+-]*){7,}', name, re.I):
+            return []
+        seed = normalize_query_text(name)
+        if not seed:
+            return []
+        if seed in self.results:
+            return self.results[seed]
+        if self.deadline is None:
+            self.deadline = monotonic() + WORDSTAT_LOOKUP_WINDOW
+        remaining = self.deadline - monotonic()
+        if len(self.results) >= MAX_WORDSTAT_LOOKUPS or remaining <= 0:
+            return []
+        self.client.request_timeout = min(WORDSTAT_REQUEST_TIMEOUT, remaining)
+        try:
+            response = self.client.get_popular_queries([seed], config.default_region)
+        except (ValueError, WordstatTemporaryUnavailable):
+            response = None
+        if not response:
+            self.client = None
+            return []
+        items = extract_popular_queries(response)
+        for item in items:
+            category, confidence, _ = categorizer.categorize_service(item['keyword'])
+            item['category'] = category if confidence >= 0.3 else 'other'
+            item['updated_at'] = datetime.now(timezone.utc)
+        self.results[seed] = sorted(items, key=lambda item: item['views'], reverse=True)
+        return self.results[seed]
+
+
+def _wordstat(cursor, business_id, service, city, search):
+    name = service['name']
+    matches = find_service_wordstat_evidence(cursor, business_id, name, city)
+    if not matches and (found := search.lookup(name)):
+        matches = find_service_wordstat_evidence(cursor, business_id, name, city, candidates=found)
+    return [{'text': clean(item['keyword'], 220), 'views': item['views'], 'source': 'Wordstat',
+             'dated': str(item.get('updated_at') or '')[:10], 'category': item.get('category')}
+            for item in matches]
+
+
+def _measured_wordstat(keywords):
+    return [item for item in keywords if item.get('source') == 'Wordstat'
+            and isinstance(item.get('views'), int) and item['views'] > 0 and item.get('text')]
 
 
 def _comparison(row):
@@ -326,9 +366,9 @@ def _local_topics(name, city, source):
     return topics
 
 
-def prepare_seo(cursor, row, actor_id, profile):
+def prepare_seo(cursor, row, profile):
     cursor.execute('''SELECT DISTINCT ON (LOWER(BTRIM(name)))
-        id,name,description,category,optimized_name,optimized_description FROM userservices
+        id,name,description,category,optimized_name,optimized_description,keywords FROM userservices
         WHERE business_id=%s AND is_active IS NOT FALSE
         ORDER BY LOWER(BTRIM(name)),name,id LIMIT %s''', (row['business_id'], MAX_ANALYZED_SERVICES + 1))
     services = {}
@@ -347,15 +387,12 @@ def prepare_seo(cursor, row, actor_id, profile):
     if not category and profile.get('business_type'):
         cursor.execute('SELECT label FROM businesstypes WHERE type_key=%s LIMIT 1', (profile['business_type'],))
         category = (cursor.fetchone() or {}).get('label')
-    row['data']['category_keywords'] = []
-    if category:
-        keywords = _wordstat(cursor, row['business_id'], actor_id, {'name': category})
-        row['data']['category_keywords'] = keywords or _local_topics(category, city, 'Вид деятельности')
+    search = _SetupWordstatSearch()
     previous_by_key = {item['key']: item for item in row['data'].get('services', [])}
     proposals = []
     for service in list(services.values())[:MAX_ANALYZED_SERVICES]:
         name = service['name']
-        keywords = _wordstat(cursor, row['business_id'], actor_id, service)
+        keywords = _wordstat(cursor, row['business_id'], service, city, search)
         description = service.get('description') or ''
         proposed = service.get('optimized_name') or name
         proposed_desc = service.get('optimized_description') or description
@@ -376,15 +413,22 @@ def prepare_seo(cursor, row, actor_id, profile):
             keywords = _local_topics(name, city, 'Тема из каталога')
         key = fingerprint(name.casefold())
         previous = previous_by_key.get(key) or {}
+        assigned = parse_service_keywords(service.get('keywords'))
+        suggested = [item['text'] for item in _measured_wordstat(keywords)]
         accepted = bool(previous.get('accepted') and previous.get('service_id') == service.get('id')
-                        and previous['proposed'] == proposed and previous['proposed_description'] == proposed_desc)
+                        and previous['proposed'] == proposed and previous['proposed_description'] == proposed_desc
+                        and merge_service_wordstat_keywords(assigned, suggested) == assigned)
         proposals.append({'key': key, 'service_id': service.get('id'), 'original': name, 'accepted': accepted,
                           'description': description, 'previous_name': service.get('optimized_name'),
                           'previous_description': service.get('optimized_description'),
                           'proposed': proposed, 'proposed_description': proposed_desc,
                           'source_url': service.get('url'), 'category': service.get('category'),
                           'keywords': keywords})
-    row['data'].update(services=proposals, seo_dirty=False, seo_prepared=True)
+    category_keywords = []
+    if category:
+        keywords = _wordstat(cursor, row['business_id'], {'name': category}, city, search)
+        category_keywords = keywords or _local_topics(category, city, 'Вид деятельности')
+    row['data'].update(services=proposals, category_keywords=category_keywords, seo_dirty=False, seo_prepared=True)
     return len(services) > MAX_ANALYZED_SERVICES
 
 
@@ -472,7 +516,7 @@ def _update_profile(cursor, row, actor_id, patch):
         row['data']['seo_dirty'] = True
 
 
-def _apply_service(cursor, row, actor_id, payload):
+def _apply_service(cursor, row, actor_id, profile, payload):
     key = payload.get('key')
     selected = next((item for item in row['data'].get('services', []) if item['key'] == key), None)
     if not selected or row['data'].get('seo_dirty'):
@@ -484,6 +528,12 @@ def _apply_service(cursor, row, actor_id, payload):
     if selected.get('accepted'):
         return 'Изменение уже сохранено в «Услугах».'
     business_id = row['business_id']
+    candidates = [{'keyword': item['text'], 'views': item['views'], 'category': item.get('category')}
+                  for item in _measured_wordstat(selected.get('keywords', []))]
+    matches = find_service_wordstat_evidence(
+        cursor, business_id, selected['original'], clean(profile.get('city'), 120), candidates=candidates,
+    ) if candidates else []
+    phrases = [item['keyword'] for item in matches]
     if selected.get('service_id'):
         cursor.execute('''SELECT * FROM userservices WHERE business_id=%s AND id=%s AND is_active IS NOT FALSE FOR UPDATE''',
                        (business_id, selected['service_id']))
@@ -493,8 +543,12 @@ def _apply_service(cursor, row, actor_id, payload):
             ('optimized_description', 'previous_description')
         )):
             raise Conflict('Услугу изменили. Обновите разбор перед сохранением.')
-        cursor.execute('''UPDATE userservices SET optimized_name=%s,optimized_description=%s,updated_at=NOW()
-            WHERE business_id=%s AND id=%s''', (override_name, override_desc, business_id, current['id']))
+        keywords = current['keywords']
+        if phrases:
+            merged = merge_service_wordstat_keywords(parse_service_keywords(keywords), phrases)
+            keywords = json.dumps(merged, ensure_ascii=False)
+        cursor.execute('''UPDATE userservices SET optimized_name=%s,optimized_description=%s,keywords=%s,updated_at=NOW()
+            WHERE business_id=%s AND id=%s''', (override_name, override_desc, keywords, business_id, current['id']))
     else:
         cursor.execute('SELECT id FROM userservices WHERE business_id=%s AND LOWER(BTRIM(name))=LOWER(%s) AND is_active IS NOT FALSE LIMIT 1',
                        (business_id, selected['original']))
@@ -502,10 +556,10 @@ def _apply_service(cursor, row, actor_id, payload):
             raise Conflict('Услуга уже появилась в каталоге. Обновите разбор.')
         service_id = str(uuid.uuid4())
         cursor.execute('''INSERT INTO userservices (id,user_id,business_id,name,description,category,
-            optimized_name,optimized_description,source,is_active,created_at,updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'initial_setup',TRUE,NOW(),NOW())''',
+            optimized_name,optimized_description,keywords,source,is_active,created_at,updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'initial_setup',TRUE,NOW(),NOW())''',
             (service_id, actor_id, business_id, selected['original'], selected['description'],
-             selected.get('category') or '', override_name, override_desc))
+             selected.get('category') or '', override_name, override_desc, json.dumps(phrases, ensure_ascii=False)))
         selected['service_id'] = service_id
     selected.update(accepted=True, proposed=override_name, proposed_description=override_desc)
     return 'Вариант сохранён в разделе «Услуги».'
@@ -646,9 +700,9 @@ def operate(cursor, row, actor, profile, payload):
         sources = status(cursor, row, profile, True)['sources']
         if any(source['status'] in ('added', 'queued', 'running') for source in sources):
             raise Conflict('Дождитесь чтения источников перед разбором услуг.')
-        if prepare_seo(cursor, row, actor_id, profile):
+        if prepare_seo(cursor, row, profile):
             return f'Разбор и поисковые запросы готовы для первых {MAX_ANALYZED_SERVICES} услуг. В каталоге есть и другие позиции.'
-        return 'Разбор каталога и поисковые запросы готовы к проверке.'
+        return 'Разбор каталога готов. Проверьте услуги и поисковые запросы.'
     if action == 'profile':
         choice = source_findings(row, 'profile').get(payload.get('key'))
         if not choice:
@@ -656,7 +710,7 @@ def operate(cursor, row, actor, profile, payload):
         _update_profile(cursor, row, actor_id, {choice['field']: choice['text']})
         return 'Выбранное значение сохранено в профиле.'
     if action == 'service':
-        return _apply_service(cursor, row, actor_id, payload)
+        return _apply_service(cursor, row, actor_id, profile, payload)
     if action == 'fact':
         return _save_fact(cursor, row, actor, payload)
     if action == 'save':
