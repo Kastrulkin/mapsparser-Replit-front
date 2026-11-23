@@ -402,6 +402,23 @@ def source_findings(row, kind):
     return findings
 
 
+def _service_review_items(cursor, row):
+    proposals = row['data'].get('services', [])
+    ids = [item['service_id'] for item in proposals if item.get('service_id')]
+    original_ids = set()
+    if ids:
+        cursor.execute('''SELECT id FROM userservices WHERE business_id=%s AND id=ANY(%s)
+            AND is_active IS NOT FALSE AND source IS DISTINCT FROM 'initial_setup' ''',
+                       (row['business_id'], ids))
+        original_ids = {str(item['id']) for item in cursor.fetchall()}
+    map_services = {item['name'].casefold()
+                    for source in row['data'].get('sources', {}).values()
+                    if source['kind'] == 'map' and source['status'] == 'ready' and not source.get('competitor')
+                    for item in source.get('catalog', [])}
+    return [dict(item, has_original=item.get('service_id') in original_ids
+                 or item['original'].casefold() in map_services) for item in proposals]
+
+
 def status(cursor, row, profile, can_edit):
     data = row['data']
     items = data.get('sources', {})
@@ -432,7 +449,7 @@ def status(cursor, row, profile, can_edit):
         sources.append(visible)
     return {'business_id': row['business_id'], 'revision': row['revision'], 'origin': row['origin'], 'can_edit': can_edit,
             'provisional': row['provisional'], 'profile': {k: profile.get(k) for k in CURRENT_FIELDS},
-            'sources': sources, 'services': data.get('services', []), 'seo_dirty': bool(data.get('seo_dirty')),
+            'sources': sources, 'services': _service_review_items(cursor, row), 'seo_dirty': bool(data.get('seo_dirty')),
             'seo_prepared': bool(data.get('seo_prepared')), 'saved': bool(data.get('saved')),
             'started': bool(data.get('started')), 'activity_type': data.get('activity_type'),
             'category_keywords': data.get('category_keywords', []),
@@ -491,7 +508,7 @@ def _apply_service(cursor, row, actor_id, payload):
              selected.get('category') or '', override_name, override_desc))
         selected['service_id'] = service_id
     selected.update(accepted=True, proposed=override_name, proposed_description=override_desc)
-    return 'Исходник и выбранный вариант доступны в разделе «Услуги».'
+    return 'Вариант сохранён в разделе «Услуги».'
 
 
 def _save_fact(cursor, row, actor, payload):

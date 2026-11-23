@@ -242,6 +242,7 @@ def _save_suggestions(
                 "service_id": saved.get("service_id") or suggestion.get("service_id"),
                 "status": saved.get("status") or "suggested",
                 "before_name": suggestion.get("before_name"),
+                "before_description": suggestion.get("before_description"),
                 "optimized_name": saved.get("after_optimized_name") or suggestion.get("optimized_name"),
                 "seo_description": saved.get("after_optimized_description") or suggestion.get("seo_description"),
             }

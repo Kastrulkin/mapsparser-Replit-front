@@ -167,6 +167,8 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     state = action(client, JINLIAN, 'prepare', state)
     original = next(item for item in state['services'] if item['original'] == 'Vegan ice cream')
     assert original['proposed'] == 'Vegan ice cream — Bangkok'
+    assert original['service_id'] == 's'
+    assert original['has_original'] is True
     assert original['keywords'][0]['views'] == 140
     assert len(state['services']) == 2
     assert client.post(SETUP + JINLIAN, headers={'X-Pilot-Actor': 'other'}, json={'action': 'service', 'key': original['key']}).status_code == 403

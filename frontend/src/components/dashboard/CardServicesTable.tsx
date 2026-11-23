@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { CheckCircle2, Edit3, Search, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { CheckCircle2, Edit3, Search, Trash2, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CardServiceDetail, CardServiceDraft, CardServiceList, CardServiceRow, CardServiceWorkspace } from '@/components/dashboard/CardServiceList';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { KeywordMatchLevel, KeywordScore } from '@/components/dashboard/cardServicesLogic';
-import { getServiceQuality } from '@/components/dashboard/cardServicesLogic';
+import { getServiceQuality, serviceProposalStatus } from '@/components/dashboard/cardServicesLogic';
+import { ServiceProposalDetail, type SaveServiceProposal, type ServiceProposal } from '@/components/initial-setup/ServiceProposals';
 
 export type ServiceTableItem = {
   id?: string;
@@ -24,6 +26,7 @@ export type ServiceTableItem = {
   pattern_version_ids?: string[];
   regeneration_status?: string;
   regeneration_attempts?: number;
+  setupProposal?: ServiceProposal;
   regeneration_history?: Array<{
     status?: string;
     attempt_no?: number;
@@ -61,6 +64,9 @@ type CardServicesTableProps = {
   services: ServiceTableItem[];
   filteredCount: number;
   loading: boolean;
+  saveSetupProposal?: SaveServiceProposal;
+  setupProposalDisabled?: boolean;
+  setupProposalError?: string;
   servicesSearch: string;
   servicesCategoryFilter: string;
   language: string;
@@ -229,6 +235,9 @@ export function CardServicesTable({
   services,
   filteredCount,
   loading,
+  saveSetupProposal,
+  setupProposalDisabled = false,
+  setupProposalError = '',
   servicesSearch,
   servicesCategoryFilter,
   language,
@@ -256,15 +265,24 @@ export function CardServicesTable({
   const locale = language === 'ru' ? 'ru-RU' : 'en-US';
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(true);
+  const [proposalReviewId, setProposalReviewId] = useState<string | null>(null);
+  const proposalDetailId = useId();
+  const proposalDetailRef = useRef<HTMLElement | null>(null);
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null);
+  const activeServiceId = useRef('');
 
   const groupedServices = useMemo(() => {
     const seen = new Map<string, GroupedService>();
     services.forEach((service, index) => {
       const serviceId = getServiceId(service, index);
-      const key = getDuplicateKey(service);
+      const key = service.setupProposal && !service.setupProposal.service_id ? serviceId : getDuplicateKey(service);
       const existing = seen.get(key);
       if (existing) {
         existing.duplicateCount += 1;
+        if (!existing.service.setupProposal && service.setupProposal) {
+          existing.service = service;
+          existing.serviceId = serviceId;
+        }
         return;
       }
       seen.set(key, { service, serviceId, duplicateCount: 1 });
@@ -280,6 +298,23 @@ export function CardServicesTable({
 
   const selectedService = selectedGroup?.service || null;
   const selectedId = selectedGroup?.serviceId || '';
+  activeServiceId.current = selectedId;
+  const selectedProposal = selectedService?.setupProposal;
+  const isNewProposal = Boolean(selectedProposal && !selectedProposal.service_id);
+  const reviewingProposal = isDetailOpen && (isNewProposal || selectedId === proposalReviewId);
+  const visibleProposal = reviewingProposal ? selectedProposal : undefined;
+  const visibleProposalKey = visibleProposal?.key;
+
+  useEffect(() => {
+    if (visibleProposalKey && selectedServiceId) proposalDetailRef.current?.focus();
+  }, [visibleProposalKey, selectedServiceId]);
+
+  const closeProposal = () => {
+    if (activeServiceId.current !== selectedId) return;
+    setProposalReviewId(null);
+    if (isNewProposal) setIsDetailOpen(false);
+    selectedRowRef.current?.focus();
+  };
   const selectedQuality = selectedService ? getServiceQuality(selectedService) : null;
   const selectedStatus = selectedService ? getServiceStatus(selectedService) : null;
   const selectedKeywords = selectedService ? getKeywordList(selectedService) : [];
@@ -313,7 +348,13 @@ export function CardServicesTable({
   }
 
   return (
-    <div ref={tableScrollRef} className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-sm">
+    <div ref={tableScrollRef} className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-sm"
+      onKeyDown={event => {
+        if (event.key === 'Escape' && visibleProposal) {
+          event.stopPropagation();
+          closeProposal();
+        }
+      }}>
       {loading ? (
         <div className="flex items-center justify-center gap-2 px-6 py-14 text-slate-500">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-950" />
@@ -327,56 +368,41 @@ export function CardServicesTable({
           <p>{servicesSearch || servicesCategoryFilter !== 'all' ? copy.emptyFiltered : copy.emptyDefault}</p>
         </div>
       ) : (
-        <div className={isDetailVisible ? 'grid items-start lg:grid-cols-[minmax(320px,0.9fr)_minmax(420px,1.35fr)]' : 'block'}>
-          <div className={isDetailVisible ? 'border-b border-slate-100 bg-slate-50/70 lg:border-b-0 lg:border-r' : ''}>
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Очередь услуг</div>
-                <div className="mt-1 text-sm text-slate-500">
-                  {isDetailOpen ? 'Выберите услугу для проверки' : 'Кликните по услуге, чтобы открыть редактор'}
-                </div>
-              </div>
-              <div className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                {groupedServices.length}
-              </div>
-            </div>
-            <div className="p-2">
+        <CardServiceWorkspace queue={(
+            <CardServiceList
+              heading="Очередь услуг"
+              description={isDetailOpen ? 'Выберите услугу для проверки' : 'Кликните по услуге, чтобы открыть редактор'}
+              count={groupedServices.length}
+            >
               {groupedServices.map((item) => {
                 const service = item.service;
-                const status = getServiceStatus(service);
-                const isSelected = isDetailVisible && selectedId === item.serviceId;
+                const status = service.setupProposal
+                  ? serviceProposalStatus({ ...service.setupProposal, has_original: Boolean(service.setupProposal.service_id || service.setupProposal.has_original) })
+                  : getServiceStatus(service);
+                const isSelected = Boolean(isDetailVisible && selectedId === item.serviceId);
                 const isDimmed = Boolean(isDetailVisible && !isSelected);
                 const updatedAt = getDisplayedServiceUpdatedAt(service);
                 return (
-                  <button
+                  <CardServiceRow
                     key={item.serviceId}
-                    type="button"
+                    title={service.name || 'Без названия'}
+                    status={status}
+                    selected={isSelected}
+                    dimmed={isDimmed}
+                    buttonRef={selectedId === item.serviceId ? selectedRowRef : undefined}
+                    controls={isSelected && visibleProposal ? proposalDetailId : undefined}
                     onClick={() => {
                       setSelectedServiceId(item.serviceId);
                       setIsDetailOpen(true);
+                      if (item.serviceId !== selectedId) setProposalReviewId(null);
+                      else if (visibleProposal) proposalDetailRef.current?.focus();
                     }}
-                    className={`mb-2 w-full rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
-                      isSelected
-                        ? 'border-slate-300 bg-slate-950 text-white shadow-md ring-2 ring-slate-950/10'
-                        : 'border-slate-100 bg-white text-slate-900 hover:border-slate-200 hover:bg-slate-50'
-                    } ${isDimmed ? 'opacity-55 blur-[0.35px] hover:opacity-90 hover:blur-0' : ''}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className={`truncate text-sm font-semibold ${isSelected ? 'text-white' : 'text-slate-950'}`}>
-                          {service.name || 'Без названия'}
-                        </div>
-                        <div className={`mt-1 flex flex-wrap items-center gap-1.5 text-xs ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                          {service.category ? <span className="truncate">{service.category}</span> : null}
-                          {service.category && service.price ? <span>·</span> : null}
-                          {service.price ? <span>{formatPrice(service.price)}</span> : null}
-                        </div>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>
-                        {status.label}
-                      </span>
-                    </div>
-                    <div className={`mt-3 flex items-center justify-between gap-2 text-xs ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                    subtitle={(service.category || service.price) ? <>
+                      {service.category ? <span className="truncate">{service.category}</span> : null}
+                      {service.category && service.price ? <span>·</span> : null}
+                      {service.price ? <span>{formatPrice(service.price)}</span> : null}
+                    </> : undefined}
+                    footer={service.setupProposal && !service.setupProposal.service_id ? undefined : <>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span className={`truncate rounded-full px-2 py-0.5 ${isSelected ? 'bg-white/10 text-slate-200' : 'bg-slate-100 text-slate-600'}`}>
                           {formatServiceSource(service)}
@@ -388,85 +414,56 @@ export function CardServicesTable({
                         ) : null}
                       </div>
                       <span className="shrink-0">{formatDate(updatedAt, locale)}</span>
-                    </div>
-                  </button>
+                    </>}
+                  />
                 );
               })}
-            </div>
-          </div>
-
-          {isDetailVisible ? (
-          <div className="min-w-0 bg-white p-4 lg:bg-gradient-to-br lg:from-white lg:to-slate-50/80 lg:p-5">
-            {selectedService && selectedQuality && selectedStatus ? (
-              <div className="space-y-4 rounded-[1.75rem] border border-slate-200/90 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.10)] ring-1 ring-white">
-                <div className="space-y-3 border-b border-slate-100 pb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${selectedStatus.className}`}>
-                        {selectedStatus.label}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                        {formatServiceSource(selectedService)}
-                      </span>
-                      {selectedGroup.duplicateCount > 1 ? (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
-                          дубликатов: {selectedGroup.duplicateCount}
-                        </span>
-                      ) : null}
-                    </div>
-                    <h3 className="max-w-4xl text-xl font-semibold leading-tight tracking-tight text-slate-950">
-                      {selectedService.name || 'Без названия'}
-                    </h3>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                      {selectedService.category ? <span>{selectedService.category}</span> : null}
-                      {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
-                      {selectedUpdatedAt ? <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span> : null}
-                    </div>
-                    <div className="mt-3 space-y-3 rounded-2xl bg-slate-50/80 px-3 py-3 ring-1 ring-slate-100">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Текущее описание</div>
-                        <p className="mt-1 max-h-56 overflow-y-auto whitespace-pre-line pr-1 text-sm leading-6 text-slate-700">
-                          {selectedService.description || 'Описание пока не заполнено.'}
-                        </p>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">SEO-запросы</div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {selectedKeywords.length > 0 ? (
-                            <>
-                              {selectedKeywords.slice(0, 3).map((keyword) => (
-                                <span key={keyword} className="max-w-[13rem] truncate rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                                  {keyword}
-                                </span>
-                              ))}
-                              {selectedKeywords.length > 3 ? (
-                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-400 ring-1 ring-slate-200">+{selectedKeywords.length - 3}</span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-500">ещё не подобраны</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setIsDetailOpen(false)}
-                      className="shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-                      title="Закрыть редактор и оставить только список услуг"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+            </CardServiceList>
+        )} detail={visibleProposal && selectedService ? (
+          <ServiceProposalDetail
+            key={JSON.stringify([visibleProposal.key, visibleProposal.proposed, visibleProposal.proposed_description])}
+            id={proposalDetailId}
+            focusRef={proposalDetailRef}
+            item={isNewProposal ? visibleProposal : { ...visibleProposal, has_original: true,
+              original: selectedService.name || visibleProposal.original, description: selectedService.description || '' }}
+            send={saveSetupProposal}
+            disabled={setupProposalDisabled}
+            error={setupProposalError}
+            onClose={closeProposal}
+            backAction={!isNewProposal ? <Button size="sm" variant="ghost" onClick={closeProposal}>К услуге</Button> : undefined}
+          />
+        ) : isDetailVisible && selectedGroup ? (
+          <CardServiceDetail
+            title={selectedService.name || 'Без названия'}
+            status={selectedStatus}
+            badges={<>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                {formatServiceSource(selectedService)}
+              </span>
+              {selectedGroup.duplicateCount > 1 && (
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                  дубликатов: {selectedGroup.duplicateCount}
+                </span>
+              )}
+            </>}
+            metadata={<>
+              {selectedService.category && <span>{selectedService.category}</span>}
+              {selectedService.price ? <span>{formatPrice(selectedService.price)}</span> : null}
+              {selectedUpdatedAt && <span>Обновлено {formatDate(selectedUpdatedAt, locale)}</span>}
+            </>}
+            description={selectedService.description || 'Описание пока не заполнено.'}
+            keywords={selectedKeywords}
+            onClose={() => setIsDetailOpen(false)}
+            actions={<>
+                    {selectedProposal && <Button size="sm" onClick={() => setProposalReviewId(selectedId)}>
+                      Проверить предложение
+                    </Button>}
                     <Button
                       onClick={() => onOptimizeService(selectedId)}
                       disabled={!automationAllowed || optimizingServiceId === selectedId || selectedQuality.manualReview}
                       size="sm"
-                      className="h-9 bg-slate-950 text-white hover:bg-slate-800"
+                      variant={selectedProposal ? 'outline' : 'default'}
+                      className={selectedProposal ? 'h-9' : 'h-9 bg-slate-950 text-white hover:bg-slate-800'}
                       title={selectedQuality.manualReview ? 'Нужна ручная проверка' : !automationAllowed ? automationLockedMessage : copy.optimize}
                     >
                       {optimizingServiceId === selectedId ? (
@@ -508,15 +505,10 @@ export function CardServicesTable({
                     <Button size="sm" variant="ghost" onClick={() => onDeleteService(selectedId)} className="h-9 text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
-
+            </>}
+          >
                 <div className="space-y-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Предложенное название
-                    </div>
+                  <CardServiceDraft title="Предложенное название">
                     {selectedService.optimized_name ? (
                       <>
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -545,7 +537,7 @@ export function CardServicesTable({
                     ) : (
                       <p className="mt-3 text-sm leading-6 text-slate-500">SEO-вариант появится после оптимизации.</p>
                     )}
-                  </div>
+                  </CardServiceDraft>
 
                   {selectedQuality.needsReview || selectedQuality.manualReview ? (
                     <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 p-3">
@@ -560,11 +552,7 @@ export function CardServicesTable({
                     </div>
                   ) : null}
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Предложенное описание
-                    </div>
+                  <CardServiceDraft title="Предложенное описание">
                     {selectedService.optimized_description ? (
                       <>
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -593,13 +581,10 @@ export function CardServicesTable({
                     ) : (
                       <p className="mt-3 text-sm leading-6 text-slate-500">Описание появится после оптимизации выбранной услуги.</p>
                     )}
-                  </div>
+                  </CardServiceDraft>
                 </div>
-              </div>
-            ) : null}
-          </div>
-          ) : null}
-        </div>
+          </CardServiceDetail>
+        ) : null} />
       )}
     </div>
   );

@@ -205,6 +205,7 @@ def test_optimize_services_saves_suggestions_and_charges() -> None:
     assert result["external_writes_performed"] is False
     assert len(cursor.items) == 2
     assert cursor.items[0]["after_optimized_name"] == "Массаж лица с уходом"
+    assert result["service_suggestions"][0]["before_description"] == "Расслабляющий массаж"
     assert cursor.ledger_entries[0][2] == -2
 
 

@@ -1,3 +1,5 @@
+import type { ServiceProposal } from '@/components/initial-setup/ServiceProposals';
+
 export type ServiceLike = {
   source?: string;
   keywords?: string[] | string;
@@ -574,7 +576,7 @@ export const buildServiceCatalogCompressionSuggestion = (
 export const formatServiceSource = (service: ServiceLike) => {
   const source = String(service?.source || '').trim().toLowerCase();
   if (!source) return 'LocalOS';
-  if (source === 'manual' || source === 'localos') return 'LocalOS';
+  if (source === 'manual' || source === 'localos' || source === 'initial_setup') return 'LocalOS';
   if (source === 'yandex_maps') return 'Яндекс Карты';
   if (source === 'yandex_business') return 'Яндекс Бизнес';
   if (source === '2gis') return '2ГИС';
@@ -607,3 +609,8 @@ export const getDisplayedServiceUpdatedAt = (
   }
   return service?.updated_at || null;
 };
+
+const savedStatus = { label: 'Сохранено', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+const updateStatus = { label: 'На проверке', className: 'border-amber-200 bg-amber-50 text-amber-800' };
+const newStatus = { label: 'Новая услуга', className: 'border-slate-200 bg-slate-100 text-slate-700' };
+export const serviceProposalStatus = (item: ServiceProposal) => item.accepted ? savedStatus : item.has_original ? updateStatus : newStatus;

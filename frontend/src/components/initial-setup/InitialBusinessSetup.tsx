@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type Proposal, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
+import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/services/api';
+import { ServiceProposals } from './ServiceProposals';
 
 const fieldNames: Record<string, string> = {
   name: 'Название', city: 'Город', address: 'Адрес', website: 'Сайт', contact_phone: 'Телефон', contact_email: 'Email',
@@ -47,6 +48,115 @@ function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: (
   </>;
 }
 
+const photoCategories = {
+  entrance: 'Вход и ориентиры', exterior: 'Фасад', interior: 'Интерьер', team: 'Команда',
+  process: 'Рабочий процесс', result: 'Примеры работ', product: 'Продукт',
+  bedroom: 'Спальня', kitchen: 'Кухня', bathroom: 'Санузел',
+};
+
+function PhotoChoice({ item, send, busy }: {
+  item: { key: string; image_url: string; provider: string };
+  send?: (action: Action) => Promise<boolean>;
+  busy: boolean;
+}) {
+  const [category, setCategory] = useState('');
+  return <li className="flex flex-wrap items-center gap-2 border-t py-2">
+    <a className="underline" href={item.image_url} target="_blank" rel="noreferrer">
+      Посмотреть фото · {platforms[item.provider] || item.provider}
+    </a>
+    {send && <>
+      <select className="min-w-0 rounded-md border bg-background p-1"
+        aria-label="Что показано на фото" value={category} onChange={event => setCategory(event.target.value)}>
+        <option value="">Выберите категорию</option>
+        {Object.entries(photoCategories).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select>
+      <Button size="sm" variant="outline" disabled={busy || !category}
+        onClick={() => void send({ action: 'photo_pick', key: item.key, category })}>Добавить в подборку</Button>
+    </>}
+  </li>;
+}
+
+function PhotoCheck({ report, businessId, send, busy }: {
+  report?: PhotoReport | null;
+  businessId: string;
+  send?: (action: Action) => Promise<boolean>;
+  busy: boolean;
+}) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const library = companyUrl('/dashboard/content?tab=media', businessId);
+  const pending = report?.status === 'queued' || report?.status === 'running';
+  const copyReport = async () => {
+    if (report?.status !== 'ready') return;
+    const lines = [
+      'Фотографии для карточек',
+      `В медиатеке ${report.library_count} фото.`,
+      ...(report.library_categories.length ? ['Категории в медиатеке — ' + report.library_categories.join(', ') + '.'] : []),
+      ...(report.shortlist.length ? ['Подборка с карт', ...report.shortlist.map(photo => `• ${photo.label} — ${photo.image_url}`)] : []),
+      ...(report.cover ? ['Кандидат для обложки — ' + report.cover.toLowerCase() + '.'] : []),
+      ...(report.missing.length ? ['Что доснять или подтвердить', ...report.missing.map(item => '• ' + item.tip)] : []),
+      ...(report.note ? [report.note] : []),
+      ...report.sources.map(source => (platforms[source.provider] || source.provider) + ' — '
+        + (source.status === 'sample' ? 'из галереи доступна выборка' : 'галерея не подтверждена') + '. ' + source.url),
+      'Медиатека LocalOS — ' + new URL(library, window.location.origin).href,
+      'Сохраните согласованные снимки на Яндекс Диске или Google Drive. Подключите папку в разделе «Материалы с Диска» в медиатеке.',
+      'Публикация на картах проводится после согласования.',
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyStatus('Отчёт скопирован.');
+    } catch {
+      setCopyStatus('Не удалось скопировать автоматически. Выделите и скопируйте текст отчёта.');
+    }
+  };
+  return <details className="rounded-lg border p-3">
+    <summary className="cursor-pointer font-medium">Фото для карт и отчёт
+      {pending ? ' · Проверяем' : report?.status === 'ready' ? ' · Готов' : ''}
+    </summary>
+    <div className="mt-2 space-y-3 text-sm">
+      {pending && <p role="status">Проверяем снимки с карт и из медиатеки.</p>}
+      {!report && <p>Подберём ссылки на фото с карт и покажем, что стоит доснять.</p>}
+      {report?.note && <p className="text-muted-foreground">{report.note}</p>}
+      {report?.status === 'ready' && <>
+        <p>В медиатеке {report.library_count} фото.{report.library_categories.length > 0
+          && ' Подтверждено — ' + report.library_categories.join(', ') + '.'}</p>
+        {report.shortlist.length > 0 && <div>
+          <h3 className="font-medium">Подборка с карт</h3>
+          <ul>{report.shortlist.map(photo => <li key={photo.key}>
+            <a className="underline" href={photo.image_url} target="_blank" rel="noreferrer">{photo.label}</a>
+            {' · '}
+            <a className="underline" href={photo.source_url} target="_blank" rel="noreferrer">Карточка-источник</a>
+          </li>)}</ul>
+        </div>}
+        {report.cover && <p>Кандидат для обложки — {report.cover.toLowerCase()}.</p>}
+        {report.missing.length > 0 && <div>
+          <h3 className="font-medium">Что доснять или подтвердить</h3>
+          <ul className="list-disc space-y-1 pl-5">{report.missing.map(item => <li key={item.label}>{item.tip}</li>)}</ul>
+        </div>}
+        {report.sources.length > 0 && <div>
+          <h3 className="font-medium">Проверенные площадки</h3>
+          <ul>{report.sources.map(source => <li key={source.url}>
+            <a className="underline" href={source.url} target="_blank" rel="noreferrer">{platforms[source.provider] || source.provider}</a>
+            {' · '}{source.status === 'sample' ? `Снимков в выборке: ${source.count}` : 'Галерея не подтверждена'}
+          </li>)}</ul>
+        </div>}
+        {report.rejected > 0 && <p className="text-muted-foreground">Не прошли проверку качества или не открылись: {report.rejected}.</p>}
+        {report.review.length > 0 && <details>
+          <summary className="cursor-pointer">Уточнить, что показано на фото · {report.review.length}</summary>
+          <ul className="mt-2">{report.review.map(item => <PhotoChoice key={item.key} item={item} send={send} busy={busy} />)}</ul>
+        </details>}
+        <p className="text-muted-foreground">После согласования сохраните снимки на Яндекс Диске или Google Drive и подключите папку в медиатеке. Оригиналы останутся в облаке компании.</p>
+      </>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link className="underline" to={library}>Открыть медиатеку</Link>
+        {report?.status === 'ready' && <Button size="sm" variant="outline" onClick={() => void copyReport()}>Скопировать отчёт</Button>}
+        {send && !pending && <Button size="sm" variant="outline" disabled={busy}
+          onClick={() => void send({ action: 'photo_check' })}>{report ? 'Обновить проверку' : 'Проверить фото'}</Button>}
+      </div>
+      {copyStatus && <p role="status">{copyStatus}</p>}
+    </div>
+  </details>;
+}
+
 function ViewLinks({ businessId }: { businessId: string }) {
   return <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Данные в кабинете">
     {[
@@ -57,37 +167,6 @@ function ViewLinks({ businessId }: { businessId: string }) {
       ['/dashboard/card?tab=competitors', 'Конкуренты'],
     ].map(([path, text]) => <Link className="font-medium underline underline-offset-4" key={path} to={companyUrl(path, businessId)}>{text}</Link>)}
   </nav>;
-}
-
-function Services({ items, send, disabled }: { items: Proposal[]; send?: (action: Action) => Promise<boolean>; disabled: boolean }) {
-  return <div className="space-y-2">
-    {items.map(item => <details key={item.key} className="rounded-lg border p-3">
-      <summary className="cursor-pointer font-medium">{item.original}{item.accepted ? ' · Сохранено' : ''}</summary>
-      <div className="my-3 grid gap-4 text-sm sm:grid-cols-2">
-        <div><h4 className="font-medium">Исходный вариант</h4><p>{item.original}</p><p className="text-muted-foreground">{item.description || 'Описание отсутствует'}</p></div>
-        <div><h4 className="font-medium">Предлагаем</h4><p>{item.proposed}</p><p className="text-muted-foreground">{item.proposed_description || 'Описание пока не подготовлено'}</p></div>
-      </div>
-      <p className="mb-2 text-sm">Запросы по услуге · {item.keywords.map(keyword => keyword.text).join(', ')}</p>
-      {item.source_url && <a className="text-sm underline" href={item.source_url} rel="noreferrer" target="_blank">Источник услуги</a>}
-      {send && !item.accepted && <ServiceEdit key={item.key + item.proposed + item.proposed_description} item={item} send={send} disabled={disabled} />}
-    </details>)}
-  </div>;
-}
-
-function ServiceEdit({ item, send, disabled }: { item: Proposal; send: (action: Action) => Promise<boolean>; disabled: boolean }) {
-  const [name, setName] = useState(item.proposed);
-  const [description, setDescription] = useState(item.proposed_description);
-  return <form className="mt-3 space-y-2" onSubmit={event => {
-    event.preventDefault();
-    void send({ action: 'service', key: item.key, name, description });
-  }}>
-    <label className="block space-y-1 text-sm">Название варианта<Input value={name} maxLength={240} onChange={event => setName(event.target.value)} required /></label>
-    <label className="block space-y-1 text-sm">Описание варианта<textarea className="block w-full rounded-md border bg-background px-3 py-2" value={description} maxLength={1200} onChange={event => setDescription(event.target.value)} /></label>
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" type="submit" disabled={disabled || !name.trim()}>Сохранить вариант</Button>
-      <Button size="sm" type="button" variant="outline" disabled={disabled} onClick={() => void send({ action: 'service', key: item.key, name: item.original, description: item.description })}>Оставить исходный</Button>
-    </div>
-  </form>;
 }
 
 function Keywords({ state }: { state: Setup }) {
@@ -123,19 +202,10 @@ function Comparisons({ rows }: { rows: Comparison[] }) {
   </details>)}</div>;
 }
 
-export function InitialSetupMenuResult({ businessId, section }: { businessId: string | null | undefined; section: 'services' | 'keywords' | 'competitors' | 'profile' }) {
+export function InitialSetupMenuResult({ businessId, section }: { businessId: string | null | undefined; section: 'competitors' | 'profile' }) {
   const setup = useInitialBusinessSetup(businessId || null, Boolean(businessId));
   const state = setup.state;
   if (!state) return null;
-  if (section === 'services' && state.services.length) return <section className="space-y-3 rounded-lg border bg-card p-4">
-    <h3 className="font-semibold">Предложения первичной настройки</h3>
-    {setup.error && <p role="alert" className="text-sm text-destructive">{setup.error}</p>}
-    {setup.notice && <p role="status" className="text-sm">{setup.notice}</p>}
-    <Services items={state.services} send={state.can_edit ? setup.send : undefined} disabled={setup.busy || state.seo_dirty} />
-  </section>;
-  if (section === 'keywords' && (state.services.length || state.category_keywords?.length)) return <section className="space-y-3 rounded-lg border bg-card p-4">
-    <h3 className="font-semibold">Семантическое ядро компании</h3><Keywords state={state} />
-  </section>;
   if (section === 'competitors' && state.comparisons.length) return <section className="space-y-3 rounded-lg border bg-card p-4">
     <h3 className="font-semibold">Сравнение по добавленным карточкам</h3><Comparisons rows={state.comparisons} />
   </section>;
@@ -255,7 +325,8 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
         </li>)}</ul>
       </details>}
       {state.services.length > 0 && <details className="rounded-lg border p-3"><summary className="mb-2 cursor-pointer font-medium">Услуги и предложенные изменения · {state.services.length}</summary>
-        <Services items={state.services} send={state.can_edit ? send : undefined} disabled={busy || state.seo_dirty} /></details>}
+        <ServiceProposals key={state.business_id} items={state.services} send={state.can_edit ? send : undefined}
+          disabled={busy || state.seo_dirty} error={error} /></details>}
       {state.seo_prepared && (state.services.length > 0 || Boolean(state.category_keywords?.length)) && <details className="space-y-2 rounded-lg border p-3">
         <summary className="cursor-pointer font-medium">Семантическое ядро</summary>
         <Keywords state={state} />
@@ -268,6 +339,8 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
         </li>)}</ul>
       </details>}
       {state.comparisons.length > 0 && <Comparisons rows={state.comparisons} />}
+      {state.started && <PhotoCheck key={state.business_id} report={state.photo_report} businessId={state.business_id}
+        busy={busy || reading} send={state.can_edit ? send : undefined} />}
       {reading && <p className="text-sm" role="status">Читаем источники. Можно вернуться позже.</p>}
       {state.can_edit && !state.started && <Button disabled={busy} onClick={() => void send({ action: 'start' })}>Начать настройку</Button>}
       {state.can_edit && state.started && !reading && (state.sources.some(source => source.status === 'added') ?

@@ -1,6 +1,8 @@
 import type { Competitor, ManualCompetitor } from '@/components/dashboard/CardOverviewTabs';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
 import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
+import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
+import type { SaveServiceProposal, ServiceProposal } from '@/components/initial-setup/ServiceProposals';
 import {
 	CardServiceAddForm,
 	CardServiceCatalogCompressionDialog,
@@ -129,6 +131,7 @@ export const CardOverviewPage = () => {
   const initialModeParam = String(searchParams.get('mode') || '').trim().toLowerCase();
   const initialReviewFocusParam = String(searchParams.get('review_filter') || '').trim().toLowerCase();
   const [activeTab, setActiveTab] = useState<CardTabValue>(isCardTabValue(initialTabParam) ? initialTabParam : 'services');
+  const initialSetup = useInitialBusinessSetup(currentBusinessId || null, !isDemoMode && activeTab === 'services');
   const isContentPlanMode = activeTab === 'news' && initialModeParam === 'plan';
   const initialNewsWorkspaceMode = isContentPlanMode ? 'plan' : 'news';
   const reviewFocus = isReviewFocusValue(initialReviewFocusParam) ? initialReviewFocusParam : 'all';
@@ -486,14 +489,47 @@ export const CardOverviewPage = () => {
   );
   const shouldShowServiceCompressionOffer = serviceCompressionSuggestion.beforeCount >= 80;
 
+  const reviewableServices = useMemo(() => {
+    const pending = initialSetup.state?.services.filter(proposal => !proposal.accepted);
+    if (!pending?.length) return userServices;
+
+    const byServiceId = new Map<string, ServiceProposal>();
+    const additions: ServiceTableItem[] = [];
+    for (const proposal of pending) {
+      if (proposal.service_id) {
+        byServiceId.set(proposal.service_id, proposal);
+      } else {
+        additions.push({
+          id: 'setup-proposal:' + proposal.key,
+          name: proposal.has_original ? proposal.original : proposal.proposed,
+          description: proposal.has_original ? proposal.description : proposal.proposed_description,
+          category: proposal.category,
+          keywords: proposal.keywords.map(keyword => keyword.text),
+          setupProposal: proposal,
+        });
+      }
+    }
+
+    return [...userServices.map(service => {
+      const proposal = service.id ? byServiceId.get(service.id) : undefined;
+      return proposal ? { ...service, setupProposal: proposal } : service;
+    }), ...additions];
+  }, [initialSetup.state, userServices]);
+
+  const saveSetupProposal: SaveServiceProposal = async (action) => {
+    if (!await initialSetup.send(action)) return false;
+    await loadUserServices();
+    return true;
+  };
+
   const serviceCategories = useMemo(() => {
     const set = new Set<string>();
-    for (const service of userServices) {
+    for (const service of reviewableServices) {
       const category = (service?.category || '').toString().trim();
       if (category) set.add(category);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, language === 'ru' ? 'ru' : 'en'));
-  }, [userServices, language]);
+  }, [reviewableServices, language]);
 
   const filteredServices = useMemo(() => {
     const sourceMatches = (service: ServiceTableItem) => {
@@ -507,7 +543,7 @@ export const CardOverviewPage = () => {
     };
 
     const query = servicesSearch.trim().toLowerCase();
-    const list = userServices.filter((service) => {
+    const list = reviewableServices.filter((service) => {
       if (!sourceMatches(service)) return false;
       if (servicesCategoryFilter !== 'all' && (service?.category || '') !== servicesCategoryFilter) {
         return false;
@@ -534,6 +570,8 @@ export const CardOverviewPage = () => {
         service?.optimized_name,
         service?.description,
         service?.optimized_description,
+        service.setupProposal?.proposed,
+        service.setupProposal?.proposed_description,
         service?.category,
         Array.isArray(service?.keywords) ? service.keywords.join(' ') : (service?.keywords || ''),
       ]
@@ -572,7 +610,7 @@ export const CardOverviewPage = () => {
       }
     });
     return sorted;
-  }, [userServices, servicesSearch, servicesCategoryFilter, servicesQualityFilter, servicesSort, language, selectedSource]);
+  }, [reviewableServices, servicesSearch, servicesCategoryFilter, servicesQualityFilter, servicesSort, language, selectedSource]);
 
   const pagedServices = useMemo(
     () => filteredServices.slice((servicesCurrentPage - 1) * servicesItemsPerPage, servicesCurrentPage * servicesItemsPerPage),
@@ -1030,7 +1068,6 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="services" className="space-y-6">
-            {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="services" />}
             {/* Rating Summary Card */}
             <DashboardSection title={pageCopy.rating} description={pageCopy.ratingDescription}>
                 <div className="flex justify-between items-start mb-5">
@@ -1231,7 +1268,7 @@ export const CardOverviewPage = () => {
                 ]}
               />
 
-              {userServices.length > 0 && !isDemoMode ? (
+              {reviewableServices.length > 0 && !isDemoMode ? (
                 <CardServicesFilterBar
                   copy={serviceControlsCopy}
                   search={servicesSearch}
@@ -1247,6 +1284,7 @@ export const CardOverviewPage = () => {
               ) : null}
 
               <CardServicesTable
+                key={currentBusinessId}
                 demoMode={isDemoMode}
                 tableScrollRef={servicesTableScrollRef}
                 copy={{
@@ -1269,6 +1307,9 @@ export const CardOverviewPage = () => {
                 services={pagedServices}
                 filteredCount={filteredServices.length}
                 loading={loadingServices}
+                saveSetupProposal={initialSetup.state?.can_edit ? saveSetupProposal : undefined}
+                setupProposalDisabled={initialSetup.busy || Boolean(initialSetup.state?.seo_dirty)}
+                setupProposalError={initialSetup.error}
                 servicesSearch={servicesSearch}
                 servicesCategoryFilter={servicesCategoryFilter}
                 language={language}
@@ -1377,7 +1418,6 @@ export const CardOverviewPage = () => {
           </TabsContent>
 
           <TabsContent value="keywords">
-            {!isDemoMode && <InitialSetupMenuResult businessId={currentBusinessId} section="keywords" />}
             <KeywordsTab businessId={currentBusinessId} />
           </TabsContent>
         </Tabs>

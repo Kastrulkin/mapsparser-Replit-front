@@ -34,6 +34,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
 import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
+import { ServiceProposals } from '@/components/initial-setup/ServiceProposals';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
@@ -158,6 +159,7 @@ type OperatorChatResult = {
     id?: string;
     service_id?: string;
     before_name?: string;
+    before_description?: string;
     optimized_name?: string;
     seo_description?: string;
   }>;
@@ -256,6 +258,15 @@ const resultText = (result: OperatorChatResult | RefreshResult | null) => {
     'Готово.'
   );
 };
+
+function operatorReplyText(message: ChatMessage) {
+  const result = message.result;
+  const text = message.text.replace(/DeepSeek/gi, 'ИИ');
+  if (!result || !('service_suggestions' in result) || !result.service_suggestions?.length) return text;
+  const comparisons = new Set(result.service_suggestions.map(item =>
+    `${item.before_name} → ${item.optimized_name}`.replace(/DeepSeek/gi, 'ИИ')));
+  return text.split('\n').filter(line => !comparisons.has(line.trim())).join('\n').trim();
+}
 
 const draftText = (result: OperatorChatResult | RefreshResult | null) => {
   if (!result) return '';
@@ -947,7 +958,7 @@ export const OperatorPage = () => {
                 >
                   {message.role === 'operator' ? <OperatorReply animate={message.fresh} text={message.result && 'approval' in message.result && message.result.approval?.capability === 'partnerships.continue_outreach' && !('credit_quote' in message.result && message.result.credit_quote)
                     ? 'Прежние условия поиска устарели. Откройте актуальную стоимость в кредитах LocalOS.'
-                    : message.text.replace(/DeepSeek/gi, 'ИИ')} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
+                    : operatorReplyText(message)} /> : <div className="whitespace-pre-wrap">{message.text}</div>}
                   {message.role === 'operator' && currentBusinessId && message.result && 'task' in message.result && message.result.task?.id && message.result.task.id !== selectedSearchId && (!message.result.task.business_id || message.result.task.business_id === currentBusinessId) && <Button size="sm" variant="ghost" onClick={() => {
                     const task = searchTaskFromResult(message.result); if (!task) return;
                     setSavedSearchTask({ ...task, business_id: currentBusinessId }); setSelectedSearchId(task.id);
@@ -1284,15 +1295,17 @@ const OperatorResultActions = ({
       ) : null}
 
       {serviceSuggestions.length > 0 ? (
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2">
           <div className="font-semibold text-slate-950">Предложения по услугам</div>
-          {serviceSuggestions.map((item) => (
-            <div key={item.id || item.service_id} className="rounded-lg bg-white px-3 py-2">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.before_name}</div>
-              <div className="font-semibold text-slate-950">{item.optimized_name}</div>
-              {item.seo_description ? <div className="text-slate-700">{item.seo_description}</div> : null}
-            </div>
-          ))}
+          <ServiceProposals items={serviceSuggestions.map((item, index) => ({
+            key: item.id || item.service_id || String(index),
+            original: item.before_name || '',
+            description: item.before_description || '',
+            proposed: item.optimized_name || item.before_name || 'Без названия',
+            proposed_description: item.seo_description || '',
+            has_original: Boolean(item.before_name),
+            keywords: [],
+          }))} />
         </div>
       ) : null}
 

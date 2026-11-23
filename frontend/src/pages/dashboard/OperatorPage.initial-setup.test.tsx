@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
-import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
+import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
+import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
 import { LanguageProvider } from '@/i18n/LanguageContext';
 import { api } from '@/services/api';
 import { OperatorPage } from './OperatorPage';
@@ -40,7 +41,7 @@ it('routes the existing chat composer to the selected company and opens the same
     return <Outlet context={{ currentBusinessId: businessId, currentBusiness: { id: businessId, name: setup.profile.name } }} />;
   }
 
-  const view = render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
+  render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeInTheDocument();
@@ -53,11 +54,96 @@ it('routes the existing chat composer to the selected company and opens the same
     action: 'message', message: 'Вид деятельности: Веганское мороженое', revision: 3,
   }));
   expect(await screen.findByText('Вид деятельности сохранён.')).toBeInTheDocument();
-  view.unmount();
+  fireEvent.click(screen.getByText('Семантическое ядро', { selector: 'summary' }));
+  fireEvent.click(screen.getByText('Vegan ice cream', { selector: 'summary' }));
+  expect(screen.getByText('Vegan ice cream Bangkok')).toBeVisible();
+});
 
-  render(<MemoryRouter><InitialSetupMenuResult businessId={businessId} section="keywords" /></MemoryRouter>);
-  expect(await screen.findByRole('heading', { name: 'Семантическое ядро компании' })).toBeInTheDocument();
-  expect(screen.getByText('Vegan ice cream Bangkok')).toBeInTheDocument();
+it('reviews new and existing services in the same list and only shows original details when available', async () => {
+  const existing = { ...setup.services[0], has_original: true, service_id: 'existing' };
+  const added = {
+    ...setup.services[0], key: 'new', has_original: false, service_id: 'created-by-setup',
+    original: 'Черновое название', description: 'Первичное описание',
+    proposed: 'Пошив мерча на заказ', proposed_description: 'Шьём худи и футболки для компаний.',
+  };
+  const state = { ...setup, services: [existing, added] };
+  vi.mocked(api.get).mockResolvedValue({ data: { available: true, setup: state } });
+  vi.mocked(api.post).mockClear();
+  function SetupChat() {
+    const initialSetup = useInitialBusinessSetup(businessId, true);
+    return <InitialSetupChat setup={initialSetup} isStaff={false} onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+  fireEvent.click(await screen.findByText('Услуги и предложенные изменения · 2'));
+
+  const newRow = await screen.findByRole('button', { name: 'Пошив мерча на заказ Новая услуга' });
+  expect(screen.queryByText(added.proposed_description)).not.toBeInTheDocument();
+  fireEvent.click(newRow);
+  const dialog = within(screen.getByRole('region', { name: added.proposed }));
+  expect(dialog.getByText(added.proposed_description)).toBeVisible();
+  expect(dialog.queryByText('Текущее описание')).not.toBeInTheDocument();
+  expect(dialog.queryByRole('button', { name: 'Оставить исходную' })).not.toBeInTheDocument();
+  expect(dialog.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(api.post).not.toHaveBeenCalled();
+
+  fireEvent.click(dialog.getByRole('button', { name: 'Изменить' }));
+  expect(dialog.getByRole('textbox', { name: 'Описание' })).toHaveValue(added.proposed_description);
+  expect(dialog.queryByText(added.proposed_description, { selector: 'p' })).not.toBeInTheDocument();
+  const editedName = 'Пошив мерча для компаний';
+  fireEvent.change(dialog.getByRole('textbox', { name: 'Название' }), { target: { value: editedName } });
+  vi.mocked(api.post).mockRejectedValueOnce({ response: { data: { error: 'Повторите сохранение.' } } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Сохранить вариант' }));
+  expect(await dialog.findByRole('alert')).toHaveTextContent('Повторите сохранение.');
+  expect(dialog.getByRole('textbox', { name: 'Название' })).toHaveValue(editedName);
+
+  vi.mocked(api.post).mockResolvedValueOnce({ data: { available: true, setup: {
+    ...state, revision: 4, services: [existing, { ...added, accepted: true, proposed: editedName }],
+  } } });
+  fireEvent.click(dialog.getByRole('button', { name: 'Сохранить вариант' }));
+  const savedRow = await screen.findByRole('button', { name: `${editedName} Сохранено` });
+  expect(api.post).toHaveBeenLastCalledWith(endpoint, {
+    action: 'service', key: 'new', revision: 3, name: editedName, description: added.proposed_description,
+  });
+  await waitFor(() => expect(savedRow).toHaveFocus());
+
+  const existingRow = screen.getByRole('button', { name: 'Vegan ice cream На проверке' });
+  fireEvent.click(existingRow);
+  expect(existingRow).toHaveAttribute('aria-pressed', 'true');
+  const edit = within(screen.getByRole('region', { name: existing.original }));
+  expect(edit.getByText('Текущее описание')).toBeVisible();
+  expect(edit.getByText(existing.description)).toBeVisible();
+  expect(edit.getByText(existing.proposed_description)).toBeVisible();
+  expect(edit.getByRole('button', { name: 'Оставить исходную' })).toBeVisible();
+  fireEvent.click(edit.getByRole('button', { name: 'Закрыть карточку услуги' }));
+  expect(existingRow).toHaveFocus();
+  expect(existingRow).toHaveAttribute('aria-pressed', 'false');
+});
+
+it('uses the same compact service list for saved SEO suggestions in the work chat', async () => {
+  vi.mocked(api.post).mockClear();
+  vi.mocked(api.get).mockResolvedValue({ data: { conversation: null, messages: [{
+    id: 'service-suggestions', role: 'operator', content: 'Подготовлено одно предложение.\nМассаж → Массаж лица',
+    result_json: { status: 'completed', optimization_job: { id: 'job' }, service_suggestions: [{
+      id: 'suggestion', before_name: 'Массаж', before_description: 'Прежнее описание.',
+      optimized_name: 'Массаж лица', seo_description: 'Лимфодренажный массаж лица.',
+    }] },
+  }] } });
+  function Context() {
+    return <Outlet context={{ currentBusinessId: businessId, currentBusiness: { id: businessId, name: setup.profile.name } }} />;
+  }
+  render(<MemoryRouter initialEntries={['/dashboard/operator']}>
+    <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
+  </MemoryRouter>);
+
+  const proposal = await screen.findByRole('button', { name: 'Массаж На проверке' });
+  expect(screen.queryByText('Массаж → Массаж лица')).not.toBeInTheDocument();
+  expect(screen.queryByText('Лимфодренажный массаж лица.')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Применить предложения' })).toBeVisible();
+  fireEvent.click(proposal);
+  const detail = within(screen.getByRole('region', { name: 'Массаж' }));
+  expect(detail.getByText('Лимфодренажный массаж лица.')).toBeVisible();
+  expect(detail.getByText('Прежнее описание.')).toBeVisible();
+  expect(api.post).not.toHaveBeenCalled();
 });
 
 it('refreshes a previously read site and shows the page and proposed SEO fix', async () => {
