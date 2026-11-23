@@ -147,7 +147,7 @@ export function useCardServiceController({
     service: ServiceTableItem,
     updateData: Partial<ServiceTableItem>
   ) => {
-    const keywords = normalizeKeywords(service.keywords);
+    const keywords = normalizeKeywords(updateData.keywords ?? service.keywords);
     const { response, data } = await createCardService({
       business_id: currentBusinessId,
       category: service.category || updateData.category || '',
@@ -187,7 +187,7 @@ export function useCardServiceController({
 
   const updateService = async (
     serviceId: string,
-    updatedData: Partial<ServiceTableItem>,
+    updatedData: Partial<ServiceTableItem> & { use_saved_wordstat?: boolean },
     options?: { reload?: boolean; showSuccess?: boolean }
   ) => {
     const { response, data } = await updateCardService(serviceId, updatedData);
@@ -207,6 +207,7 @@ export function useCardServiceController({
     if (options?.showSuccess !== false) {
       setSuccess(copy.success);
     }
+    return data;
   };
 
   const addService = async () => {
@@ -257,6 +258,7 @@ export function useCardServiceController({
         text: String(service.name || '') + (service.description ? `\n${service.description}` : ''),
         business_id: currentBusinessId,
         service_category: service.category || '',
+        use_saved_wordstat: true,
         instructions: buildRegenerationInstructions(service),
       });
       const errorText = String(data?.error || '');
@@ -285,14 +287,25 @@ export function useCardServiceController({
         };
 
         try {
-          await updateService(serviceId, updateData, { reload: false, showSuccess: false });
-          patchServiceInState(serviceId, statePatch);
+          const saved = await updateService(
+            serviceId,
+            { ...updateData, use_saved_wordstat: true },
+            { reload: false, showSuccess: false },
+          );
+          patchServiceInState(serviceId, {
+            ...statePatch,
+            keywords: Array.isArray(saved.keywords) ? normalizeKeywords(saved.keywords) : updateData.keywords,
+          });
           if (!options?.silent) setSuccess(copy.success);
           return 'ok';
         } catch (updateError) {
           if (isServiceNotFoundError(updateError) && currentBusinessId) {
             try {
-              await createLocalServiceDraft(serviceId, service, updateData);
+              const verified = normalizeKeywords(data.result.saved_wordstat_keywords);
+              await createLocalServiceDraft(serviceId, service, {
+                ...updateData,
+                keywords: [...new Set([...updateData.keywords, ...verified])],
+              });
               if (!options?.silent) {
                 setSuccess('SEO-вариант готов. Создана LocalOS-копия услуги для редактирования и принятия.');
               }

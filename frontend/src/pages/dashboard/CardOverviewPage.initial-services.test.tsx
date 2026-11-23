@@ -103,3 +103,36 @@ it('shows the saved Wordstat frequency in the standard keyword tab without loadi
   expect(screen.queryByText('Семантическое ядро компании')).not.toBeInTheDocument();
   expect(api.get).not.toHaveBeenCalledWith('/operator/initial-setup/' + businessId, expect.anything());
 });
+
+it('shows the persisted Wordstat match after optimizing a service', async () => {
+  window.localStorage.setItem('language', 'ru');
+  vi.mocked(api.get).mockResolvedValue({ data: { available: false } });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    let data: unknown = { success: true };
+    if (url.includes('/services/list')) {
+      data = { success: true, services: [existing] };
+    } else if (url.includes('/services/optimize')) {
+      data = { success: true, result: { services: [{ optimized_name: 'Мерч на заказ' }] } };
+    } else if (url.includes('/services/update/')) {
+      data = { success: true, keywords: ['пошив мерча', 'мерч на заказ'] };
+    }
+    return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<MemoryRouter initialEntries={['/dashboard/card?business_id=' + businessId]}>
+    <LanguageProvider><Routes><Route element={<ContextRoute />}>
+      <Route path="/dashboard/card" element={<CardOverviewPage />} />
+    </Route></Routes></LanguageProvider>
+  </MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole('button', { name: /^Оптимизировать$/ }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+    expect.stringContaining('/api/services/update/merch'),
+    expect.objectContaining({ body: expect.stringContaining('"use_saved_wordstat":true') }),
+  ));
+  const service = within(screen.getByRole('region', { name: existing.name }));
+  expect(await service.findByTitle('мерч на заказ')).toBeVisible();
+  expect(service.getByTitle('пошив мерча')).toBeVisible();
+});

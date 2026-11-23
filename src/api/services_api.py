@@ -11,6 +11,8 @@ from core.service_keyword_scoring import build_services_quality_audit
 from core.service_keyword_enrichment import (
     attach_service_quality_metadata,
     enrich_service_keywords_from_wordstat,
+    match_saved_wordstat_keywords,
+    merge_service_wordstat_keywords,
 )
 from core.service_problem_regeneration import (
     SERVICE_REGENERATION_BATCH_LIMIT,
@@ -674,40 +676,60 @@ def _start_persistent_regeneration_job(job_id, token):
 
 
 def _apply_regenerated_service(service, optimized):
-    db = DatabaseManager()
-    cursor = db.conn.cursor()
     optimized_name = str(optimized.get("optimized_name") or optimized.get("optimizedName") or "").strip()
     optimized_description = str(optimized.get("seo_description") or optimized.get("seoDescription") or "").strip()
     fallback_reason = str(optimized.get("fallback_reason") or "").strip()
     guardrail_reasons = optimized.get("guardrail_reasons") if isinstance(optimized.get("guardrail_reasons"), list) else []
     pattern_version_ids = optimized.get("pattern_version_ids") if isinstance(optimized.get("pattern_version_ids"), list) else []
-    cursor.execute(
-        """
-        UPDATE userservices
-        SET optimized_name = %s,
-            optimized_description = %s,
-            fallback_used = %s,
-            fallback_reason = %s,
-            guardrail_reasons = %s,
-            pattern_version_ids = %s,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = %s
-        """,
-        (
-            optimized_name,
-            optimized_description,
-            bool(optimized.get("fallback_used")),
-            fallback_reason,
-            Json(guardrail_reasons),
-            Json(pattern_version_ids),
-            service.get("id"),
-        ),
-    )
-    db.conn.commit()
-    db.close()
+    with DatabaseManager() as db:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            """
+            SELECT name, keywords FROM userservices
+            WHERE id = %s AND business_id = %s AND is_active IS NOT FALSE
+            FOR UPDATE
+            """,
+            (service.get("id"), service.get("business_id")),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("Услуга больше недоступна")
+        keywords = merge_service_wordstat_keywords(
+            _parse_service_keywords(_cell(row, "keywords", _cell(row, 1))),
+            match_saved_wordstat_keywords(
+                cursor,
+                service.get("business_id"),
+                _cell(row, "name", _cell(row, 0)),
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE userservices
+            SET optimized_name = %s,
+                optimized_description = %s,
+                keywords = %s,
+                fallback_used = %s,
+                fallback_reason = %s,
+                guardrail_reasons = %s,
+                pattern_version_ids = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (
+                optimized_name,
+                optimized_description,
+                json.dumps(keywords, ensure_ascii=False),
+                bool(optimized.get("fallback_used")),
+                fallback_reason,
+                Json(guardrail_reasons),
+                Json(pattern_version_ids),
+                service.get("id"),
+            ),
+        )
     return {
         "optimized_name": optimized_name,
         "optimized_description": optimized_description,
+        "keywords": keywords,
         "fallback_used": bool(optimized.get("fallback_used")),
         "fallback_reason": fallback_reason,
         "guardrail_reasons": guardrail_reasons,
@@ -808,6 +830,7 @@ def _run_service_regeneration_job(job_id, token):
                     "text": str(item.get("name") or "") + ("\n" + str(item.get("description") or "") if item.get("description") else ""),
                     "business_id": business_id,
                     "service_category": item.get("category") or "",
+                    "use_saved_wordstat": True,
                     "instructions": item.get("instructions") or "",
                 },
                 timeout=90,
@@ -859,7 +882,7 @@ def _run_service_regeneration_job(job_id, token):
                 db.close()
                 continue
 
-            next_data = _apply_regenerated_service({"id": service_id}, optimized)
+            next_data = _apply_regenerated_service({"id": service_id, "business_id": business_id}, optimized)
             after_service = {
                 "id": service_id,
                 "name": item.get("name"),
@@ -2024,6 +2047,7 @@ def update_service(service_id):
     if request.method == 'OPTIONS':
         return ('', 204)
     
+    db = None
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
@@ -2044,9 +2068,10 @@ def update_service(service_id):
         # Проверяем, что услуга принадлежит пользователю
         cursor.execute(
             """
-            SELECT user_id, business_id, name, description, optimized_name, optimized_description
+            SELECT user_id, business_id, name, description, optimized_name, optimized_description, keywords, is_active
             FROM userservices
             WHERE id = %s
+            FOR UPDATE
             """,
             (service_id,),
         )
@@ -2074,6 +2099,16 @@ def update_service(service_id):
         
         # Преобразуем keywords в строку JSON, если это массив
         keywords = data.get('keywords', [])
+        if data.get("use_saved_wordstat") is True:
+            if _cell(row, "is_active", _cell(row, 7)) is False:
+                db.close()
+                return jsonify({"error": "Услуга не найдена"}), 404
+            keywords = merge_service_wordstat_keywords(
+                _parse_service_keywords(_cell(row, "keywords", _cell(row, 6))),
+                match_saved_wordstat_keywords(
+                    cursor, service_business_id, previous_data["name"],
+                ),
+            )
         if isinstance(keywords, list):
             keywords_str = json.dumps(keywords, ensure_ascii=False)
         elif isinstance(keywords, str):
@@ -2212,8 +2247,11 @@ def update_service(service_id):
             "success": True,
             "service_id": service_id,
             "business_id": service_business_id,
+            "keywords": _parse_service_keywords(keywords_str),
         })
     except Exception as e:
+        if db is not None:
+            db.rollback_and_close()
         print(f"❌ Ошибка обновления услуги: {e}")
         import traceback
         traceback.print_exc()

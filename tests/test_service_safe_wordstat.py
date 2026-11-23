@@ -1,9 +1,51 @@
 from core.service_duplicate_grouping import attach_duplicate_group_metadata, build_service_duplicate_key
+from core.service_keyword_enrichment import match_saved_wordstat_keywords, merge_service_wordstat_keywords
 from core.service_safe_wordstat import (
     build_safe_seed_queries,
     extract_service_attributes,
     filter_wordstat_candidates,
 )
+
+
+def test_saved_wordstat_matches_specific_services_and_preserves_existing_keywords() -> None:
+    candidates = [
+        "мерч на заказ",
+        "пошив мерча",
+        "пошив одежды для брендов",
+        "пошив корпоративной одежды",
+        "пошив",
+        "корпоративные подарки на заказ",
+        "пошив образца одежды",
+        "разработка лекал одежды",
+    ]
+
+    class Cursor:
+        def execute(self, query, params):
+            assert params == ("selected-business",)
+            assert "k.business_id = %s" in query
+            assert "wordstatkeywordsexcluded" in query
+            assert "seonegativekeywords" in query
+            assert "k.views > 0" in query
+
+        def fetchall(self):
+            return [{"keyword": keyword} for keyword in candidates]
+
+    cursor = Cursor()
+    merch = match_saved_wordstat_keywords(cursor, "selected-business", "Пошив брендированного мерча")
+    assert merch == ["мерч на заказ", "пошив мерча"]
+    assert match_saved_wordstat_keywords(
+        cursor, "selected-business", "Корпоративные подарки из кожи и текстиля",
+    ) == ["корпоративные подарки на заказ"]
+    assert match_saved_wordstat_keywords(
+        cursor, "selected-business", "Разработка лекал одежды и пошив опытного образца",
+    ) == ["пошив образца одежды", "разработка лекал одежды"]
+    assert match_saved_wordstat_keywords(
+        cursor, "selected-business", "Малосерийный пошив для брендов одежды",
+    ) == ["пошив одежды для брендов"]
+    assert match_saved_wordstat_keywords(cursor, None, "Пошив мерча") == []
+    existing = ["Мерч на заказ", "корпоративная атрибутика"]
+    assert merge_service_wordstat_keywords(existing, merch) == [*existing, "пошив мерча"]
+    assert merge_service_wordstat_keywords(existing, []) == existing
 
 
 def test_afro_builds_safe_hair_seeds_without_raw_ambiguous_seed() -> None:

@@ -661,6 +661,7 @@ def services_optimize():
                 business_profile = ""
 
         seo_keywords_list: list[str] = []
+        saved_wordstat_keywords: list[str] = []
         seo_keywords_top10 = ""
         active_service_pattern_version_ids = [
             str(pattern.get("id") or "").strip()
@@ -926,18 +927,32 @@ def services_optimize():
 
             try:
                 from core.seo_keywords import collect_ranked_keywords
+                from core.auth_helpers import verify_business_access
+                from core.service_keyword_enrichment import match_saved_wordstat_keywords
 
                 db_kw = DatabaseManager()
                 cur_kw = db_kw.conn.cursor()
-                ranked = collect_ranked_keywords(
-                    cur_kw,
-                    business_id=request_business_id,
-                    user_id=user_data['user_id'],
-                    service_name=content[:300],
-                    service_description=content[:1000],
-                    limit=10,
-                )
-                db_kw.close()
+                try:
+                    wordstat_business_id = str(json_payload.get("business_id") or request_business_id or "").strip()
+                    if json_payload.get("use_saved_wordstat") is True and wordstat_business_id:
+                        has_access, _ = verify_business_access(cur_kw, wordstat_business_id, user_data)
+                        if has_access:
+                            service_name, _, _ = content.partition("\n")
+                            saved_wordstat_keywords = match_saved_wordstat_keywords(
+                                cur_kw, wordstat_business_id, service_name[:300],
+                            )
+                    ranked = {"items": [{"keyword": keyword} for keyword in saved_wordstat_keywords]}
+                    if not saved_wordstat_keywords:
+                        ranked = collect_ranked_keywords(
+                            cur_kw,
+                            business_id=request_business_id,
+                            user_id=user_data['user_id'],
+                            service_name=content[:300],
+                            service_description=content[:1000],
+                            limit=10,
+                        )
+                finally:
+                    db_kw.close()
                 seo_keywords_list = [
                     str((item or {}).get("keyword", "")).strip()
                     for item in (ranked or {}).get("items", [])
@@ -1217,6 +1232,8 @@ def services_optimize():
             f.write(content)
 
         result = parsed_result
+        if json_payload.get("use_saved_wordstat") is True:
+            result["saved_wordstat_keywords"] = saved_wordstat_keywords
         services_count = len(result.get('services', [])) if isinstance(result.get('services'), list) else 0
         if active_service_patterns:
             record_industry_pattern_impact_event(

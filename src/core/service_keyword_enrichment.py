@@ -3,11 +3,72 @@ from __future__ import annotations
 from typing import Any
 
 from core.service_duplicate_grouping import attach_duplicate_group_metadata
+from core.service_keyword_scoring import tokenize_keyword_text
 from core.service_safe_wordstat import (
     build_safe_seed_queries,
     detect_service_keyword_category,
     filter_wordstat_candidates,
 )
+
+
+_QUERY_MODIFIERS = frozenset(tokenize_keyword_text(
+    "заказ купить заказать цена стоимость услуга услуги пошив разработка изготовление "
+    "производство нанесение доставка подрядчик онлайн недорого"
+))
+
+
+def match_saved_wordstat_keywords(
+    cursor: Any, business_id: str | None, name: str,
+) -> list[str]:
+    """Match this business's saved Wordstat phrases to the current service title."""
+    title_terms = set(tokenize_keyword_text(name)) - _QUERY_MODIFIERS
+    if not business_id or not title_terms:
+        return []
+
+    cursor.execute(
+        """
+        SELECT k.keyword
+        FROM wordstatkeywordscustom k
+        WHERE k.business_id = %s AND k.views > 0
+          AND NOT EXISTS (
+              SELECT 1 FROM wordstatkeywordsexcluded e
+              WHERE e.business_id = k.business_id
+                AND LOWER(BTRIM(e.keyword)) = LOWER(BTRIM(k.keyword))
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM seonegativekeywords n
+              WHERE n.business_id = k.business_id AND n.is_active IS TRUE
+                AND BTRIM(n.phrase) <> ''
+                AND (n.scope <> 'category' OR LOWER(n.category) = LOWER(k.category))
+                AND STRPOS(LOWER(k.keyword), LOWER(BTRIM(n.phrase))) > 0
+          )
+        ORDER BY k.views DESC, k.keyword
+        """,
+        (business_id,),
+    )
+    selected: list[str] = []
+    seen: set[str] = set()
+    for row in cursor.fetchall():
+        keyword = str((row["keyword"] if hasattr(row, "keys") else row[0]) or "").strip()
+        terms = set(tokenize_keyword_text(keyword)) - _QUERY_MODIFIERS
+        key = keyword.casefold()
+        if key not in seen and terms and terms <= title_terms:
+            selected.append(keyword)
+            seen.add(key)
+            if len(selected) >= 6:
+                break
+    return selected
+
+
+def merge_service_wordstat_keywords(existing: list[str], matched: list[str]) -> list[str]:
+    result = list(existing)
+    seen = {str(keyword).strip().casefold() for keyword in existing}
+    for keyword in matched:
+        key = keyword.casefold()
+        if key not in seen:
+            result.append(keyword)
+            seen.add(key)
+    return result
 
 
 def _fetch_wordstat_candidates(cursor: Any, seeds: list[str], limit_per_seed: int = 30) -> list[dict[str, Any]]:
