@@ -67,11 +67,14 @@ def test_new_search_queries_have_seo_tools():
     assert not editorial_input('Проверь новые популярные поисковые запросы из вордстата')
 
 
-def test_stored_queries_never_claim_new_trends(monkeypatch):
+def test_stored_queries_display_only_heading_and_results(monkeypatch):
     monkeypatch.setattr(operator_search_demand, 'stored_demand', lambda *args, **kwargs: {'items': [{'keyword': 'груминг собак', 'views': 18500, 'updated_at': '2026-06-24', 'business_name': 'Филиал', 'business_city': 'СПб'}], 'period_comparison_available': False})
     result = operator_search_demand.read_demand(None, 'root', 'user', {})
-    assert 'Новизна и рост не подтверждены' in result['chat_response']
-    assert 'Город бизнеса не подтверждает регион' in result['chat_response']
+    assert result['chat_response'].splitlines() == [
+        'Сохранённые релевантные запросы Wordstat:',
+        '• груминг собак — 18500 показов/месяц; обновлено 2026-06-24; Филиал; город бизнеса: СПб.',
+    ]
+    assert result['period_comparison_available'] is False
 
 
 def test_preview_refresh_does_not_route_to_stored_reviews():
@@ -89,6 +92,8 @@ def test_review_refresh_preview_is_read_only(monkeypatch):
     assert 'Обновление пока не запущено' in result['chat_response']
     assert result['paid_actions_performed'] is False
     assert result['external_calls_performed'] is False
+    assert 'подтвердите платное обновление' in result['chat_response']
+    assert 'Публикации в карты не выполняются' not in result['chat_response']
 
 
 def test_last_update_date_is_a_read_request(monkeypatch):

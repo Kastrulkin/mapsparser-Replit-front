@@ -2190,7 +2190,8 @@ def _read_requested_content(cursor, business_id, message):
                     result['chat_response'] += ' Можно подготовить следующий план, сохранив старый.'
         if not zone and not explicit_date:
             result['chat_response'] += '\n\nПорядок — по датам в плане, без отсечения прошедших дней: часовой пояс бизнеса не задан.'
-        result['chat_response'] += '\n\nДата в плане не подтверждает постановку на автопубликацию или публикацию во внешнем канале.'
+        if items and re.search(r'\b(?:автопубликац|опубликован|опубликуется)', lowered):
+            result['chat_response'] += '\n\nЭто дата из плана. Статус публикации не проверял.'
     if re.search(r'верси\w*|комплект\w*|выбранн\w*\s+фото|фото\s+(?:есть|выбран)', lowered):
         package = _content_package_summary(cursor, business_id, result.get('items') or [], include_text=full_text_requested)
         if package:

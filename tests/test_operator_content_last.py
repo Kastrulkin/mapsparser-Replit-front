@@ -24,6 +24,16 @@ def test_plan_is_compact_complete_schedule(monkeypatch):
     assert len(result['chat_response']) < 3500
 
 
+def test_publication_note_only_for_a_publication_question(monkeypatch):
+    setup_items(monkeypatch)
+    plain = operator_core._read_requested_content(None, 'b', 'Какой следующий пост?')
+    publication = operator_core._read_requested_content(None, 'b', 'Покажи следующий пост, который будет опубликован')
+    assert '2099-09-01' in plain['chat_response']
+    assert 'Статус публикации' not in plain['chat_response']
+    assert '2099-09-01' in publication['chat_response']
+    assert 'Это дата из плана. Статус публикации не проверял.' in publication['chat_response']
+
+
 def test_read_phrasings_and_publish_boundary():
     for message in ['Пришли контент-план', 'Контент план', 'Покажи последний пост', 'Какой последний пост в контент плане', 'Покажи крайний пост в плане']:
         assert operator_core._content_read_request(message), message

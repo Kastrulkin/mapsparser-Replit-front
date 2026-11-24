@@ -193,6 +193,8 @@ def test_reviews_query_returns_latest_review_with_body():
     assert "Последний отзыв" in result["chat_response"]
     assert "Ответ опубликован" in result["chat_response"]
     assert result["freshness"]["status"] == "stored_snapshot"
+    assert "Последнее сохранённое обновление: 2026-08-26." in result["chat_response"]
+    assert "отдельную команду обновления" not in result["chat_response"]
 
 
 def test_full_view_caps_chat_body_without_hiding_result_count():

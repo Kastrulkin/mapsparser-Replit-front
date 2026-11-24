@@ -405,11 +405,7 @@ def execute_operator_query(cursor: Any, *, business_id: str, arguments: Any, use
         )
         last_updated_at = (metadata.get('freshness') or {}).get('last_updated_at')
         freshness_note += f" Последнее сохранённое обновление: {str(last_updated_at)[:10]}." if last_updated_at else " Дата обновления неизвестна."
-        chat_response += (
-            "\n\n"
-            + freshness_note
-            + " Для проверки новых отзывов во внешних картах используйте отдельную команду обновления."
-        )
+        chat_response += "\n\n" + freshness_note
     return {
         "status": "completed",
         "intent": "operator.query",

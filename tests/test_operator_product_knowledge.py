@@ -114,7 +114,7 @@ def test_saved_competitor_returns_only_cached_facts_without_claiming_refresh():
     assert result["status"] == "completed"
     assert result["competitors"][0]["name"] == "Салон Рядом"
     assert result["fresh_external_check_performed"] is False
-    assert "новая внешняя проверка не запускалась" in result["chat_response"].lower()
+    assert result["chat_response"] == "Последний сохранённый снимок от 2026-08-26: Салон Рядом, рейтинг 4.7, отзывов 80."
     assert result["external_writes_performed"] is False
 
 

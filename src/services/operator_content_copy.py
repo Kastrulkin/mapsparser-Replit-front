@@ -167,6 +167,6 @@ def copy_saved_content(cursor, *, business_id, user_id, message, request_id):
     return {'status': 'completed', 'capability': 'content.item.edit', 'created_versions': created,
         'existing_versions_preserved': existing_count, 'items_count': len(prepared),
         'external_writes_performed': False, 'charged_credits': 0,
-        'chat_response': f'Готовый текст скопирован без генерации. Постов: {len(prepared)}, новых версий: {created}, сохранённых без изменений: {existing_count}. Фото сохранены. Ничего не опубликовано и не отправлено; расписание не включалось.',
+        'chat_response': f'Постов в подборке: {len(prepared)}. Новых черновиков: {created}. Уже существовало: {existing_count}.',
         'result_ref': {'href': '/dashboard/content?business_id=' + business_id + '&plan_id=' + plan_id,
                        'label': 'Открыть контент-план', 'entity_id': plan_id, 'entity_type': 'content_plan'}}

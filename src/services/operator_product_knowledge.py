@@ -475,13 +475,15 @@ def read_saved_competitors(cursor: Any, *, business_id: str, name: Any = None) -
         facts.append(f"рейтинг {rating}")
     if reviews_count is not None:
         facts.append(f"отзывов {reviews_count}")
+    snapshot_at = row.get("updated_at") or row.get("created_at")
+    snapshot_label = f"Последний сохранённый снимок от {str(snapshot_at)[:10]}" if snapshot_at else "Последний сохранённый снимок"
     return {
         "status": "completed",
         "intent": "competitors.read",
-        "chat_response": "Последний сохранённый снимок: " + ", ".join(facts) + ". Это сохранённые данные, новая внешняя проверка не запускалась.",
+        "chat_response": f"{snapshot_label}: " + ", ".join(facts) + ".",
         "competitors": [selected],
         "count": 1,
-        "snapshot_at": row.get("updated_at") or row.get("created_at"),
+        "snapshot_at": snapshot_at,
         "fresh_external_check_performed": False,
         "result_ref": _result_ref(FEATURE_BY_KEY["competitors"]),
         "external_writes_performed": False,

@@ -55,7 +55,6 @@ def read_demand(cursor, business_id, user_id, arguments):
         lines.append(f"• {item['keyword']} — {item.get('views') or 0} показов/месяц; обновлено {str(item.get('updated_at') or 'неизвестно')[:10]}; {item.get('business_name')}; город бизнеса: {item.get('business_city') or 'не указан'}.")
     if not evidence['items']:
         lines.append('Релевантных сохранённых запросов для доступных услуг не найдено.')
-    lines.append('Это сохранённый снимок. Новизна и рост не подтверждены: история периодов недоступна. Город бизнеса не подтверждает регион частотности источника. Нерелевантные запросы исключены из предложений.')
     return {'status': 'completed', 'chat_response': '\n'.join(lines), **evidence,
             'external_writes_performed': False, 'result_ref': {'href': '/dashboard/card?tab=keywords', 'label': 'Открыть Wordstat'}}
 
@@ -81,7 +80,7 @@ def review_refresh_preview(cursor, business_id, user_id):
     for plan in plans:
         reason = ', '.join(plan.get('blocked_reasons') or [])
         lines.append(f"• {plan['business_id']}: {plan.get('url') or 'ссылка карты не задана'}; " + (f"недоступно ({reason})" if reason else f"оценка до {DEFAULT_MAP_REFRESH_ESTIMATED_CREDITS} кредитов за карточку"))
-    lines.append('Фактическая стоимость зависит от объёма данных. Для запуска выберите конкретную доступную точку и подтвердите платное обновление. Публикации в карты не выполняются.')
+    lines.append('Фактическая стоимость зависит от объёма данных. Для запуска выберите конкретную доступную точку и подтвердите платное обновление.')
     return {'status': 'completed', 'chat_response': '\n'.join(lines), 'refresh_plans': plans,
             'external_calls_performed': False, 'external_writes_performed': False, 'paid_actions_performed': False,
             'result_ref': {'href': '/dashboard/card?tab=reviews', 'label': 'Открыть отзывы'}}
