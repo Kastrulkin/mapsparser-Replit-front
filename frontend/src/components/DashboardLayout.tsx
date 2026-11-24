@@ -1,5 +1,6 @@
 import { PreparedCabinetPanel } from './PreparedCabinet';
 import { usePreparedCabinet } from './usePreparedCabinet';
+import logo from '@/assets/images/logo.png';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { workNavigationCopy } from '@/lib/workNavigation';
@@ -109,10 +110,17 @@ export const DashboardLayout = () => {
   const [chatStarted, setChatStarted] = useState(false);
   const [chatRetry, setChatRetry] = useState(0);
   const chatTrigger = useRef<HTMLButtonElement>(null);
+  const restoreChatFocus = useRef(false);
   const closeChat = () => {
+    restoreChatFocus.current = true;
     setChatOpen(false);
-    chatTrigger.current?.focus();
   };
+  useEffect(() => {
+    if (!chatOpen && restoreChatFocus.current) {
+      restoreChatFocus.current = false;
+      chatTrigger.current?.focus();
+    }
+  }, [chatOpen]);
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,6 +376,7 @@ export const DashboardLayout = () => {
   const fullChat = chatRoute && canUseOperator;
   const dockedChat = !chatRoute && canOpenChat && chatOpen;
   const chatVisible = fullChat || dockedChat;
+  const chatLauncherLabel = language === 'ru' ? 'Чат с помощником ЛокалОС' : 'Chat with the LocalOS assistant';
   const scopeKey = `${currentBusinessId || 'none'}:${controlScope?.kind || 'none'}:${controlScope?.id || 'none'}`;
   const operatorContext = { user, currentBusinessId, currentBusiness, controlScope };
   const paywallReturnTo = `${location.pathname}${location.search}`;
@@ -393,17 +402,6 @@ export const DashboardLayout = () => {
           onControlScopeChange={selectControlScope}
           isSuperadmin={user.is_superadmin}
           user={user}
-          chatPanel={!chatRoute && canOpenChat ? {
-            open: dockedChat,
-            triggerRef: chatTrigger,
-            onToggle: () => {
-              if (dockedChat) closeChat();
-              else {
-                setChatStarted(true);
-                setChatOpen(true);
-              }
-            },
-          } : undefined}
         />
         {user.demo_mode ? <DemoModeBanner /> : null}
         <main className="flex-1 p-3 pb-24 sm:p-4 sm:pb-24 md:pb-4 lg:p-6"><WorkReturnNotice />
@@ -464,6 +462,30 @@ export const DashboardLayout = () => {
           </div>
         </main>
       </div>
+      {!chatRoute && canOpenChat && !dockedChat && (
+        <button
+          ref={chatTrigger}
+          type="button"
+          aria-label={chatLauncherLabel}
+          aria-controls="dashboard-chat-panel"
+          aria-expanded={false}
+          onClick={() => {
+            setChatStarted(true);
+            setChatOpen(true);
+          }}
+          className="group fixed bottom-24 right-0 z-40 hidden h-14 w-16 items-center justify-center rounded-l-full border border-r-0 border-border bg-card text-card-foreground shadow-lg transition-shadow hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none md:flex"
+        >
+          <span className="relative size-10 overflow-hidden rounded-full bg-white" aria-hidden="true">
+            <img src={logo} alt="" className="absolute left-1/2 top-1/2 size-[4.5rem] max-w-none -translate-x-1/2 -translate-y-[42%] [clip-path:inset(0_0_33%_0)]" />
+          </span>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-2 text-sm font-medium text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+          >
+            {chatLauncherLabel}
+          </span>
+        </button>
+      )}
       {/* Mobile sidebar overlay */}
       <MobileWorkNavigation />
       <div className="fixed bottom-0 right-0 z-40 flex min-h-14 w-16 items-center justify-center pb-[env(safe-area-inset-bottom)] md:hidden">

@@ -2,8 +2,8 @@ import { workNavigationCopy } from '@/lib/workNavigation';
 import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import type { User } from '@/lib/auth_new';
 import type { BusinessRecord } from '@/types/business';
-import { LogIn, LogOut, MessageSquareText, Settings, UserCircle } from 'lucide-react';
-import React, { useEffect, useState, type Ref } from 'react';
+import { LogIn, LogOut, Settings, UserCircle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCurrency } from '../contexts/CurrencyContext.logic';
 import { useLanguage } from '../i18n/LanguageContext.logic';
@@ -35,7 +35,6 @@ interface DashboardHeaderProps {
   currentBusiness?: BusinessRecord;
   controlScope?: ControlScope | null;
   onControlScopeChange?: (scope: ControlScope) => void;
-  chatPanel?: { open: boolean; onToggle: () => void; triggerRef: Ref<HTMLButtonElement> };
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -45,7 +44,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isSuperadmin = false,
   user: userProp,
   currentBusiness,
-  chatPanel,
 }) => {
   const { currency, setCurrency } = useCurrency();
   const { language } = useLanguage();
@@ -137,18 +135,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Right Side: Actions & Profile */}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
-          {chatPanel && <Button
-            ref={chatPanel.triggerRef}
-            type="button"
-            variant={chatPanel.open ? 'secondary' : 'outline'}
-            className="hidden min-h-11 md:inline-flex"
-            aria-controls="dashboard-chat-panel"
-            aria-expanded={chatPanel.open}
-            onClick={chatPanel.onToggle}
-          >
-            <MessageSquareText aria-hidden="true" />
-            {workCoherenceCopy(language).chat}
-          </Button>}
           {/* Quick Actions for superadmins */}
           {currentUser?.is_superadmin && (
             <Button
