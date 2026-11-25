@@ -16,11 +16,12 @@ import {
 	Send,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 
 import { BetaFeedbackBanner } from '@/components/dashboard/BetaFeedbackBanner';
 import { DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
+import { InitialSetupChat, useInitialBusinessSetup } from '@/components/initial-setup/InitialBusinessSetup';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
@@ -278,8 +279,21 @@ const operatorMessageText = (message: ChatMessage) => (
 
 export const OperatorPage = () => {
   const { currentBusinessId, currentBusiness, controlScope, user } = useOutletContext<DashboardContext>();
+  const [routeParams, setSearchParams] = useSearchParams();
   const { language } = useLanguage();
   const copy = operatorPageCopyForLanguage(language);
+  const [setupRequested, setSetupRequested] = useState(false);
+  const setupLink = routeParams.get('setup') === '1';
+  const setupTarget = routeParams.get('business_id');
+  const setupBusinessId = setupTarget && setupTarget !== currentBusinessId ? null : currentBusinessId;
+  const setupMode = Boolean(currentBusinessId) && (setupLink || setupRequested);
+  const initialSetup = useInitialBusinessSetup(setupBusinessId, setupMode);
+  const exitInitialSetup = () => {
+    setSetupRequested(false);
+    const next = new URLSearchParams(routeParams);
+    next.delete('setup');
+    setSearchParams(next, { replace: true });
+  };
   const businessName = localizeDemoBusinessName(currentBusiness?.name || '', language) || copy.selectedBusiness;
   const activeBusiness = useRef(currentBusinessId);
   activeBusiness.current = currentBusinessId;
@@ -388,6 +402,11 @@ export const OperatorPage = () => {
     const text = (overrideText || chatMessage).trim();
     const platformScope = controlScope?.kind === 'platform';
     if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
+    if (setupMode && !source) {
+      const ok = await initialSetup.send(initialSetup.state ? { action: 'message', message: text } : { action: 'start' });
+      if (ok && initialSetup.state) setChatMessage('');
+      return;
+    }
     const asksAllClients = /всем\s+клиент|все\s+клиент|всем\s+бизнес|все\s+бизнес|по\s+всем\s+(компан|точк)|all\s+(clients|businesses)|every\s+client/i.test(text);
     const platformContentRequest = controlScope?.kind === 'platform' || (asksAllClients && user?.is_superadmin === true);
     if (platformContentRequest) {
@@ -455,6 +474,15 @@ export const OperatorPage = () => {
       if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", id: "" };
       appendPair(text, result);
+      if (result.capability === 'business.initial_setup' && ['queued', 'processing', 'completed'].includes(result.status)) {
+        setSetupRequested(true);
+        setSearchParams(current => {
+          const next = new URLSearchParams(current);
+          next.set('setup', '1');
+          next.set('business_id', currentBusinessId);
+          return next;
+        }, { replace: true });
+      }
       const nextConversationId = response.data.conversation_id || result.conversation_id;
       if (nextConversationId) {
         setConversationId(nextConversationId);
@@ -712,7 +740,9 @@ export const OperatorPage = () => {
         </div>
 
         <div className="max-h-[62vh] min-h-[480px] space-y-4 overflow-y-auto bg-slate-50/70 px-4 py-4">
-          {historyError ? (
+          {setupMode ? (setupBusinessId ?
+            <InitialSetupChat setup={initialSetup} isStaff={user?.is_superadmin === true} onExit={exitInitialSetup} /> :
+            <p role="status">Выберите кабинет из ссылки, чтобы открыть его настройку.</p>) : historyError ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="status">
               <span>{historyError}</span>
               <Button size="sm" variant="outline" onClick={() => setHistoryRetry((current) => current + 1)} disabled={historyLoading}>
@@ -811,15 +841,17 @@ export const OperatorPage = () => {
         </div>
 
         <div className="border-t border-slate-200 bg-white px-4 py-4">
-          {currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
-          {currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
+          {!setupMode && currentBusinessId && <OperatorVoiceInput key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+          {!setupMode && currentBusinessId && <OperatorWorkdayInput key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={chatLoading || historyLoading} onConversation={setConversationId} />}
 
           <div className="flex flex-col gap-3 lg:flex-row">
             <textarea
               className="min-h-[96px] flex-1 resize-y rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-950 outline-none ring-sky-200 placeholder:text-slate-400 focus:ring-2"
+              disabled={setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy)}
+              aria-label={setupMode ? 'Сообщение для первичной настройки' : 'Задача для Оператора'}
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
-              placeholder={copy.placeholder}
+              placeholder={setupMode ? 'Вставьте ссылку или дополните данные компании…' : copy.placeholder}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                   event.preventDefault();
@@ -835,7 +867,7 @@ export const OperatorPage = () => {
                       type="button"
                       className="h-12 w-full transition-transform active:scale-[0.96] lg:w-auto"
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim()}
+                      disabled={chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim() || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       {copy.send}

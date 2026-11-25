@@ -99,6 +99,7 @@ CAPABILITIES: tuple[OperatorCapability, ...] = (
     OperatorCapability("operator.query", "Поиск по данным LocalOS", "available", "read_only", "none", "/dashboard/operator", ("Покажи услуги нужной категории", "Покажи последний отзыв", "Найди посты за период")),
     OperatorCapability("maps.status", "Состояние карточки", "available", "read_only", "none", "/dashboard/card", ("В каком состоянии карточка?",)),
     OperatorCapability("maps.refresh", "Обновление карточки и отзывов", "available", "paid_external", "credit_policy", "/dashboard/card", ("Обнови карточку", "Проверь новые отзывы")),
+    OperatorCapability("business.initial_setup", "Первичная настройка компании", "available", "internal_write", "explicit_command", "/dashboard/operator?setup=1", ("Добавь ссылку и проведи первичную настройку",)),
     OperatorCapability("competitors.read", "Сохранённые конкуренты", "available", "read_only", "none", "/dashboard/card?tab=competitors", ("Посмотри, как дела у соседа", "Покажи сохранённых конкурентов")),
     OperatorCapability("competitors.manage", "Наблюдение за конкурентами", "manual", "paid_external", "manual_handoff", "/dashboard/card?tab=competitors", ("Добавь конкурента", "Запусти новую проверку конкурента")),
     OperatorCapability("reviews.read", "Отзывы без ответа", "available", "read_only", "none", "/dashboard/card?tab=reviews&review_filter=needs_reply", ("Есть отзывы без ответа?",)),
@@ -565,6 +566,14 @@ def _is_services_read_intent(message: str) -> bool:
 def _is_services_inventory_intent(message: str) -> bool:
     lowered = str(message or "").lower()
     return "услуг" in lowered and "сколько" in lowered
+
+
+def _is_initial_setup_intent(message: str) -> bool:
+    lowered = str(message or '').lower()
+    has_link = bool(re.search(r'https?://[^\s<>]+', lowered))
+    has_setup = bool(re.search(r'первичн\S*\s+настройк\S*', lowered))
+    has_action = any(marker in lowered for marker in ('добав', 'начн', 'провед', 'запуст', 'сделай'))
+    return has_link and has_setup and has_action
 
 
 def _service_source_title(source: Any) -> str:
@@ -2068,6 +2077,27 @@ def route_operator_message(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     clean_message = str(message or "").strip()
     tool_loop_active = _operator_tool_loop_enabled() or tool_planner is not None
+    if _is_initial_setup_intent(clean_message):
+        blocked = operator_subscription_block(subscription_access, 'business.initial_setup')
+        if blocked:
+            return blocked, {}
+        from services import initial_business_setup
+        try:
+            result = initial_business_setup.start_from_operator(
+                cursor,
+                business_id=business_id,
+                user_id=user_id,
+                source_message=clean_message,
+                actor_context=actor_context,
+            )
+        except (ValueError, PermissionError) as error:
+            result = {
+                'status': 'blocked',
+                'chat_response': str(error),
+                'blocked_reasons': ['initial_setup_rejected'],
+                'external_writes_performed': False,
+            }
+        return standardize_operator_result(result, 'business.initial_setup'), {}
     run_refresh = refresh_handler or refresh_reviews_from_operator
     run_ai_router = ai_router_handler or classify_operator_intent_with_ai
     run_manual_review = manual_review_handler or process_operator_chat_message

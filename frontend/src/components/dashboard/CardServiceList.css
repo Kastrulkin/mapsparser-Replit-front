@@ -1,0 +1,19 @@
+.card-service-queue {
+  @apply border-b border-slate-100;
+}
+
+@container (min-width: 48rem) {
+  .card-service-columns {
+    display: grid;
+    grid-template-columns: minmax(20rem, 0.9fr) minmax(26.25rem, 1.35fr);
+    align-items: start;
+  }
+
+  .card-service-queue {
+    @apply border-b-0 border-r;
+  }
+
+  .card-service-detail {
+    @apply bg-gradient-to-br from-white to-slate-50/80 p-5;
+  }
+}
