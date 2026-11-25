@@ -27,7 +27,12 @@ describe('demo matches the canonical navigation', () => {
       '/dashboard/card?tab=services', '/dashboard/card?tab=reviews&review_filter=all',
       '/dashboard/card?tab=news', '/dashboard/card?tab=keywords', '/dashboard/card?tab=competitors',
     ]);
-    tabs.forEach(step => expect(source).toContain(`data-tour-target="${step.target}"`));
+    expect(source).toContain('data-tour-target={`card-tab-${value}`}');
+    tabs.forEach(step => {
+      const tab = new URLSearchParams(step.route.split('?')[1]).get('tab');
+      expect(step.target).toBe(`card-tab-${tab}`);
+      expect(source).toContain(`value: '${tab}'`);
+    });
     expect(GUIDED_TOUR_STEPS.some(step => step.key === 'geo-promotion' || step.key === 'progress-focus-action')).toBe(false);
   });
   it('keeps content preparation, preview, save and review separate', () => {
