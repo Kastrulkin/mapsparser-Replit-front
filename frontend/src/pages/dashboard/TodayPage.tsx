@@ -1,13 +1,13 @@
-import { workCoherenceCopy } from '@/i18n/workCoherenceCopy';
 import { workChatRoute, workNavigationCopy } from '@/lib/workNavigation';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
-import { ArrowRight, ChevronDown, Clock3, RefreshCw } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Clock3, ListTodo, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 
 import type { ControlScope } from '@/components/DashboardLayout';
-import { DashboardEmptyState, DashboardPageHeader, DashboardSection } from '@/components/dashboard/DashboardPrimitives';
+import { DashboardEmptyState, DashboardPageHeader } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { featureFlags } from '@/config/featureFlags';
 import { useLanguage, type Language } from '@/i18n/LanguageContext.logic';
 import { fillTodayTemplate, getTodayOperationalCopy, getTodayPageCopy, type TodayPageCopy } from '@/i18n/todayPageCopy';
@@ -117,6 +117,8 @@ const formatDate = (language: Language, value?: string | null, timeZone?: string
 
 const flowRoute: Record<TodayPreference['primary_flow'], string> = { overview: '/dashboard/today', content: '/dashboard/content', influencers: '/dashboard/influencers', partnerships: '/dashboard/partnerships', maps: '/dashboard/card', upsells: '/dashboard/average-ticket', automation: '/dashboard/agents' };
 const flowOrder: TodayPreference['primary_flow'][] = ['overview', 'content', 'influencers', 'partnerships', 'maps', 'upsells', 'automation'];
+const isMissingMap = (id?: string) => id?.startsWith('card-growth:') && id.endsWith(':select-provider');
+
 const flowLabels: Record<Language, Record<TodayPreference['primary_flow'], string>> = {
   ru: { overview: 'Обзор', content: 'Контент', influencers: 'Инфлюенсеры', partnerships: 'Партнёрства', maps: 'Карты', upsells: 'Допродажи', automation: 'Автоматизация' },
   en: { overview: 'Overview', content: 'Content', influencers: 'Creators', partnerships: 'Partnerships', maps: 'Maps', upsells: 'Upsells', automation: 'Automation' },
@@ -276,45 +278,65 @@ export const TodayPage = () => {
   const preferenceCopy = operationalCopy.preference;
   const sourceName = (source?: string) => ({ demo_grooming_network: ui.sourceDemo, manual: ui.sourceManual, yclients: 'YCLIENTS', YCLIENTS: 'YCLIENTS', 'Прогресс LocalOS': ui.sourceHistory, LocalOS: 'LocalOS' }[source || ''] || ui.sourceUnknown);
   const expand = (key: string) => setExpandedSections(current => current.includes(key) ? current.filter(value => value !== key) : [...current, key]);
-  const itemLabel = (item: TodayItem, result = false) => item.action?.label && item.action.label !== 'Открыть'
-    ? todayWorkActionLabel(language, item.action.label_code, item.action.label)
-    : result ? ui.viewResult : needsHuman(item) ? ui.review : ui.open;
+  const firstMission = primaryItem ? null : nextMission;
+  const taskTabs = [
+    { key: 'decisions', title: language === 'ru' ? 'Требует внимания' : ui.decisions, items: sections.decisions, empty: language === 'ru' ? 'Нет задач для проверки' : ui.emptyDecisions, count: sections.decisions.length + Number(Boolean(firstMission)) },
+    { key: 'continuing', title: language === 'ru' ? 'В работе' : ui.continue, items: sections.continuing, empty: language === 'ru' ? 'Нет начатых задач' : ui.emptyContinue, count: sections.continuing.length },
+    { key: 'results', title: ui.completed, items: sections.results, empty: language === 'ru' ? 'Нет завершённых задач' : ui.emptyResults, count: sections.results.length },
+  ];
+  const defaultTab = taskTabs.find(tab => tab.count > 0)?.key || 'decisions';
+  const reportDate = formatDate(language, overview?.as_of, overview?.timezone);
+  const missingMapMission = language === 'ru' && isMissingMap(firstMission?.id);
+  const missionLabel = missingMapMission ? 'Добавить карточку' : firstMission?.cta_label || ui.setup;
+  const itemLabel = (item: TodayItem, result: boolean) => {
+    if (language === 'ru' && isMissingMap(item.id)) return 'Добавить карточку';
+    if (item.action?.label && item.action.label !== 'Открыть') {
+      return todayWorkActionLabel(language, item.action.label_code, item.action.label);
+    }
+    return result ? ui.viewResult : needsHuman(item) ? ui.review : ui.open;
+  };
   const openWork = (item: TodayItem) => {
     const route = workRoute(item);
-    if (!route) return;
-    openItem(undefined, item.business_id, item.business_name, route);
+    if (route) openItem(undefined, item.business_id, item.business_name, route);
   };
-  const row = (item: TodayItem, result = false) => {
+  const row = (item: TodayItem, result = false, primary = false) => {
     const route = workRoute(item);
     const status = statusKey(item, observedAt);
-    return <div key={item.id} className="min-w-0 py-4 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-56"><h3 className="break-words text-sm font-medium text-foreground">{localizedGrowthText(language, item.title)}</h3>
+    const title = language === 'ru' && isMissingMap(item.id) ? 'Добавить карточку на картах' : localizedGrowthText(language, item.title);
+    const label = itemLabel(item, result);
+    const date = formatDate(language, result ? item.occurred_at : item.due_at, item.timezone || overview?.timezone);
+    const Icon = result ? Check : needsHuman(item) ? ListTodo : Clock3;
+    const warning = status === 'overdue' || status === 'blocked' || status === 'failed';
+    const description = todayWorkDescription(language, item.message_code, localizedGrowthText(language, item.description || item.stage));
+    return (
+      <div key={item.id} className={cn('grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 px-3 py-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-4', primary && 'bg-muted/40')}>
+        <div className="grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground"><Icon className="size-4" aria-hidden="true" /></div>
+        <div className="min-w-0 pt-0.5">
+          <h2 className="break-words text-sm font-medium text-foreground sm:text-base">{title}</h2>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {item.business_name ? <span>{item.business_name}</span> : null}
-            <span className={cn(needsHuman(item) && 'font-medium text-amber-800')}>{ui[status === 'completed' ? 'completedStatus' : status]}</span>
-            {formatDate(language, result ? item.occurred_at : item.due_at, item.timezone || overview?.timezone) ? <span>{result ? '' : `${ui.due}: `}{formatDate(language, result ? item.occurred_at : item.due_at, item.timezone || overview?.timezone)}{!validTimezone(item.timezone || overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</span> : null}
+            {item.flow && item.flow !== 'overview' ? <span>{flowLabels[language][item.flow]}</span> : null}
+            {controlScope?.kind === 'network' && item.business_name ? <span>{item.business_name}</span> : null}
+            {status !== 'unknown' && status !== 'decision' && status !== 'completed' ? <span className={cn(warning && 'text-destructive')}>{ui[status]}</span> : null}
+            {date ? <span>{result ? '' : `${ui.due} `}{date}{!validTimezone(item.timezone || overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</span> : null}
           </div>
         </div>
-        {route ? <Button type="button" variant="outline" className="min-h-11 max-w-full whitespace-normal text-left" onClick={() => openWork(item)} aria-label={`${itemLabel(item, result)}: ${item.title}`}>{itemLabel(item, result)}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button> : null}
-        {route && item.business_id ? <Button variant="ghost" onClick={() => navigate(workChatRoute(route, item.business_id || '', item.entity_type === 'journey_action' ? item.entity_id : undefined))}>{workNavigationCopy(language).discuss}</Button> : null}
+        {route || primary ? (
+          <Button type="button" variant={primary ? 'default' : 'outline'} className="col-start-2 mt-2 min-h-11 w-fit max-w-full whitespace-normal text-start sm:col-start-3 sm:row-start-1 sm:mt-0" onClick={() => route ? openWork(item) : navigate('/dashboard/operator')} aria-label={primary ? undefined : `${label}: ${title}`}>
+            {route ? label : ui.openManagement}<ArrowRight className="ms-2 size-4 shrink-0" aria-hidden="true" />
+          </Button>
+        ) : null}
+        {description || item.preview || item.source || !route || item.business_id ? (
+          <details className="col-start-2 mt-1 text-xs text-muted-foreground">
+            <summary className="min-h-10 w-fit cursor-pointer py-2.5">{ui.details}</summary>
+            {description ? <p className="break-words leading-relaxed">{description}</p> : null}
+            {item.preview ? <p className="mt-2 whitespace-pre-wrap break-words text-foreground">{item.preview}</p> : null}
+            {item.source ? <p className="mt-2">{copy.source} {sourceName(item.source)}</p> : null}
+            {!route ? <p className="mt-2">{ui.blockedAction}</p> : null}
+            {route && item.business_id ? <Button type="button" variant="ghost" className="min-h-10" onClick={() => navigate(workChatRoute(route, item.business_id || '', item.entity_type === 'journey_action' ? item.entity_id : undefined))}>{workNavigationCopy(language).discuss}</Button> : null}
+          </details>
+        ) : null}
       </div>
-      {!route ? <p className="mt-2 text-sm text-muted-foreground">{ui.blockedAction}</p> : null}
-      {item.description || item.preview || item.source ? <details className="mt-2 text-sm"><summary className="min-h-10 cursor-pointer py-2 text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{ui.details}</summary>
-        {item.description || item.stage ? <p className="break-words leading-6 text-muted-foreground">{todayWorkDescription(language, item.message_code, localizedGrowthText(language, item.description || item.stage))}</p> : null}
-        {item.preview ? <p className="mt-2 whitespace-pre-wrap break-words text-foreground">{item.preview}</p> : null}
-        {item.source ? <p className="mt-2 text-xs text-muted-foreground">{copy.source} {sourceName(item.source)}</p> : null}
-      </details> : null}
-    </div>;
-  };
-  const workSection = (key: string, title: string, items: TodayItem[], empty: string, result = false) => {
-    const remaining = items.filter(item => item.id !== primaryItem?.id);
-    const visible = expandedSections.includes(key) ? remaining : remaining.slice(0, 3);
-    return <section aria-label={title} className="border-t border-border pt-5"><h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>{key === 'decisions' ? <p className="mb-3 text-sm text-muted-foreground">{operationalCopy.decisionDescription}</p> : null}
-      {remaining.length ? <div className="divide-y divide-border">{visible.map(item => row(item, result))}</div> : <p className="text-sm leading-6 text-muted-foreground">{unavailableSources.length ? ui.unavailable : items.some(item => item.id === primaryItem?.id) ? workCoherenceCopy(language).currentWorkAbove : empty}</p>}
-      {remaining.length > 3 ? <Button type="button" variant="ghost" className="mt-3 min-h-11" onClick={() => expand(key)} aria-expanded={expandedSections.includes(key)}>{expandedSections.includes(key) ? ui.details : ui.more} ({remaining.length})</Button> : null}
-      {remaining.length ? <p className="mt-3 text-xs text-muted-foreground">{ui.limited}</p> : null}
-    </section>;
+    );
   };
 
   const updatePreference = async (action: 'set' | 'accept' | 'decline' | 'snooze' | 'opt_out' | 'enable' | 'undo', options: { primary_flow?: TodayPreference['primary_flow']; proposal_id?: string } = {}) => {
@@ -357,44 +379,84 @@ export const TodayPage = () => {
   }
 
   return (
-    <div key={scopeKey} className="mx-auto max-w-5xl space-y-6 pb-10" data-tour-target="today-overview">
-      <DashboardPageHeader title={copy.title} description={ui.description} icon={Clock3} actions={<Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2"><RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />{copy.refresh}</Button>} />
-      {formatDate(language, overview?.as_of, overview?.timezone) ? <p className="text-xs text-muted-foreground">{ui.reportDate}: {formatDate(language, overview?.as_of, overview?.timezone)}{!validTimezone(overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</p> : null}
+    <div key={scopeKey} className="mx-auto max-w-5xl space-y-5 pb-10" data-tour-target="today-overview">
+      <DashboardPageHeader
+        title={copy.title}
+        icon={Clock3}
+        className="lg:items-center [&_h1]:font-medium sm:[&_h1]:text-3xl"
+        actions={<>
+          {reportDate ? <span className="text-xs text-muted-foreground">{ui.reportDate} · {reportDate}{!validTimezone(overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</span> : null}
+          <Button type="button" variant="outline" onClick={load} disabled={loading} className="min-h-11 gap-2"><RefreshCw className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />{copy.refresh}</Button>
+        </>}
+      />
       {error && overview ? <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-950"><span>{copy.retryHint}</span><Button type="button" variant="outline" onClick={load} disabled={loading}>{copy.retry}</Button></div> : null}
       {unavailableSources.length ? <p role="status" className="text-sm text-muted-foreground">{ui.sourceUnavailable}: {unavailableSources.map(([flow]) => { const knownFlow = flowOrder.find(value => value === flow); return knownFlow ? flowLabels[language][knownFlow] : ui.data; }).join(', ')}</p> : null}
-      <section aria-label={ui.next} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-        <p className="text-sm font-medium text-muted-foreground">{ui.next}</p>
-        <h2 className="mt-2 break-words text-xl font-semibold text-foreground">{primaryItem ? localizedGrowthText(language, primaryItem.title) : nextMission?.title || copy.openProgress}</h2>
-        {primaryItem ? <>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground"><span>{ui[statusKey(primaryItem, observedAt)]}</span>{primaryItem.business_name ? <span>{primaryItem.business_name}</span> : null}{formatDate(language, primaryItem.due_at, primaryItem.timezone || overview?.timezone) ? <span>{ui.due}: {formatDate(language, primaryItem.due_at, primaryItem.timezone || overview?.timezone)}{!validTimezone(primaryItem.timezone || overview?.timezone) ? ` · ${ui.deviceTime}` : ''}</span> : null}</div>
-          <p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{todayWorkDescription(language, primaryItem.message_code, localizedGrowthText(language, primaryItem.description || primaryItem.stage))}</p>
-          {workRoute(primaryItem) ? <Button type="button" onClick={() => openWork(primaryItem)} className="mt-4 min-h-11 w-full whitespace-normal sm:w-auto">{itemLabel(primaryItem)}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button> : <><p className="mt-3 text-sm text-muted-foreground">{ui.blockedAction}</p><Button type="button" className="mt-4 min-h-11" onClick={() => navigate('/dashboard/operator')}>{ui.openManagement}<ArrowRight className="ml-2 h-4 w-4" /></Button></>}
-          {workRoute(primaryItem) && primaryItem.business_id ? <Button variant="ghost" className="mt-2" onClick={() => navigate(workChatRoute(workRoute(primaryItem) || '', primaryItem.business_id || '', primaryItem.entity_type === 'journey_action' ? primaryItem.entity_id : undefined))}>{workNavigationCopy(language).discuss}</Button> : null}
-        </> : <>
-          <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{nextMission?.reason || (unavailableSources.length ? ui.unavailable : ui.emptyDecisions)}</p>
-          <Button type="button" onClick={() => openMission(nextMission)} className="mt-4 min-h-11 w-full whitespace-normal sm:w-auto">{(nextMission?.cta_url?.startsWith('/dashboard/profile') || nextMission?.screen === 'settings') && journeyAction?.access?.allowed !== false ? ui.setup : nextMission?.cta_label || copy.openProgress}<ArrowRight className="ml-2 h-4 w-4 shrink-0" /></Button>
-          {nextMission?.expected_outcome ? <details className="mt-3 text-sm"><summary className="min-h-10 cursor-pointer py-2 text-muted-foreground">{ui.details}</summary><p className="text-muted-foreground">{copy.after} {nextMission.expected_outcome}</p></details> : null}
-        </>}
-      </section>
-      {workSection('decisions', ui.decisions, sections.decisions, ui.emptyDecisions)}
-      {workSection('continuing', ui.continue, sections.continuing, ui.emptyContinue)}
-      {workSection('results', ui.completed, sections.results, ui.emptyResults, true)}
-      <div className="space-y-3 border-t border-border pt-5">
-        {changes.length ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{copy.changesTitle}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><p className="mb-3 text-sm text-muted-foreground">{copy.changesHint}</p><div className="divide-y divide-border">{changes.map(item => row(item))}</div></details> : <p className="text-sm text-muted-foreground">{unavailableSources.length ? ui.unavailable : copy.noChanges}</p>}
-        {controlScope?.kind === 'network' ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{ui.locations} · {overview?.network_summary?.locations_count ?? '—'}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><p className="mt-2 text-sm text-muted-foreground">{ui.networkHint}</p><div className="mt-3 divide-y divide-border">{(expandedSections.includes('locations') ? problemLocations : problemLocations.slice(0, 3)).map(location => <button key={location.business_id} type="button" onClick={() => openItem(location.focus_action, location.business_id, location.business_name)} className="flex min-h-16 w-full items-center justify-between gap-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"><span className="min-w-0"><strong className="block break-words text-sm">{location.business_name}</strong><span className="block text-sm text-muted-foreground">{localizedGrowthText(language, location.problem || copy.locationAttention)}</span></span><ArrowRight className="h-4 w-4 shrink-0" /></button>)}</div>{problemLocations.length > 3 ? <Button type="button" variant="ghost" className="min-h-11" onClick={() => expand('locations')} aria-expanded={expandedSections.includes('locations')}>{ui.more} ({problemLocations.length})</Button> : null}</details> : null}
-        {dataHealth || dataRhythm || analyticsModules.length ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{ui.data}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><div className="mt-3 space-y-3 text-sm text-muted-foreground"><p>{copy.dataHint}</p><p>{copy.financeSource} {sourceName(dataHealth?.source_label || dataHealth?.source)}{formatDate(language, dataHealth?.source_updated_at || dataHealth?.updated_at || dataHealth?.last_updated_at) ? ` · ${formatDate(language, dataHealth?.source_updated_at || dataHealth?.updated_at || dataHealth?.last_updated_at)}` : ''}</p>
-          {dataRhythm?.completed_periods_8w != null ? <p>{fillTodayTemplate(copy.summaries, { count: dataRhythm.completed_periods_8w })}</p> : null}
-          {formatDate(language, dataRhythm?.next_due_at) ? <p>{validDate(dataRhythm?.next_due_at) && Date.parse(dataRhythm?.next_due_at || '') < observedAt ? `${ui.overdue}: ${formatDate(language, dataRhythm?.next_due_at)}` : fillTodayTemplate(copy.nextSummary, { date: formatDate(language, dataRhythm?.next_due_at) || '' })} · {ui.deviceTime}</p> : null}
-          {analyticsModules.map(module => <p key={module.key || module.label}>{analyticsLabel(language, copy, module.key, module.label)}: {analyticsStatus(copy, module.status)}</p>)}
-          {dataHealth?.missing?.length ? <p>{fillTodayTemplate(copy.add, { items: dataHealth.missing.map(item => localizedGrowthText(language, item)).join(', ') })}</p> : null}
-          {<Button type="button" variant="outline" className="min-h-11 whitespace-normal" onClick={() => navigate('/dashboard/finance')}>{ui.importData}</Button>}
-        </div></details> : null}
-      {overview?.preference ? <details className="group rounded-2xl bg-white px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden"><span>{preferenceCopy.configure}: {flowLabels[language][overview.preference.primary_flow]}</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary><div className="mt-3 border-t border-slate-100 pt-3"><div className="flex flex-wrap gap-2">{availableFlows.map((flow) => <Button key={flow} type="button" size="sm" variant={flow === overview.preference?.primary_flow ? 'default' : 'outline'} disabled={preferenceSaving} onClick={() => updatePreference('set', { primary_flow: flow })}>{flowLabels[language][flow]}</Button>)}</div><div className="mt-3 flex flex-wrap gap-2">{emptyPrimaryMission && primaryItem ? <Button type="button" variant="outline" className="min-h-11" onClick={() => openMission(emptyPrimaryMission)}>{emptyPrimaryMission.cta_label}</Button> : null}{overview.preference.can_undo ? <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('undo')}>{preferenceCopy.undo}</Button> : null}{overview.preference.suggestions_enabled ? <Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('opt_out')}>{preferenceCopy.disableSuggestions}</Button> : <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('enable')}>{preferenceCopy.enableSuggestions}</Button>}</div></div></details> : null}
+      <Tabs key={scopeKey} defaultValue={defaultTab}>
+        <TabsList aria-label={copy.title} className="h-auto max-w-full flex-wrap justify-start gap-1 rounded-xl">
+          {taskTabs.map(tab => (
+            <TabsTrigger key={tab.key} value={tab.key} className="min-h-11 gap-2 whitespace-normal rounded-lg px-3 text-start font-normal data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              {tab.title}{tab.count > 0 || !unavailableSources.length ? <span className="tabular-nums opacity-80">{tab.count}</span> : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {taskTabs.map(tab => {
+          const mission = tab.key === 'decisions' ? firstMission : null;
+          const featured = tab.items.find(item => item === primaryItem);
+          const items = featured ? [featured, ...tab.items.filter(item => item !== featured)] : tab.items;
+          const expanded = expandedSections.includes(tab.key);
+          const visible = expanded ? items : items.slice(0, 3);
+          return (
+            <TabsContent key={tab.key} value={tab.key} className="mt-3 min-w-0 rounded-2xl border border-border bg-card shadow-sm">
+              {mission ? (
+                <div className="flex flex-wrap items-start justify-between gap-3 bg-muted/40 px-4 py-4">
+                  <div className="min-w-0 flex-1 basis-56">
+                    <h2 className="break-words text-base font-medium">{missingMapMission ? 'Добавить карточку на картах' : mission.title}</h2>
+                    {mission.reason || mission.expected_outcome ? (
+                      <details className="mt-1 text-xs text-muted-foreground">
+                        <summary className="min-h-10 w-fit cursor-pointer py-2.5">{ui.details}</summary>
+                        {mission.reason ? <p>{mission.reason}</p> : null}
+                        {mission.expected_outcome ? <p className="mt-2">{copy.after} {mission.expected_outcome}</p> : null}
+                      </details>
+                    ) : null}
+                  </div>
+                  <Button type="button" className="min-h-11 whitespace-normal" onClick={() => openMission(mission)}>{missionLabel}<ArrowRight className="ms-2 size-4 shrink-0" aria-hidden="true" /></Button>
+                </div>
+              ) : null}
+              {items.length ? <div className="divide-y divide-border">{visible.map(item => row(item, tab.key === 'results', item === featured))}</div> : null}
+              {!tab.count ? <p className="px-4 py-5 text-sm text-muted-foreground">{unavailableSources.length ? ui.unavailable : tab.empty}</p> : null}
+              {items.length > 3 ? <Button type="button" variant="ghost" className="m-2 min-h-11" onClick={() => expand(tab.key)} aria-expanded={expanded}>{expanded ? ui.details : ui.more} ({items.length})</Button> : null}
+              {tab.key === 'results' ? <div className="border-t border-border px-3 py-2"><Button type="button" variant="ghost" className="min-h-11" onClick={() => navigate('/dashboard/progress')}>{copy.openProgress}<ArrowRight className="ms-2 size-4" aria-hidden="true" /></Button></div> : null}
+            </TabsContent>
+          );
+        })}
+      </Tabs>
+      <div className="space-y-2">
+        {emptyPrimaryMission && primaryItem ? (
+          <Button type="button" variant="ghost" className="min-h-11 font-normal" onClick={() => openMission(emptyPrimaryMission)}>
+            {emptyPrimaryMission.cta_label}<ArrowRight className="ms-1 size-4 shrink-0" aria-hidden="true" />
+          </Button>
+        ) : null}
+        {changes.length ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{copy.changesTitle}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><p className="mb-3 text-sm text-muted-foreground">{copy.changesHint}</p><div className="divide-y divide-border">{changes.map(item => row(item))}</div></details> : null}
+        {controlScope?.kind === 'network' && problemLocations.length ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{ui.locations} · {overview?.network_summary?.locations_count ?? '—'}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><p className="mt-2 text-sm text-muted-foreground">{ui.networkHint}</p><div className="mt-3 divide-y divide-border">{(expandedSections.includes('locations') ? problemLocations : problemLocations.slice(0, 3)).map(location => <button key={location.business_id} type="button" onClick={() => openItem(location.focus_action, location.business_id, location.business_name)} className="flex min-h-16 w-full items-center justify-between gap-3 py-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"><span className="min-w-0"><strong className="block break-words text-sm font-medium">{location.business_name}</strong><span className="block text-sm text-muted-foreground">{localizedGrowthText(language, location.problem || copy.locationAttention)}</span></span><ArrowRight className="h-4 w-4 shrink-0" /></button>)}</div>{problemLocations.length > 3 ? <Button type="button" variant="ghost" className="min-h-11" onClick={() => expand('locations')} aria-expanded={expandedSections.includes('locations')}>{ui.more} ({problemLocations.length})</Button> : null}</details> : null}
+        {dataHealth || dataRhythm || analyticsModules.length || overview?.preference ? (
+          <details className="rounded-xl border border-border bg-card px-4">
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-normal text-muted-foreground">
+              {language === 'ru' ? 'Настройки обзора' : workNavigationCopy(language).label('settings')}
+            </summary>
+            <div className="space-y-2 border-t border-border py-3">
+              {dataHealth || dataRhythm || analyticsModules.length ? <details className="group rounded-xl border border-border p-4"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-medium">{ui.data}<ChevronDown className="h-4 w-4 group-open:rotate-180" /></summary><div className="mt-3 space-y-3 text-sm text-muted-foreground"><p>{copy.dataHint}</p><p>{copy.financeSource} {sourceName(dataHealth?.source_label || dataHealth?.source)}{formatDate(language, dataHealth?.source_updated_at || dataHealth?.updated_at || dataHealth?.last_updated_at) ? ` · ${formatDate(language, dataHealth?.source_updated_at || dataHealth?.updated_at || dataHealth?.last_updated_at)}` : ''}</p>
+              {dataRhythm?.completed_periods_8w != null ? <p>{fillTodayTemplate(copy.summaries, { count: dataRhythm.completed_periods_8w })}</p> : null}
+              {formatDate(language, dataRhythm?.next_due_at) ? <p>{validDate(dataRhythm?.next_due_at) && Date.parse(dataRhythm?.next_due_at || '') < observedAt ? `${ui.overdue}: ${formatDate(language, dataRhythm?.next_due_at)}` : fillTodayTemplate(copy.nextSummary, { date: formatDate(language, dataRhythm?.next_due_at) || '' })} · {ui.deviceTime}</p> : null}
+              {analyticsModules.map(module => <p key={module.key || module.label}>{analyticsLabel(language, copy, module.key, module.label)}: {analyticsStatus(copy, module.status)}</p>)}
+              {dataHealth?.missing?.length ? <p>{fillTodayTemplate(copy.add, { items: dataHealth.missing.map(item => localizedGrowthText(language, item)).join(', ') })}</p> : null}
+              {<Button type="button" variant="outline" className="min-h-11 whitespace-normal" onClick={() => navigate('/dashboard/finance')}>{ui.importData}</Button>}
+              </div></details> : null}
+              {overview?.preference ? <details className="group rounded-xl border border-border px-4 py-2"><summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-normal text-muted-foreground marker:hidden [&::-webkit-details-marker]:hidden"><span>{preferenceCopy.configure}: {flowLabels[language][overview.preference.primary_flow]}</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary><div className="mt-3 border-t border-border pt-3"><div className="flex flex-wrap gap-2">{availableFlows.map((flow) => <Button key={flow} type="button" size="sm" variant={flow === overview.preference?.primary_flow ? 'default' : 'outline'} disabled={preferenceSaving} onClick={() => updatePreference('set', { primary_flow: flow })}>{flowLabels[language][flow]}</Button>)}</div><div className="mt-3 flex flex-wrap gap-2">{overview.preference.can_undo ? <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('undo')}>{preferenceCopy.undo}</Button> : null}{overview.preference.suggestions_enabled ? <Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('opt_out')}>{preferenceCopy.disableSuggestions}</Button> : <Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('enable')}>{preferenceCopy.enableSuggestions}</Button>}</div></div></details> : null}
 
-      {overview?.priority_proposal && overview.preference?.suggestions_enabled ? <section className="rounded-2xl bg-slate-50 p-4 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"><p className="text-sm font-semibold text-slate-950">{preferenceCopy.proposalTitle} «{flowLabels[language][overview.priority_proposal.flow]}»</p><p className="mt-1 text-sm text-slate-600">{preferenceCopy.proposalDescription}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('accept', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.accept}</Button><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('decline', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.decline}</Button><Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('snooze', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.snooze}</Button></div></section> : null}
-
-        <details className="rounded-xl border border-border p-4"><summary className="min-h-11 cursor-pointer py-2 font-medium">{ui.how}</summary><p className="mt-2 text-sm leading-6 text-muted-foreground">{ui.description} {copy.after} {copy.readyHint}</p></details>
-        <Button type="button" variant="outline" className="min-h-11" onClick={() => navigate('/dashboard/progress')}>{copy.openProgress}<ArrowRight className="ml-2 h-4 w-4" /></Button>
+              {overview?.priority_proposal && overview.preference?.suggestions_enabled ? <section className="rounded-xl bg-muted/40 p-4"><p className="text-sm font-medium text-foreground">{preferenceCopy.proposalTitle} «{flowLabels[language][overview.priority_proposal.flow]}»</p><p className="mt-1 text-sm text-muted-foreground">{preferenceCopy.proposalDescription}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('accept', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.accept}</Button><Button type="button" size="sm" variant="outline" disabled={preferenceSaving} onClick={() => updatePreference('decline', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.decline}</Button><Button type="button" size="sm" variant="ghost" disabled={preferenceSaving} onClick={() => updatePreference('snooze', { proposal_id: overview.priority_proposal?.id })}>{preferenceCopy.snooze}</Button></div></section> : null}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
