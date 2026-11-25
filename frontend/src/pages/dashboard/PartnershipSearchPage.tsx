@@ -2425,9 +2425,9 @@ export const PartnershipSearchPage: React.FC = () => {
       />
 
 
-      {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
-        <label className="text-sm font-medium text-slate-700">Группа компаний
-          <select aria-label="Выбранный поиск партнёров" className="mt-1 block min-h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedSearchGroup} onChange={(event) => changeSearchGroup(event.target.value)}>
+      {(searchTaskOptions.length > 0 || candidateSearchGroups.groups.length > 0) && <div className="flex flex-wrap items-end gap-3 rounded-[24px] border border-border bg-background p-4 shadow-sm">
+        <label className="text-sm font-medium text-foreground">Группа компаний
+          <select aria-label="Выбранный поиск партнёров" className="mt-1.5 block min-h-11 max-w-full rounded-xl border border-input bg-background px-3 text-sm" value={selectedSearchGroup} onChange={(event) => changeSearchGroup(event.target.value)}>
             <option value="all">Все группы</option>
             {searchTaskOptions.map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
             {candidateSearchGroups.groups.filter((group) => !group.id.startsWith('task:')).map((group) => <option key={group.id} value={group.id}>{group.label} ({group.count})</option>)}
@@ -2850,10 +2850,10 @@ export const PartnershipSearchPage: React.FC = () => {
 
           {(workspaceView === 'drafts' || workspaceView === 'queue') ? (
           <>
-          <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}:${sendRefreshVersion}`}
+          {(workspaceView === 'drafts' || searchParams.get('campaign_id') || selectedSearchGroup.startsWith('task:')) && <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:${workspaceView}:${searchParams.get('campaign_id') || ''}:${sendRefreshVersion}`}
             onCountChange={workspaceView === 'queue' ? setCanonicalSendCount : setCanonicalLetterCount} searchTaskId={selectedSearchGroup.startsWith('task:') ? selectedSearchGroup.slice(5) : null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
             campaignId={searchParams.get('campaign_id')} presentation={workspaceView === 'drafts' ? 'letters' : 'send'}
-            onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
+            onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />}
           {searchParams.get('campaign_id') && <Button variant="outline" onClick={() => { const next = new URLSearchParams(searchParams); next.delete('campaign_id'); setSearchParams(next); }}>Показать все письма</Button>}
           {workspaceView === 'drafts' && visibleDrafts.length > 0 && !searchParams.get('campaign_id') ? (
           <PartnershipDraftsSection
@@ -2879,27 +2879,36 @@ export const PartnershipSearchPage: React.FC = () => {
           ) : null}
 
           {workspaceView === 'queue' && !searchParams.get('campaign_id') && !selectedSearchGroup.startsWith('task:') ? (
-          <PartnershipQueueSection
-            batches={visibleBatches}
-            selectedQueueIds={selectedQueueIds}
-            queueView={queueView}
-            queueViewOptions={QUEUE_VIEW_OPTIONS}
-            bulkQueueStatus={bulkQueueStatus}
-            queueReadyDraftsCount={queueReadyDrafts.length}
-            loading={loading}
-            sendQueueBusy={sendQueueBusy}
-            outcomeOptions={OUTCOME_OPTIONS}
-            onQueueViewChange={(value) => setQueueView(toQueueView(value))}
-            onRefresh={() => void loadBatches()}
-            onCreateBatch={createBatch}
-            onBulkQueueStatusChange={setBulkQueueStatus}
-            onBulkUpdateDelivery={bulkUpdateQueueDelivery}
-            onBulkDeleteQueueItems={bulkDeleteQueueItems}
-            onToggleAll={toggleAllQueueSelection}
-            onToggleQueueItem={toggleQueueSelection}
-            onApproveBatch={(batchId) => void approveBatch(batchId)}
-            onRecordReaction={(queueId, outcome) => void recordReaction(queueId, outcome)}
-          />
+          <div className="space-y-4">
+            <PartnershipQueueSection
+              batches={visibleBatches}
+              selectedQueueIds={selectedQueueIds}
+              queueView={queueView}
+              queueViewOptions={QUEUE_VIEW_OPTIONS}
+              bulkQueueStatus={bulkQueueStatus}
+              queueReadyDraftsCount={queueReadyDrafts.length}
+              loading={loading}
+              sendQueueBusy={sendQueueBusy}
+              outcomeOptions={OUTCOME_OPTIONS}
+              onQueueViewChange={(value) => setQueueView(toQueueView(value))}
+              onRefresh={() => void loadBatches()}
+              onCreateBatch={createBatch}
+              onBulkQueueStatusChange={setBulkQueueStatus}
+              onBulkUpdateDelivery={bulkUpdateQueueDelivery}
+              onBulkDeleteQueueItems={bulkDeleteQueueItems}
+              onToggleAll={toggleAllQueueSelection}
+              onToggleQueueItem={toggleQueueSelection}
+              onApproveBatch={(batchId) => void approveBatch(batchId)}
+              onRecordReaction={(queueId, outcome) => void recordReaction(queueId, outcome)}
+            />
+            <details className="rounded-[24px] border border-border bg-background p-4 shadow-sm">
+              <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-foreground">Все сообщения и статусы</summary>
+              <p className="mb-4 text-sm text-muted-foreground">Общий журнал подготовленных, отправленных и доставленных сообщений.</p>
+              <OutreachMessageQueue key={`${currentBusinessId}:${selectedSearchGroup}:all-messages:${sendRefreshVersion}`}
+                searchTaskId={null} businessId={currentBusinessId || undefined} scope="client_partnership" query="" channel="" status=""
+                campaignId={null} presentation="send" onChannelChange={() => {}} onStatusChange={() => {}} onOpenLead={(id) => setSelectedLeadId(id)} />
+            </details>
+          </div>
           ) : null}
           </>
           ) : null}

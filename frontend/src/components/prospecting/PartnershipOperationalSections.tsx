@@ -324,11 +324,12 @@ export function PartnershipQueueSection({
   const queueItemIds = getQueueItemIds(batches);
 
   return (
-    <div className="space-y-4 rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+    <section aria-labelledby="partnership-send-queue-title" className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-950">Отправка ({batches.length})</h2>
+          <h2 id="partnership-send-queue-title" className="text-xl font-semibold text-slate-950">Очередь на отправку</h2>
           <p className="mt-1 text-sm text-slate-500">Откройте письмо в почтовой программе, отправьте вручную и отметьте результат.</p>
+          <p className="mt-2 text-xs font-medium text-slate-400">Готовых очередей: <span className="tabular-nums text-slate-700">{batches.length}</span></p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Select value={queueView} onValueChange={onQueueViewChange}>
@@ -486,7 +487,7 @@ export function PartnershipQueueSection({
           ))}
         </>
       )}
-    </div>
+    </section>
   );
 }
 

@@ -126,11 +126,23 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
     } catch { if (epoch === scope.current) setError('Поиск не запущен. Обновите условия или проверьте доступный баланс.'); }
     finally { if (epoch === scope.current) setBusy(false); }
   };
+  const openNewSearch = (button: HTMLButtonElement) => {
+    returnFocus.current = button;
+    setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null);
+    setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination(''); setRequirements('');
+    setError(''); setFieldErrors({}); setTargetCount(10); setMaxSearchCalls(3); setSearchCreditsPerCall(5);
+    setLanguage('en'); setEvidenceTerms(''); setShortageOnly(false); setMode('find_only'); setEditing(true);
+  };
   if (demoMode) return null;
   if (!enabled) return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
-  return <section aria-labelledby="outreach-continuation-title" className="space-y-3 rounded-lg border p-4">
-    <h2 hidden={compact} id="outreach-continuation-title" className="text-lg font-semibold">Поиск компаний и обращения</h2>
-    <p hidden={compact} className="text-sm text-muted-foreground">Найдите компании, проверьте контакты и выберите подходящих. Письма отправляются только по отдельно согласованным правилам.</p>
+  return <section aria-labelledby="outreach-continuation-title" className={`space-y-3 border bg-background ${compact ? 'rounded-[24px] p-4 shadow-sm sm:p-5' : 'rounded-lg p-4'}`}>
+    <div className={compact ? 'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between' : 'space-y-2'}>
+      <div>
+        <h2 id="outreach-continuation-title" className="text-lg font-semibold">{compact ? 'Найдите новых партнёров' : 'Поиск компаний и обращения'}</h2>
+        <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{compact ? 'Задайте аудиторию и географию — LocalOS соберёт компании и подготовит их к проверке.' : 'Найдите компании, проверьте контакты и выберите подходящих. Письма отправляются только по отдельно согласованным правилам.'}</p>
+      </div>
+      {compact && <Button className="min-h-11 shrink-0 bg-slate-950 text-white hover:bg-slate-900" onClick={(event) => openNewSearch(event.currentTarget)}>Новый поиск</Button>}
+    </div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {items.filter(task => selectedTaskId ? task.id === selectedTaskId : !compact).map(task => <div key={task.id} className={compact ? "space-y-3" : "space-y-3 border-t pt-4"}>
       <OutreachGroupCard compact={compact} name={task.display_name || task.config.audience} presentation={task.presentation} busy={busy} onAction={(action) => {
@@ -178,7 +190,7 @@ export function OutreachContinuation({ businessId, selectedTaskId, onTasksChange
       </div>}
       </div></details>
     </div>)}
-    <Button variant={items.length ? 'outline' : 'default'} onClick={(event) => { returnFocus.current = event.currentTarget; setRequestId(crypto.randomUUID()); setReview(null); setEditingTask(null); setAudience(''); setOffer(''); setQuery(''); setCity(''); setAgencyCountry(''); setSoldDestination(''); setRequirements(''); setError(''); setFieldErrors({}); setTargetCount(10); setMaxSearchCalls(3); setSearchCreditsPerCall(5); setLanguage('en'); setEvidenceTerms(''); setShortageOnly(false); setMode('find_only'); setEditing(true); }}>Новый поиск</Button>
+    {!compact && <Button variant={items.length ? 'outline' : 'default'} onClick={(event) => openNewSearch(event.currentTarget)}>Новый поиск</Button>}
     <Dialog open={editing} onOpenChange={(open) => { if (!busy) setEditing(open); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(event) => { event.preventDefault(); returnFocus.current?.focus(); }}>
       <DialogTitle>{review ? 'Проверьте условия' : editingTask ? 'Изменить условия поиска' : 'Новый поиск'}</DialogTitle>
       <DialogDescription>Задайте аудиторию и требования. Работа начнётся после подтверждения.</DialogDescription>

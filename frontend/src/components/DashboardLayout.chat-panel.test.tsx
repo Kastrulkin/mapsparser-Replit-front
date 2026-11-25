@@ -50,7 +50,8 @@ function deferred<Value>() {
 }
 
 const textbox = () => screen.findByRole('textbox', { name: 'Вопрос или поручение для LocalOS' }, { timeout: 5000 });
-const launcher = () => screen.findByRole('button', { name: 'Чат с LocalOS' });
+const launcherName = 'Чат с помощником ЛокалОС';
+const launcher = () => screen.findByRole('button', { name: launcherName });
 
 beforeEach(() => {
   localStorage.clear();
@@ -66,7 +67,10 @@ beforeEach(() => {
 
 it('keeps the open chat and draft across sections, then expands the same workspace', async () => {
   open('/dashboard/profile?command=ignore-me');
-  fireEvent.click(await launcher());
+  const trigger = await launcher();
+  expect(trigger).toHaveClass('fixed', 'right-0', 'bottom-24');
+  expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Чат с LocalOS' })).toBeNull();
+  fireEvent.click(trigger);
   const panel = await screen.findByRole('region', { name: 'Боковой чат' });
   const input = await textbox();
   expect(input).toHaveValue('');
@@ -98,10 +102,11 @@ it('continues a request while collapsed and scopes the next workspace to the new
     business_id: 'hamik', conversation_id: 'chat-hamik', message: 'Проверь кабинет',
   })));
   fireEvent.keyDown(input, { key: 'Escape' });
-  expect(button).toHaveFocus();
-  expect(button).toHaveAttribute('aria-expanded', 'false');
+  const restoredLauncher = await launcher();
+  expect(restoredLauncher).toHaveFocus();
+  expect(restoredLauncher).toHaveAttribute('aria-expanded', 'false');
   await act(async () => reply.resolve({ data: { conversation_id: 'chat-hamik', operator_result: { status: 'completed', chat_response: 'Кабинет проверен' } } }));
-  fireEvent.click(button);
+  fireEvent.click(restoredLauncher);
   expect((await screen.findAllByText('Кабинет проверен')).length).toBeGreaterThan(0);
   fireEvent.change(await textbox(), { target: { value: 'Приватный черновик Хамика' } });
   fireEvent.click(screen.getByRole('button', { name: 'Выбрать Jinlian' }));
@@ -129,7 +134,7 @@ it('honors the same access as the full chat', async () => {
   ] });
   open('/dashboard/profile');
   await screen.findByRole('heading', { name: 'Профиль компании' });
-  expect(screen.queryByRole('button', { name: 'Чат с LocalOS' })).toBeNull();
+  expect(screen.queryByRole('button', { name: launcherName })).toBeNull();
   fireEvent.click(screen.getByRole('link', { name: 'Полный чат' }));
   expect(await screen.findByRole('heading', { name: /Оператор входит в тариф/ })).toBeInTheDocument();
   expect(api.get).not.toHaveBeenCalledWith('/operator/conversations/current', expect.anything());

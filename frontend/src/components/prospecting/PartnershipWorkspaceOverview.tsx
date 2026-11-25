@@ -23,18 +23,30 @@ export function PartnershipWorkspaceOverview({ workspaceView, rawLeadCount, pipe
     { value: 'sent', label: copy.replies, count: visibleReactionsCount, Icon: MessageSquare },
   ];
   return <>
-    {part !== 'navigation' && <header className="flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-semibold text-foreground">{language === 'ru' ? 'Партнёрства' : copy.title}</h1>
-      <div className="flex gap-1" aria-label={language === 'ru' ? 'Дополнительные представления' : 'Additional views'}>
+    {part !== 'navigation' && <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="max-w-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {language === 'ru' ? 'LocalOS · Партнёрства' : 'LocalOS · Partnerships'}
+        </p>
+        <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          {language === 'ru' ? 'Партнёрства' : copy.title}
+        </h1>
+        <p className="mt-3 max-w-2xl text-pretty text-sm leading-6 text-muted-foreground">
+          {language === 'ru'
+            ? 'Найдите подходящие компании, подготовьте письма и контролируйте отправку и ответы в одном рабочем процессе.'
+            : 'Find suitable companies, prepare messages, and track delivery and replies in one workspace.'}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2" aria-label={language === 'ru' ? 'Дополнительные представления' : 'Additional views'}>
         {[{ value: 'overview', label: copy.overview }, { value: 'analytics', label: copy.report }].map(view =>
-          <Button key={view.value} size="sm" variant={workspaceView === view.value ? 'secondary' : 'ghost'} aria-pressed={workspaceView === view.value} onClick={() => onWorkspaceChange(view.value)}>{view.label}</Button>)}
+          <Button key={view.value} variant={workspaceView === view.value ? 'default' : 'outline'} className="min-h-10" aria-pressed={workspaceView === view.value} onClick={() => onWorkspaceChange(view.value)}>{view.label}</Button>)}
       </div>
     </header>}
-    {part !== 'header' && <nav aria-label={language === 'ru' ? 'Этапы аутрича' : 'Outreach stages'} className="grid grid-cols-2 gap-1 border-b border-border bg-background sm:grid-cols-4">
+    {part !== 'header' && <nav aria-label={language === 'ru' ? 'Этапы аутрича' : 'Outreach stages'} className="grid grid-cols-2 gap-1 rounded-[24px] border border-border bg-background p-1.5 shadow-sm sm:grid-cols-4">
       {stages.map(({ value, label, count, Icon }) => {
         const active = workspaceView === value || value === 'raw' && workspaceView === 'pipeline';
-        return <Button key={value} variant={active ? "brand" : "ghost"} aria-current={active ? 'page' : undefined} onClick={() => onWorkspaceChange(value)} className={`min-h-11 justify-center gap-2 rounded-none border-b-2 ${active ? 'border-primary shadow-none hover:scale-100' : 'border-transparent text-muted-foreground'}`}>
-          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className="min-w-[3ch] shrink-0 rounded bg-muted px-1.5 text-center text-xs text-foreground tabular-nums">{count}</span>
+        return <Button key={value} variant="ghost" data-shared-treatment={active ? 'brand' : undefined} aria-current={active ? 'page' : undefined} onClick={() => onWorkspaceChange(value)} className={`min-h-11 justify-center gap-2 rounded-[18px] transition-[background-color,color] ${active ? 'bg-slate-950 text-white hover:bg-slate-900 hover:text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+          <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{label}</span><span className={`min-w-[3ch] shrink-0 rounded-md px-1.5 text-center text-xs tabular-nums ${active ? 'bg-white/15 text-white' : 'bg-muted text-foreground'}`}>{count}</span>
         </Button>;
       })}
     </nav>}
