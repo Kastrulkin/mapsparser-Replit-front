@@ -11,9 +11,9 @@ const response = (data: Record<string, unknown>) => Promise.resolve(new Response
   headers: { 'Content-Type': 'application/json' },
 }));
 
-const ContextRoute = () => (
+const ContextRoute = ({ demoMode = true }: { demoMode?: boolean }) => (
   <Outlet context={{
-    user: { id: 'demo-user', demo_mode: true },
+    user: { id: 'test-user', demo_mode: demoMode },
     currentBusinessId: 'demo-business',
     currentBusiness: { id: 'demo-business', name: 'Roga i Kopyta', subscription_tier: 'starter', subscription_status: 'active' },
     businesses: [],
@@ -157,7 +157,7 @@ describe('CardOverviewPage localization', () => {
       <MemoryRouter initialEntries={['/?tab=reviews&review_filter=needs_reply']}>
         <LanguageProvider>
           <Routes>
-            <Route element={<ContextRoute />}>
+            <Route element={<ContextRoute demoMode={false} />}>
               <Route index element={<CardOverviewPage />} />
             </Route>
           </Routes>
