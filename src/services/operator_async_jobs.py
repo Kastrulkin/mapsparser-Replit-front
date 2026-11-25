@@ -531,6 +531,10 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             result = process_source(claimed)
             status = "failed" if result.get("state") == "unavailable" else "completed"
             stage, progress = "Чтение источника проверено", 100
+        elif kind == "initial_setup_photos":
+            from services.initial_business_setup import process_photos
+            result = process_photos(claimed)
+            status, stage, progress = "completed", "Проверка фото завершена", 100
         elif kind == "content_plan_generate":
             from services.content_plan_service import create_generated_content_plan
 

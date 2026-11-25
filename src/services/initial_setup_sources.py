@@ -6,7 +6,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
-from services import map_card_initial_audit, website_seo_audit
+from services import initial_setup_photos, map_card_initial_audit, website_seo_audit
 
 
 SOCIALS = {
@@ -201,7 +201,8 @@ def read_map(source, snapshot):
     observed_at = raw.get('updated_at') or raw.get('created_at')
     if isinstance(observed_at, datetime):
         observed_at = observed_at.isoformat()
+    photos = initial_setup_photos.candidates(provider, raw) if not source.get('competitor') else []
     return {'status': 'ready', 'note': message, 'name': title, 'catalog': catalog_rows(raw, url), 'profile': profile,
             'facts': [dated(description, url)] if description else [],
             'metrics': {'rating': clean(raw.get('rating'), 20), 'reviews': clean(raw.get('reviews_count'), 20)},
-            'observed_at': clean(observed_at, 60)}
+            'observed_at': clean(observed_at, 60), 'photo_candidates': photos}

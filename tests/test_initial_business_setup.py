@@ -389,6 +389,13 @@ def test_website_audit_refresh_is_separate_from_saved_catalog_and_uses_same_perm
     state = client.get(SETUP + HAMIK).get_json()['setup']
     key = state['sources'][0]['key']
     facts = state['facts']
+    row = setup.load(cursor, HAMIK, lock=True)
+    photo_report = {'status': 'ready', 'shortlist': [{'key': 'fixture-photo'}]}
+    row['data'].update(photo_report=photo_report, photo_report_scope=setup._photo_scope(row))
+    setup.persist(cursor, row)
+    conn.commit()
+    state = client.get(SETUP + HAMIK).get_json()['setup']
+    assert state['photo_report'] == photo_report
     assert 'website_audit' not in state['sources'][0]
     state = action(client, HAMIK, 'prepare', state)
     state = action(client, HAMIK, 'save', state)
@@ -409,6 +416,7 @@ def test_website_audit_refresh_is_separate_from_saved_catalog_and_uses_same_perm
     assert state['sources'][0]['website_audit'] == refreshed
     assert 'website_audit_job' not in state['sources'][0]
     assert state['facts'] == facts
+    assert state['photo_report'] == photo_report
     assert state['saved'] and not state['seo_dirty']
     state = action(client, HAMIK, 'website_audit', state, key=key)
     monkeypatch.setattr(setup, 'read_website', lambda url: {'status': 'unavailable', 'note': 'Сайт недоступен.'})
@@ -453,3 +461,26 @@ def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monke
     assert client.get(SETUP + business).get_json()['setup']['provisional'] is False
     cursor.execute('SELECT relation_role FROM business_company_links WHERE business_id=%s', (business,))
     assert cursor.fetchone()['relation_role'] == 'owner'
+
+def test_website_audit_can_use_pinned_node_on_existing_images(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from services import website_seo_audit
+
+    runner = tmp_path / 'audit.mjs'
+    node = tmp_path / 'node'
+    monkeypatch.setattr(website_seo_audit, 'IMAGE_RUNNER', tmp_path / 'missing-image-runner.mjs')
+    monkeypatch.setattr(website_seo_audit, 'LOCAL_RUNNER', runner)
+    monkeypatch.setattr(website_seo_audit, 'BUNDLED_NODE', node)
+    monkeypatch.setattr(website_seo_audit.shutil, 'which', lambda binary: str(node) if binary == str(node) else None)
+    page = {'url': 'https://example.com/', 'html': '<title>Fixture</title>'}
+
+    def run(args, **kwargs):
+        assert args == [str(node), '--max-old-space-size=192', str(runner)]
+        assert json.loads(kwargs['input']) == [page]
+        return SimpleNamespace(stdout=json.dumps([{'url': page['url'], 'findings': []}]))
+
+    monkeypatch.setattr(website_seo_audit.subprocess, 'run', run)
+    report = website_seo_audit.audit_pages([page])
+    assert report['status'] == 'ready'
+    assert report['engine'] == 'SEOmator'

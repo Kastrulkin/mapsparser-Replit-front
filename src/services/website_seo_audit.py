@@ -9,6 +9,7 @@ from pathlib import Path
 
 IMAGE_RUNNER = Path('/opt/localos/website-seo/audit.mjs')
 LOCAL_RUNNER = Path(__file__).resolve().parents[1] / 'website_seo' / 'audit.mjs'
+BUNDLED_NODE = LOCAL_RUNNER.parent / 'node_modules' / '.bin' / 'node'
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +20,7 @@ def unavailable(note):
 def audit_pages(pages):
     if not pages:
         return unavailable('Для SEO-проверки нужна доступная HTML-страница. Проверьте ссылку и повторите.')
-    binary = shutil.which('node')
+    binary = shutil.which('node') or shutil.which(str(BUNDLED_NODE))
     runner = IMAGE_RUNNER if IMAGE_RUNNER.is_file() else LOCAL_RUNNER
     if not binary:
         return unavailable('SEO-проверка временно недоступна. Можно повторить позже.')

@@ -16,6 +16,7 @@ from core.service_safe_wordstat import normalize_query_text
 from service_categorizer import categorizer
 from wordstat_client import WordstatClient, WordstatTemporaryUnavailable, extract_popular_queries
 from wordstat_config import config
+from services import initial_setup_photos
 from services.initial_setup_sources import clean, dated, read_map, read_social, read_website, source_url
 from services.website_seo_audit import unavailable as audit_unavailable
 
@@ -287,6 +288,106 @@ def process_source(claimed):
         db.rollback_and_close()
 
 
+def _photo_sources(row):
+    return {key: source for key, source in row['data'].get('sources', {}).items()
+            if source['kind'] == 'map' and not source.get('competitor')}
+
+
+def _photo_scope(row):
+    return fingerprint(row['data'].get('activity_type'), [
+        (key, source['status'], source.get('checked_at'), source.get('photo_candidates'))
+        for key, source in sorted(_photo_sources(row).items())
+    ])
+
+
+def _queue_photos(cursor, row, actor_id, *, key=None, category=None):
+    from services.operator_async_jobs import create_operator_async_job
+
+    data = row['data']
+    tracker = data.setdefault('photo_job', {})
+    scope = _photo_scope(row)
+    if tracker.get('id'):
+        cursor.execute('SELECT status FROM operator_async_jobs WHERE id=%s AND business_id=%s',
+                       (tracker['id'], row['business_id']))
+        job = cursor.fetchone()
+        if job and job['status'] in ('queued', 'running'):
+            raise Conflict('Дождитесь текущей проверки фотографий.')
+    if key is not None:
+        if (data.get('photo_report_scope') != scope or not isinstance(key, str)
+                or key not in {item['key'] for item in data.get('photo_report', {}).get('review', [])}):
+            raise Conflict('Снимок больше не в текущей подборке. Обновите проверку.')
+        if not isinstance(category, str) or category not in initial_setup_photos.LABELS:
+            raise ValueError('Выберите, что показано на фото.')
+        data.setdefault('photo_picks', {})[key] = category
+    attempt = tracker.get('attempt', 0) + 1
+    job = create_operator_async_job(
+        cursor, user_id=actor_id, action_id=None, business_id=row['business_id'],
+        kind=initial_setup_photos.JOB_KIND, payload={'scope': scope},
+        idempotency_key=f'initial-setup-photos:{row["business_id"]}:{attempt}',
+        stage='Ожидает проверки фотографий', max_attempts=1,
+    )
+    tracker.update(id=job['id'], attempt=attempt)
+
+
+def process_photos(claimed):
+    from database_manager import DatabaseManager
+    from services.business_permissions import load_actor, require_permission
+
+    business_id, actor_id = claimed['business_id'], claimed['user_id']
+    scope = claimed['payload_json']['scope']
+    if not allowed(business_id):
+        return {'state': 'setup_disabled'}
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        require_permission(cursor, business_id, load_actor(cursor, actor_id), 'business.settings.write')
+        row = load(cursor, business_id)
+        if not row or row['data'].get('photo_job', {}).get('id') != str(claimed['id']) or _photo_scope(row) != scope:
+            return {'state': 'obsolete'}
+        cards = []
+        for key, source in _photo_sources(row).items():
+            photos = source.get('photo_candidates')
+            if not photos:
+                photos = initial_setup_photos.candidates(source['provider'], snapshot(cursor, business_id, source) or {})
+            cards.append({**source, 'source_key': key, 'photo_candidates': photos})
+        picks = row['data'].get('photo_picks', {})
+        db.conn.rollback()
+        # Older company records may have counts but no gallery URLs. Reuse the native readers
+        # for the missing gallery, outside the transaction and without any paid fallback.
+        refresh = [card for card in cards if not card['photo_candidates'] and card['provider'] in ('yandex', '2gis')
+                   and card['status'] in ('ready', 'unavailable', 'link_only')][:2]
+        for card in refresh:
+            try:
+                card['photo_candidates'] = read_map(card, None).get('photo_candidates', [])
+            except Exception:
+                continue
+        selection = initial_setup_photos.review_cards(cards, picks)
+        row = load(cursor, business_id, lock=True)
+        require_permission(cursor, business_id, load_actor(cursor, actor_id), 'business.settings.write')
+        tracker = row.get('data', {}).get('photo_job', {})
+        cursor.execute("SELECT 1 FROM operator_async_jobs WHERE id=%s AND lease_token=%s AND status='running' FOR UPDATE",
+                       (claimed['id'], claimed['lease_token']))
+        if (not cursor.fetchone() or tracker.get('id') != str(claimed['id']) or _photo_scope(row) != scope
+                or not allowed(business_id)):
+            return {'state': 'obsolete'}
+        profile = read_business(cursor, business_id)
+        if not profile:
+            return {'state': 'obsolete'}
+        for card in refresh:
+            if card['photo_candidates']:
+                row['data']['sources'][card['source_key']]['photo_candidates'] = card['photo_candidates']
+        row['data']['photo_report'] = initial_setup_photos.build_report(
+            cursor, business_id, profile, row['data'].get('activity_type'), selection,
+        )
+        row['data']['photo_report_scope'] = _photo_scope(row)
+        tracker.pop('id')
+        persist(cursor, row)
+        db.conn.commit()
+        return {'state': 'ready'}
+    finally:
+        db.rollback_and_close()
+
+
 class _SetupWordstatSearch:
     def __init__(self):
         self.client = WordstatClient.from_config(config) if config.is_configured() else None
@@ -469,6 +570,9 @@ def status(cursor, row, profile, can_edit):
     ids = [item['job_id'] for item in items.values() if item.get('job_id') and item['status'] == 'queued']
     ids.extend(track['job_id'] for item in items.values()
                if (track := item.get('website_audit_job')) and track.get('job_id'))
+    photo_job = data.get('photo_job', {}).get('id')
+    if photo_job:
+        ids.append(photo_job)
     jobs = {}
     if ids:
         cursor.execute('SELECT id,status FROM operator_async_jobs WHERE business_id=%s AND id=ANY(%s)',
@@ -477,7 +581,7 @@ def status(cursor, row, profile, can_edit):
     sources = []
     for key, item in items.items():
         visible = {k: v for k, v in item.items()
-                   if k not in ('profile', 'facts', 'links', 'catalog', 'job_id', 'website_audit_job')}
+                   if k not in ('profile', 'facts', 'links', 'catalog', 'job_id', 'photo_candidates', 'website_audit_job')}
         if item['status'] == 'queued':
             state = jobs.get(item.get('job_id'))
             if not state or state in ('failed', 'cancelled', 'completed'):
@@ -491,12 +595,21 @@ def status(cursor, row, profile, can_edit):
                                         audit_unavailable('SEO-проверка была прервана. Можно повторить.'))
         visible.update(key=key, service_count=len(item.get('catalog', [])))
         sources.append(visible)
+    photo_report = data.get('photo_report')
+    if photo_job:
+        job_state = jobs.get(photo_job)
+        photo_report = {'status': job_state} if job_state in ('queued', 'running') else {
+            'status': 'unavailable', 'note': 'Проверка фото прервалась. Запустите её ещё раз.',
+        }
+    elif photo_report and ('shortlist' not in photo_report or data.get('photo_report_scope') != _photo_scope(row)):
+        photo_report = {'status': 'unavailable', 'note': 'Обновите отчёт по фото, чтобы получить актуальную подборку.'}
     return {'business_id': row['business_id'], 'revision': row['revision'], 'origin': row['origin'], 'can_edit': can_edit,
             'provisional': row['provisional'], 'profile': {k: profile.get(k) for k in CURRENT_FIELDS},
             'sources': sources, 'services': _service_review_items(cursor, row), 'seo_dirty': bool(data.get('seo_dirty')),
             'seo_prepared': bool(data.get('seo_prepared')), 'saved': bool(data.get('saved')),
             'started': bool(data.get('started')), 'activity_type': data.get('activity_type'),
             'category_keywords': data.get('category_keywords', []),
+             'photo_report': photo_report,
             'facts': [{'key': key, **value, 'accepted': key in data.get('accepted_facts', [])}
                       for key, value in source_findings(row, 'facts').items()],
             'profile_choices': [{'key': key, **value} for key, value in source_findings(row, 'profile').items()],
@@ -669,6 +782,15 @@ def operate(cursor, row, actor, profile, payload):
     if action == 'read':
         queue_added(cursor, row, actor_id)
         return 'Чтение добавленных источников запущено.'
+    if action == 'photo_check':
+        _queue_photos(cursor, row, actor_id)
+        return 'Проверка фото запущена.'
+    if action == 'photo_pick':
+        key = payload.get('key')
+        if not isinstance(key, str) or not key:
+            raise ValueError('Выберите фотографию.')
+        _queue_photos(cursor, row, actor_id, key=key, category=payload.get('category'))
+        return 'Проверяем кадр. Если он подходит, добавим ссылку в подборку.'
     if action == 'website_audit':
         key = payload.get('key')
         if not isinstance(key, str) or key not in row['data'].get('sources', {}):
@@ -700,6 +822,10 @@ def operate(cursor, row, actor, profile, payload):
         sources = status(cursor, row, profile, True)['sources']
         if any(source['status'] in ('added', 'queued', 'running') for source in sources):
             raise Conflict('Дождитесь чтения источников перед разбором услуг.')
+        if (any(source.get('photo_candidates') for source in _photo_sources(row).values())
+                and not row['data'].get('photo_job', {}).get('id')
+                and row['data'].get('photo_report_scope') != _photo_scope(row)):
+            _queue_photos(cursor, row, actor_id)
         if prepare_seo(cursor, row, profile):
             return f'Разбор и поисковые запросы готовы для первых {MAX_ANALYZED_SERVICES} услуг. В каталоге есть и другие позиции.'
         return 'Разбор каталога готов. Проверьте услуги и поисковые запросы.'
