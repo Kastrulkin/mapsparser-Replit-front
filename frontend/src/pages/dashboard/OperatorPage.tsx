@@ -324,7 +324,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
   const demoMode = Boolean(user?.demo_mode);
   const [setupRequested, setSetupRequested] = useState(false);
   const initialSetupEnabled = import.meta.env.VITE_LOCALOS_INITIAL_SETUP_ENABLED === 'true';
-  const setupLink = initialSetupEnabled && workParams.get('setup') === '1';
+  const setupLink = workParams.get('setup') === '1';
   const setupMode = !demoMode && Boolean(currentBusinessId) && (setupLink || setupRequested);
   const setupTarget = workParams.get('business_id');
   const setupBusinessId = setupTarget && setupTarget !== currentBusinessId ? null : currentBusinessId;
@@ -675,6 +675,17 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
       if(activeBusiness.current!==currentBusinessId)return;
       pendingRequest.current = { businessId: "", text: "", groupId: "", id: "" };
       appendPair(text, result);
+      if (result.capability === 'business.initial_setup' && ['queued', 'processing', 'completed'].includes(result.status)) {
+        setSetupRequested(true);
+        if (!panel) {
+          setSearchParams(current => {
+            const next = new URLSearchParams(current);
+            next.set('setup', '1');
+            next.set('business_id', currentBusinessId);
+            return next;
+          }, { replace: true });
+        }
+      }
       if (result.task?.id && (!result.task.business_id || result.task.business_id === currentBusinessId)) {
         const task = { ...result.task, business_id: currentBusinessId };
         setSavedSearchTask(task);

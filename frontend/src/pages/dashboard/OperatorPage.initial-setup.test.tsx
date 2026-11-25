@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
 import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
@@ -35,6 +35,7 @@ const setup = {
 };
 
 it('routes the existing chat composer to the selected company and opens the same results through the menu', async () => {
+  vi.stubEnv('VITE_LOCALOS_INITIAL_SETUP_ENABLED', 'false');
   let state = setup;
   vi.mocked(api.get).mockImplementation(async path => ({
     data: path === endpoint ? { available: true, setup: state } : { messages: [], conversation: null },
@@ -192,4 +193,37 @@ it('refreshes a previously read site and shows the page and proposed SEO fix', a
   fireEvent.click(await screen.findByText('SEO-аудит сайта · Рекомендаций: 1', {}, { timeout: 4000 }));
   expect(screen.getByRole('link', { name: site })).toBeVisible();
   expect(screen.getByText('Добавьте уникальный title.')).toBeVisible();
+});
+
+it('opens the existing setup steps when the server accepts a chat command', async () => {
+  const queued = {
+    ...setup,
+    seo_prepared: false,
+    sources: setup.sources.map(source => ({ ...source, status: 'queued' })),
+  };
+  vi.mocked(api.get).mockImplementation(async path => ({
+    data: path === endpoint ? { available: true, setup: queued } : { messages: [], conversation: null },
+  }));
+  vi.mocked(api.post).mockResolvedValue({
+    data: { operator_result: { status: 'queued', capability: 'business.initial_setup', chat_response: 'Первичная настройка начата.' } },
+  });
+  function Context() {
+    const location = useLocation();
+    return <><output aria-label="Текущий адрес">{location.search}</output><Outlet context={{
+      currentBusinessId: businessId,
+      currentBusiness: { id: businessId, name: setup.profile.name },
+    }} /></>;
+  }
+
+  render(<MemoryRouter initialEntries={['/dashboard/operator?business_id=' + businessId]}>
+    <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
+  </MemoryRouter>);
+  const input = await screen.findByRole('textbox', { name: 'Вопрос или поручение для LocalOS' });
+  const command = 'Начни первичную настройку ' + setup.sources[0].url;
+  fireEvent.change(input, { target: { value: command } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/operator/chat', expect.objectContaining({ business_id: businessId, message: command })));
+  expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
+  expect(screen.getByLabelText('Текущий адрес')).toHaveTextContent('setup=1');
 });
