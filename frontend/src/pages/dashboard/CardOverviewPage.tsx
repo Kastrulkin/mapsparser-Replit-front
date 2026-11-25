@@ -1,5 +1,6 @@
 import type { Competitor, ManualCompetitor } from '@/components/dashboard/CardOverviewTabs';
 import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/dashboard/CardOverviewTabs';
+import { DemoReviews } from './demo/DemoReviews';
 import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
 import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
 import type { SaveServiceProposal, ServiceProposal } from '@/components/initial-setup/ServiceProposals';
@@ -1274,7 +1275,7 @@ const CardOverviewWorkspace = () => {
           </TabsContent>
 
           <TabsContent value="reviews">
-            <ReviewsTab
+            {isDemoMode ? <DemoReviews /> : <ReviewsTab
               automationAllowed={mapsAccess.allowed}
               automationLockedMessage={mapsLockedMessage}
               businessName={currentBusiness?.name}
@@ -1282,7 +1283,7 @@ const CardOverviewWorkspace = () => {
               aggregateScope={!isDemoMode && isNetworkRepresentative ? 'network' : 'business'}
               onOpenLocation={onBusinessChange}
               initialFilter={reviewFocus}
-            />
+            />}
           </TabsContent>
 
           <TabsContent value="news">

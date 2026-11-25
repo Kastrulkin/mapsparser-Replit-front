@@ -226,7 +226,7 @@ export const mapIntegrationsState = (rawState: IntegrationsRegistryRawState): Se
       id: 'outreach_vk',
       name: 'VK-сообщество для аутрича',
       tag: 'Коммуникации',
-      description: 'Личный профиль для одобренных сообщений и проверки ответов.',
+      description: 'Сообщество VK для одобренных сообщений и проверки ответов.',
       connectionType: 'oauth',
       status: vkOutreachReady ? 'connected' : vkOutreachSender ? 'action_required' : 'not_connected',
       nextAction: vkOutreachReady

@@ -4,22 +4,46 @@ import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLanguage } from '@/i18n/LanguageContext.logic';
+import { getPartnershipWorkspaceCopy } from '@/i18n/partnershipWorkspaceCopy';
 import { demoNavigationCopy } from '@/components/guided-tour/demoNavigationCopy';
 import { workNavigationCopy } from '@/lib/workNavigation';
-import { DEMO_CARE_ROUTE, demoWalkthroughCopy } from './demoWalkthroughCopy';
+import { DEMO_CARE_ROUTE, DEMO_ROOM_ROUTE, demoWalkthroughCopy } from './demoWalkthroughCopy';
 
-type DemoArea = 'today' | 'operator' | 'influencers' | 'journal' | 'finance' | 'progress' | 'growth' | 'profile';
+type DemoArea = 'today' | 'operator' | 'influencers' | 'journal' | 'finance' | 'progress' | 'growth' | 'profile' | 'partnerships';
 export function DemoRoute({ area, children }: { area: DemoArea; children: ReactNode }) {
  const [params] = useSearchParams();
  const context = useOutletContext<{ demoMode?: boolean; user?: { demo_mode?: boolean } }>();
  if (!context.demoMode && !context.user?.demo_mode) return <>{children}</>;
  if (area === 'profile' && params.get('section') === 'knowledge') return <DemoBusinessKnowledge />;
+ if (area === 'partnerships') return <DemoPartnerships />;
  return <DemoWorkspace key={area} area={area} />;
 }
 function Panel({ title, children, target }: { title: string; children: ReactNode; target?: string }) {
  return <Card data-tour-target={target}><CardHeader><CardTitle className="text-lg">{title}</CardTitle></CardHeader><CardContent className="space-y-3">{children}</CardContent></Card>;
 }
-function DemoWorkspace({ area }: { area: DemoArea }) {
+function DemoPartnerships() {
+ const { language } = useLanguage();
+ const copy = getPartnershipWorkspaceCopy(language);
+ const sample = demoWalkthroughCopy(language);
+
+ return (
+  <section className="space-y-5 pb-16" data-tour-target="partnership-workspace">
+   <header className="space-y-2">
+    <h1 className="text-3xl font-semibold tracking-tight">{workNavigationCopy(language).label('partnerships')}</h1>
+    <p className="text-sm text-muted-foreground">{demoNavigationCopy(language).example}</p>
+   </header>
+   <Panel title={copy.demoPartnerName} target="partnership-candidates">
+    <p className="font-medium">{copy.demoOfferTitle}</p>
+    <p>{sample.roomOffer}</p>
+    <p className="text-sm text-muted-foreground">{sample.offerStatus}</p>
+    <Button asChild><Link to={DEMO_ROOM_ROUTE}>{copy.demoOpenRoom}</Link></Button>
+   </Panel>
+   <Panel title={copy.demoExplanationTitle}><p>{copy.demoExplanation}</p></Panel>
+  </section>
+ );
+}
+
+function DemoWorkspace({ area }: { area: Exclude<DemoArea, 'partnerships'> }) {
  const { language }=useLanguage(); const t=demoWalkthroughCopy(language); const n=workNavigationCopy(language); const d=demoNavigationCopy(language);
  const [revealed,setRevealed]=useState(false); const [focus,setFocus]=useState(''); const [params]=useSearchParams();
  const names={today:n.label('today'),operator:n.label('operator'),influencers:n.label('influencers'),journal:language==='ru'?'Рабочий журнал':'Work journal',finance:n.label('finance'),progress:n.label('progress'),growth:language==='ru'?'Пути роста':'Growth paths',profile:n.label('profile')};
@@ -39,5 +63,5 @@ function DemoWorkspace({ area }: { area: DemoArea }) {
 }
 export function DemoRoomPage() {
  const {language}=useLanguage(); const t=demoWalkthroughCopy(language);
- return <main className="mx-auto max-w-3xl space-y-5 p-4 py-8 sm:p-8"><header className="space-y-2"><h1 className="text-3xl font-semibold">{t.roomTitle}</h1><p role="note" className="rounded-lg border bg-muted p-4">{t.roomHint}</p></header><Panel title={language==='ru'?'Рога и копыта → Ромашка':'Horns and Hooves → Chamomile'}><p>{t.roomOffer}</p><p>{language==='ru'?'Учебное предложение согласовано · отправка не выполнена':'Sample offer approved · not sent'}</p></Panel><Panel title={t.roomDiscussion}><p>{t.roomComment}</p><p>{t.author}: {t.reason}</p></Panel><Button asChild><Link to="/dashboard/partnerships?demo=romashka">{t.back}</Link></Button></main>;
+ return <main className="mx-auto max-w-3xl space-y-5 p-4 py-8 sm:p-8"><header className="space-y-2"><h1 className="text-3xl font-semibold">{t.roomTitle}</h1><p role="note" className="rounded-lg border bg-muted p-4">{t.roomHint}</p></header><Panel title={language==='ru'?'Рога и копыта → Ромашка':'Horns and Hooves → Chamomile'}><p>{t.roomOffer}</p><p>{t.offerStatus}</p></Panel><Panel title={t.roomDiscussion}><p>{t.roomComment}</p><p>{t.author}: {t.reason}</p></Panel><Button asChild><Link to="/dashboard/partnerships?demo=romashka">{t.back}</Link></Button></main>;
 }

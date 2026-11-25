@@ -39,18 +39,24 @@ function isStage(value: unknown): value is Stage {
 }
 
 function readStoredPlan(defaultDraft: string) {
+  const initial = { stage: 'intro' satisfies Stage, draft: defaultDraft, reviewedDraft: undefined };
   const saved = window.sessionStorage.getItem(STORAGE_KEY);
-  if (isStage(saved)) return { stage: saved, draft: defaultDraft };
-  if (!saved) return { stage: 'intro' satisfies Stage, draft: defaultDraft };
+  if (isStage(saved)) return { ...initial, stage: saved };
+  if (!saved) return initial;
   try {
     const parsed = JSON.parse(saved);
     if (parsed && isStage(parsed.stage) && typeof parsed.draft === 'string') {
-      return { stage: parsed.stage, draft: parsed.draft };
+      const stage = parsed.stage;
+      return {
+        stage,
+        draft: parsed.draft,
+        reviewedDraft: typeof parsed.reviewedDraft === 'string' ? parsed.reviewedDraft : undefined,
+      };
     }
   } catch {
     // Ignore stale or malformed demo-session state and start with safe defaults.
   }
-  return { stage: 'intro' satisfies Stage, draft: defaultDraft };
+  return initial;
 }
 
 export function DemoContentPlanPage() {
@@ -63,33 +69,55 @@ export function DemoContentPlanPage() {
   const [period,setPeriod] = useState(t.periodValue);
   const [frequency,setFrequency] = useState(t.frequencyValue);
   const [channels,setChannels] = useState('Telegram · VK · Google');
-  const [stage, setStage] = useState<Stage>(() => readStoredPlan(t.draftValue).stage);
-  const [draft, setDraft] = useState(() => selectedItem === DEMO_CARE_ITEM_ID ? sample.taskBody : readStoredPlan(sample.taskBody).draft);
+  const [storedPlan] = useState(() => readStoredPlan(sample.taskBody));
+  const [stage, setStage] = useState<Stage>(() => selectedItem === DEMO_CARE_ITEM_ID ? 'review' : storedPlan.stage);
+  const [draft, setDraft] = useState<string>(storedPlan.draft);
+  const [reviewedDraft, setReviewedDraft] = useState<string | undefined>(storedPlan.reviewedDraft);
+  const reviewed = reviewedDraft === draft;
+
+  const editDraft = (value: string) => {
+    setDraft(value);
+    setReviewedDraft(undefined);
+  };
 
   useEffect(() => {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, stage, draft }));
-  }, [draft, stage]);
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, stage, draft, reviewedDraft }));
+  }, [draft, stage, reviewedDraft]);
   useEffect(() => {
     const requestedStage = searchParams.get('demo_stage');
-    if (selectedItem === DEMO_CARE_ITEM_ID && !requestedStage) { setStage('review'); setDraft(sample.taskBody); return; }
+    if (selectedItem === DEMO_CARE_ITEM_ID && !requestedStage) { setStage('review'); return; }
     if (requestedStage === 'setup' || requestedStage === 'preview' || requestedStage === 'saved' || requestedStage === 'review') setStage(requestedStage);
-  }, [searchParams, selectedItem, sample.taskBody]);
+  }, [searchParams, selectedItem]);
 
   const advance = (nextStage: Stage) => {
     setStage(nextStage);
     setSearchParams(current => { const next = new URLSearchParams(current); next.set('demo_stage',nextStage); return next; }, {replace:true});
     window.dispatchEvent(new CustomEvent('localos:demo-content-stage', {detail:nextStage}));
   };
-  const reset = () => { window.sessionStorage.removeItem(STORAGE_KEY); setSearchParams({}); setStage('intro'); setDraft(sample.taskBody); };
+  const reset = () => {
+    setSearchParams({});
+    setGoal(t.goalValue);
+    setPeriod(t.periodValue);
+    setFrequency(t.frequencyValue);
+    setChannels('Telegram · VK · Google');
+    setStage('intro');
+    editDraft(sample.taskBody);
+  };
 
   return <div className="space-y-5 pb-16" data-tour-target="content-calendar">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{t.eyebrow}</div><h1 className="mt-1 text-balance text-3xl font-semibold text-slate-950">{t.title}</h1><p className="mt-2 max-w-3xl text-pretty text-sm leading-6 text-slate-600">{t.description}</p></div>{stage === 'intro' ? <Button type="button" onClick={() => advance('setup')} className="min-h-11 gap-2 transition-transform active:scale-[0.96]"><Sparkles className="h-4 w-4" />{t.create}</Button> : <Button type="button" variant="outline" onClick={reset} className="min-h-11 transition-transform active:scale-[0.96]">{t.startOver}</Button>}</header>
     <div className="grid grid-cols-4 gap-2" aria-label={t.title}>{(['setup', 'preview', 'saved', 'review'] satisfies Stage[]).map((value, index) => <div key={value} className={cn('h-1.5 rounded-full', ['setup', 'preview', 'saved', 'review'].indexOf(stage) >= index ? 'bg-orange-500' : 'bg-slate-200')} />)}</div>
     {stage === 'intro' ? <section className="rounded-2xl bg-white p-8 text-center shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><CalendarDays className="mx-auto h-9 w-9 text-slate-400" /><h2 className="mt-4 text-balance text-xl font-semibold text-slate-950">{t.create}</h2><p className="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-slate-600">{t.setupHint}</p></section> : null}
     {stage === 'setup' ? <section data-tour-target="content-plan-setup" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-xl font-semibold text-slate-950">{t.setup}</h2><p className="mt-1 text-pretty text-sm text-slate-500">{t.setupHint}</p><div className="mt-5 grid gap-3 sm:grid-cols-2"><Field label={t.goal} value={goal} onChange={setGoal} /><Field label={t.period} value={period} onChange={setPeriod} /><Field label={t.frequency} value={frequency} onChange={setFrequency} /><Field label={t.channels} value={channels} onChange={setChannels} /></div><Button type="button" onClick={() => advance('preview')} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]">{t.generate}<ChevronRight className="h-4 w-4" /></Button></section> : null}
-    {stage === 'preview' ? <section data-tour-target="content-plan-preview" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-xl font-semibold text-slate-950">{t.preview}</h2><p className="mt-1 text-pretty text-sm text-slate-500">{t.editHint}</p><p className="mt-3 text-sm">{goal} · {period} · {frequency} · {channels}</p><div className="mt-5 rounded-xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.theme}</div><div className="mt-1 font-semibold text-slate-950">{sample.task}</div><div className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.draft}</div><Textarea aria-label={t.draft} value={draft} onChange={(event) => setDraft(event.target.value)} className="mt-2 min-h-32 bg-white" /><p className="mt-2 text-xs text-slate-500">{t.editHint}</p></div><Button type="button" onClick={() => advance('saved')} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]"><Check className="h-4 w-4" />{t.save}</Button></section> : null}
-    {stage === 'saved' || stage === 'review' ? <section data-tour-target="content-plan-save" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Check className="h-5 w-5" /></div><div><h2 className="text-balance text-xl font-semibold text-slate-950">{sample.saveTitle}</h2><p className="mt-1 text-sm text-slate-600">{sample.saveHint}</p></div></div><div className="mt-5 rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.calendar}</div><div className="mt-1 font-semibold text-slate-950">{sample.task}</div></div><span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{t.review}</span></div><p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{draft}</p></div>{stage === 'saved' ? <Button type="button" onClick={() => advance('review')} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]">{t.review}<ChevronRight className="h-4 w-4" /></Button> : null}</section> : null}
-    {stage === 'review' ? <section data-tour-target="content-plan-review" className="rounded-2xl bg-amber-50 p-5 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.24)]"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" /><div><h2 className="font-semibold text-slate-950">{t.review}</h2><p className="mt-1 text-pretty text-sm leading-6 text-slate-700">{t.safety}</p><h3 className="mt-4 font-medium">{sample.task}</h3><Textarea aria-label={t.draft} value={draft} onChange={event => setDraft(event.target.value)} className="mt-2 min-h-32 bg-background" /></div></div></section> : null}
+    {stage === 'preview' ? <section data-tour-target="content-plan-preview" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><h2 className="text-balance text-xl font-semibold text-slate-950">{t.preview}</h2><p className="mt-1 text-pretty text-sm text-slate-500">{t.editHint}</p><p className="mt-3 text-sm">{goal} · {period} · {frequency} · {channels}</p><div className="mt-5 rounded-xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.theme}</div><div className="mt-1 font-semibold text-slate-950">{sample.task}</div><div className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.draft}</div><Textarea aria-label={t.draft} value={draft} onChange={(event) => editDraft(event.target.value)} className="mt-2 min-h-32 bg-white" /><p className="mt-2 text-xs text-slate-500">{t.editHint}</p></div><Button type="button" onClick={() => advance('saved')} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]"><Check className="h-4 w-4" />{t.save}</Button></section> : null}
+    {stage === 'saved' || stage === 'review' ? <section data-tour-target="content-plan-save" className="rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(15,23,42,0.08)]"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Check className="h-5 w-5" /></div><div><h2 className="text-balance text-xl font-semibold text-slate-950">{sample.saveTitle}</h2><p className="mt-1 text-sm text-slate-600">{reviewed ? sample.approveNote : sample.saveHint}</p></div></div><div className="mt-5 rounded-xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t.calendar}</div><div className="mt-1 font-semibold text-slate-950">{sample.task}</div></div><span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">{reviewed ? sample.reviewed : t.review}</span></div><p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{draft}</p></div>{stage === 'saved' ? <Button type="button" onClick={() => advance('review')} className="mt-5 min-h-11 gap-2 transition-transform active:scale-[0.96]">{t.review}<ChevronRight className="h-4 w-4" /></Button> : null}</section> : null}
+    {stage === 'review' ? <section data-tour-target="content-plan-review" className="rounded-2xl bg-amber-50 p-5 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.24)]"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700" /><div><h2 className="font-semibold text-slate-950">{t.review}</h2><p className="mt-1 text-pretty text-sm leading-6 text-slate-700">{t.safety}</p><h3 className="mt-4 font-medium">{sample.task}</h3><Textarea aria-label={t.draft} value={draft} onChange={event => setDraft(event.target.value)} className="mt-2 min-h-32 bg-background" />
+      {reviewed ? <p role="status" className="mt-3 text-sm text-emerald-800">{sample.reviewed}</p> : (
+        <Button type="button" className="mt-4" disabled={!draft.trim()} onClick={() => setReviewedDraft(draft)}>
+          {sample.approve}
+        </Button>
+      )}
+    </div></div></section> : null}
   </div>;
 }
 

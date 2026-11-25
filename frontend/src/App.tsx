@@ -367,7 +367,7 @@ const AppShell = () => {
             <Route path="work-journal" element={<DemoRoute area="journal"><WorkJournalPage /></DemoRoute>} />
             <Route path="ai-chat-promotion" element={<AIChatPromotionPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
-            <Route path="partnerships" element={<JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus>} />
+            <Route path="partnerships" element={<DemoRoute area="partnerships"><JourneyWorkspaceFocus><PartnershipSearchPage /></JourneyWorkspaceFocus></DemoRoute>} />
             <Route path="promotion" element={<WorkRouteAlias path="/dashboard/growth-paths" group="clients" />} />
             <Route path="promotion/partnerships" element={<WorkRouteAlias path="/dashboard/partnerships" />} />
             <Route path="influencers" element={<DemoRoute area="influencers"><JourneyWorkspaceFocus><InfluencersPage /></JourneyWorkspaceFocus></DemoRoute>} />
