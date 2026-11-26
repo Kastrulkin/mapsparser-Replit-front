@@ -53,7 +53,7 @@ def owner_setup_available(cursor, business_id, user_id):
         return False
     cursor.execute("""SELECT 1 FROM initial_business_setups s JOIN businesses b ON b.id=s.business_id
         WHERE s.business_id=%s AND b.owner_id=%s AND b.is_active IS NOT FALSE
-          AND s.data->>'handoff_owner_id'=%s AND s.data->>'saved'='true'""",
+          AND s.data->>'handoff_owner_id'=%s""",
         (business_id, user_id, user_id))
     return bool(cursor.fetchone())
 

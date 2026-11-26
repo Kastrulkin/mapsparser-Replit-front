@@ -598,6 +598,12 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
         other = HAMIK if business == JINLIAN else JINLIAN
         assert client.get(SETUP + other + '/report', headers={'X-Pilot-Actor': owner_id}).status_code in (403, 404)
         assert owner.post('/api/auth/set-password', json=activation).status_code == 400
+        owner_state = read(owner_id)
+        update = client.post(SETUP + business, headers={'X-Pilot-Actor': owner_id}, json={
+            'action': 'message', 'revision': owner_state['revision'], 'message': 'https://example.com/contact', 'auto': True,
+        })
+        assert update.status_code == 200 and not update.get_json()['setup']['saved']
+        assert client.get(SETUP + business, headers={'X-Pilot-Actor': owner_id}).get_json()['available']
 
 
 def test_report_keeps_multilingual_queries_and_avoids_repeated_evidence():
