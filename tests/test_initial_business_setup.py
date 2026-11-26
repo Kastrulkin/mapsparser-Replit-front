@@ -183,9 +183,11 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     state = action(client, JINLIAN, 'message', state, message='Конкурент: https://yandex.com/maps/org/fixture/789012')
     monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda **_: {'yandex': lambda url: {
         'title': 'Fixture competitor', 'rating': 4.4, 'reviews_count': 12, 'products': [{'name': 'Soy scoop'}],
+        'website': 'https://competitor.example/', 'telegram_url': 'https://t.me/competitor_news',
     }})
     assert process_next(conn)['state'] == 'ready'
     state = client.get(SETUP + JINLIAN).get_json()['setup']
+    assert len(state['sources']) == 2
     assert state['comparisons'][0]['ours']['rating'].startswith('4.6')
     assert state['comparisons'][0]['their_services'] == ['Soy scoop']
     monkeypatch.setattr(setup, '_wordstat', lambda cursor, business, service, city, search: (
@@ -522,6 +524,60 @@ def test_placeholder_map_title_does_not_confirm_a_card():
     source = {'provider': 'yandex', 'url': 'https://yandex.com/maps/org/clinic/123456'}
     result = initial_setup_sources.read_map(source, {'name': 'Untitled'})
     assert result['status'] == 'unavailable'
+
+
+def test_first_map_link_checks_website_and_socials_before_marking_draft_ready(pilot, monkeypatch):
+    from services import contact_intelligence_service
+
+    client, _ = pilot
+    site = 'https://clinic.example/'
+    url = 'https://yandex.ru/maps/org/clinic/123456'
+    telegram = 'https://t.me/clinic_news'
+    vk = 'https://vk.com/clinic'
+    checked_pages = []
+
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda **_: {
+        'yandex': lambda _: {
+            'name': 'Clinic', 'website': 'clinic.example/?utm_source=yandex',
+            'products': [{'name': 'Consultation'}], 'messenger_links': [{'url': telegram}],
+        },
+    })
+    def collect_website(observed_url, *, observe_page):
+        assert observed_url == site
+        observe_page(site, f'<a href="{telegram}">Telegram</a><a href="{vk}">VK</a>')
+        return [], {}, {}
+
+    def audit_pages(pages):
+        checked_pages.extend(page['url'] for page in pages)
+        return {'status': 'ready', 'pages': [{'url': site, 'findings': []}]}
+
+    monkeypatch.setattr(contact_intelligence_service, 'collect_public_website_intelligence', collect_website)
+    monkeypatch.setattr(initial_setup_sources.website_seo_audit, 'audit_pages', audit_pages)
+    monkeypatch.setattr(setup, 'read_social', lambda provider, url: {
+        'status': 'ready' if provider == 'telegram' else 'link_only',
+    })
+    action(client, HAMIK, 'start', message=url, auto=True)
+    assert process_next_operator_async_job()['result']['state'] == 'ready'
+    state = client.get(SETUP + HAMIK).get_json()['setup']
+    assert {(item['kind'], item['status']) for item in state['sources']} == {
+        ('map', 'ready'), ('website', 'queued'), ('social', 'queued'),
+    }
+    assert not state['report_ready']
+    for _ in range(3):
+        job = process_next_operator_async_job()
+        assert job['kind'] == setup.JOB_KIND and job['status'] == 'completed'
+        assert not client.get(SETUP + HAMIK).get_json()['setup']['report_ready']
+    assert checked_pages == [site]
+    for _ in range(2):
+        assert process_next_operator_async_job()['status'] == 'completed'
+    state = client.get(SETUP + HAMIK).get_json()['setup']
+    sources = {item['url']: item for item in state['sources']}
+    assert len(sources) == len(state['sources']) == 4
+    assert sources[site]['found_on'] == url
+    assert sources[site]['website_audit']['status'] == 'ready'
+    assert sources[telegram]['status'] == 'ready'
+    assert sources[vk]['found_on'] == site and sources[vk]['status'] == 'link_only'
+    assert state['report_ready']
 
 
 @pytest.mark.parametrize('provider_returns_card', [True, False])

@@ -176,6 +176,38 @@ def catalog_rows(raw, url):
     return rows
 
 
+def _map_source_links(source, raw, website):
+    if source.get('competitor'):
+        return []
+    from services.prospecting_service import ProspectingService
+
+    links = {}
+
+    def add(value, allowed_kinds):
+        try:
+            kind, provider, url = source_url(value)
+        except ValueError:
+            return
+        if kind in allowed_kinds:
+            links.setdefault(url, {'kind': kind, 'provider': provider, 'url': url, 'found_on': source['url']})
+
+    def social_links(value):
+        try:
+            payload = map_card_initial_audit.record(value)
+        except ValueError:
+            return None
+        return payload.get('social_links') if isinstance(payload, dict) else None
+
+    if website:
+        add(website if '://' in website else 'https://' + website.lstrip('/'), ('website', 'social'))
+    for social in ProspectingService._collect_nested_strings([
+        raw.get('telegram_url'), raw.get('whatsapp_url'), raw.get('social_links'), raw.get('messenger_links'),
+        social_links(raw.get('overview')), social_links(raw.get('search_payload_json')),
+    ])[:30]:
+        add(social, ('social',))
+    return list(links.values())[:15]
+
+
 def read_map(source, snapshot, *, capture_method=None):
     provider, url = source['provider'], source['url']
     if snapshot:
@@ -196,16 +228,18 @@ def read_map(source, snapshot, *, capture_method=None):
     if not title or title.casefold() == 'untitled':
         return {'status': 'unavailable', 'note': 'Парсер не подтвердил название карточки.'}
     description = clean(raw.get('description') or map_card_initial_audit.record(raw.get('profile')).get('description'), 700)
+    website = clean(raw.get('website') or raw.get('site') or raw.get('websiteUri'), 500)
     profile = [{'field': field, **dated(value, url)} for field, value in (
         ('contact_phone', clean(raw.get('phone') or map_card_initial_audit.record(raw.get('phoneNumbers')).get('primaryPhone'), 100)),
         ('address', clean(raw.get('address'))),
-        ('website', clean(raw.get('website') or raw.get('site') or raw.get('websiteUri'), 500)),
+        ('website', website),
     ) if value]
     observed_at = raw.get('updated_at') or raw.get('created_at')
     if isinstance(observed_at, datetime):
         observed_at = observed_at.isoformat()
     photos = initial_setup_photos.candidates(provider, raw) if not source.get('competitor') else []
     return {'status': 'ready', 'note': message, 'name': title, 'catalog': catalog_rows(raw, url), 'profile': profile,
+            'links': _map_source_links(source, raw, website),
             'facts': [dated(description, url)] if description else [],
             'metrics': {'rating': clean(raw.get('rating'), 20), 'reviews': clean(raw.get('reviews_count'), 20)},
             'observed_at': clean(observed_at, 60), 'photo_candidates': photos,

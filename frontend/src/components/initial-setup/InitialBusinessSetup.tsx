@@ -352,6 +352,7 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
         <ul className="divide-y">
           {sources.map(source => {
             const name = platforms[source.provider] || (source.kind === 'website' ? 'Сайт' : source.provider);
+            const discoverySource = state.sources.find(item => item.url === source.found_on);
             return <li key={source.key} className="space-y-1.5 py-1.5 text-sm">
               <div className="flex items-center gap-1.5">
                 <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
@@ -361,7 +362,7 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
                   <span className="text-xs text-muted-foreground">{statuses[source.status] || source.status}
                     {source.service_count > 0 && ' · Услуг: ' + source.service_count}
                     {!!source.photo_candidate_count && ' · Фото: ' + source.photo_candidate_count}
-                    {source.found_on && ' · Найдено на сайте'}
+                    {source.found_on && (discoverySource?.kind === 'map' ? ' · Найдено в карточке' : ' · Найдено на сайте')}
                   </span>
                 </div>
                 {state.can_edit && <Button size="icon" variant="ghost" className="shrink-0 text-muted-foreground"
