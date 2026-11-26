@@ -346,6 +346,40 @@ it.each([false, true])('shows progress and reconciles an unconfirmed save (commi
   }
 });
 
+it('gives the signed-in owner one direct link to the saved cabinet', async () => {
+  vi.mocked(api.get).mockResolvedValue({ data: { available: true, setup: { ...setup, saved: true, viewer_is_owner: true } } });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+
+  const cabinet = await screen.findByRole('link', { name: 'Открыть кабинет' });
+  expect(cabinet).toHaveAttribute('href', expect.stringContaining(`business_id=${businessId}`));
+  expect(screen.queryByText('Доступ владельцу')).not.toBeInTheDocument();
+});
+
+it.each([
+  { provisional: true, viewerIsOwner: true, access: { invite_url: 'https://localos.pro/set-password#test' }, caption: 'По этой ссылке владелец задаст пароль и сразу попадёт в кабинет.' },
+  { provisional: false, viewerIsOwner: false, access: { login_path: '/dashboard/operator?business_id=pilot-jinlian&setup=1' }, caption: 'Ссылка на кабинет владельца.' },
+])('shows the appropriate owner link to staff (provisional=$provisional)', async ({ provisional, viewerIsOwner, access, caption }) => {
+  vi.mocked(api.get).mockResolvedValue({ data: {
+    available: true, setup: { ...setup, saved: true, provisional, viewer_is_owner: viewerIsOwner },
+  } });
+  vi.mocked(api.post).mockResolvedValueOnce({ data: access });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+
+  fireEvent.click(await screen.findByText('Доступ владельцу'));
+  fireEvent.change(screen.getByLabelText('Почта владельца'), { target: { value: 'owner@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Подготовить доступ' }));
+  expect(await screen.findByText(caption)).toBeVisible();
+  expect(screen.getByRole('textbox', { name: 'Ссылка для владельца' })).toHaveValue(
+    access.invite_url || window.location.origin + access.login_path,
+  );
+});
+
 it('updates one result message from map reading to photos and keeps an unread card out of the draft', async () => {
   const map = { ...setup.sources[0], photo_candidate_count: 4 };
   const pending = {

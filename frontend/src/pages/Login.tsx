@@ -136,8 +136,12 @@ const Login = () => {
       } else if (user) {
         const tierFromUrl = searchParams.get('tier');
         const source = searchParams.get('source');
+        const setupBusinessId = searchParams.get('setup_business_id');
 
-        if (consumeMaxConnection() || searchParams.get("return_to") === "/dashboard/max") {
+        if (setupBusinessId) {
+          const setupParams = new URLSearchParams({ business_id: setupBusinessId, setup: '1' });
+          navigate('/dashboard/operator?' + setupParams, { replace: true });
+        } else if (consumeMaxConnection() || searchParams.get("return_to") === "/dashboard/max") {
           navigate('/dashboard/max');
         } else if (journeyTokenParam && featureFlags.journeyPostAuthRedirect) {
           try {

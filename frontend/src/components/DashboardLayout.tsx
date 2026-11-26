@@ -359,6 +359,11 @@ export const DashboardLayout = () => {
   }
 
   if (!user) {
+    const params = new URLSearchParams(location.search);
+    const setupBusinessId = chatRoute && params.get('setup') === '1' ? params.get('business_id') : null;
+    if (setupBusinessId) {
+      return <Navigate to={'/login?' + new URLSearchParams({ setup_business_id: setupBusinessId })} replace />;
+    }
     return <Navigate to={location.pathname === "/dashboard/max" ? "/login?return_to=%2Fdashboard%2Fmax" : "/login"} replace />;
   }
 

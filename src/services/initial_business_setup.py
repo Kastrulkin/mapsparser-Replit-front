@@ -1287,14 +1287,18 @@ def prepare_owner(cursor, business_id, actor_id, email, revision):
         raise Conflict('У компании уже есть владелец. Проверьте его email в админке.')
     if row['provisional'] and profile['owner_id'] != actor_id:
         raise Conflict('Передать черновик может создавший его сотрудник.')
+    cabinet_path = '/dashboard/operator?business_id=' + business_id + '&setup=1'
+    already_signed_in = bool(owner and str(owner['id']) == str(actor_id))
+    owner_access = {'email': email, 'already_signed_in': already_signed_in, 'login_path': cabinet_path}
+    password_set = bool(owner and owner['password_hash'])
+    if already_signed_in and not row['provisional']:
+        return {**owner_access, 'existing_account': password_set}
     if not owner:
         owner_id = str(uuid.uuid4())
         cursor.execute('INSERT INTO users(id,email,is_active,is_verified,created_at) VALUES (%s,%s,TRUE,FALSE,NOW())',
                        (owner_id, email))
-        password_set = False
     else:
         owner_id = owner['id']
-        password_set = bool(owner['password_hash'])
     if row['provisional']:
         cursor.execute("UPDATE businesses SET owner_id=%s,entity_group='client',updated_at=NOW() WHERE id=%s",
                        (owner_id, business_id))
@@ -1305,8 +1309,8 @@ def prepare_owner(cursor, business_id, actor_id, email, revision):
                        (business_id,))
     row['data']['handoff_owner_id'] = str(owner_id)
     persist(cursor, row)
-    if password_set:
-        return {'email': email, 'existing_account': True, 'login_path': '/dashboard/operator?business_id=' + business_id + '&setup=1'}
+    if already_signed_in or password_set:
+        return {**owner_access, 'existing_account': password_set}
     from services.prepared_cabinet import TOKEN_PREFIX, _digest
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
     cursor.execute("""INSERT INTO prepared_cabinets (business_id,owner_id,materials,invite_hash,invite_expires_at)

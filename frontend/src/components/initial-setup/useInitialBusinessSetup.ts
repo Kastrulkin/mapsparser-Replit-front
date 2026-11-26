@@ -48,6 +48,7 @@ export type Setup = {
   can_edit: boolean;
   origin: string;
   provisional: boolean;
+  viewer_is_owner?: boolean;
   profile: Record<string, string | null>;
   sources: Source[];
   services: ServiceProposal[];
@@ -68,7 +69,7 @@ export type Setup = {
 };
 type SetupResponse = { available: boolean; can_edit?: boolean; setup?: Setup | null; message?: string };
 export type Action = { action: string; key?: string; message?: string; name?: string; description?: string; text?: string; category?: string; auto?: boolean };
-export type Invite = { email: string; invite_url?: string; login_path?: string; existing_account: boolean };
+export type Invite = { email: string; invite_url?: string; login_path?: string; existing_account: boolean; already_signed_in?: boolean };
 
 export const setupUrl = (id: string) => '/operator/initial-setup/' + encodeURIComponent(id);
 const SAVE_TIMEOUT_MS = 15_000;

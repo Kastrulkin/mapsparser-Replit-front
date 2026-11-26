@@ -279,15 +279,17 @@ function Handoff({ state }: { state: Setup }) {
       finally { setPending(false); }
     }}>
       <label className="block max-w-sm space-y-1 text-sm">Почта владельца<Input type="email" required value={email} onChange={event => { setEmail(event.target.value); setResult(null); }} /></label>
-      <Button size="sm" disabled={pending || !email.trim()}>Подтвердить получателя</Button>
+      <Button size="sm" disabled={pending || !email.trim()}>Подготовить доступ</Button>
     </form>
     {error && <p className="mt-2 text-sm text-destructive" role="alert">{error}</p>}
-    {result && <div className="mt-2 space-y-2" role="status">
-      <p>{result.existing_account ? 'Владелец может войти с существующим паролем.' : 'Ссылка для первого входа подготовлена.'} {result.email}</p>
-      <div className="flex flex-wrap gap-2">
+    {result && <div className="mt-2 space-y-2">
+      <p role="status">{result.already_signed_in ? 'Вы уже в своём аккаунте.'
+        : result.invite_url ? 'По этой ссылке владелец задаст пароль и сразу попадёт в кабинет.'
+          : 'Ссылка на кабинет владельца.'}</p>
+      {!result.already_signed_in && link && <div className="flex flex-wrap gap-2">
         <Input readOnly value={link} className="min-w-0 flex-1" aria-label="Ссылка для владельца" onFocus={event => event.target.select()} />
         <Button size="sm" variant="outline" onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true)).catch(() => setError('Выделите ссылку и скопируйте её вручную.'))}>{copied ? 'Ссылка скопирована' : 'Скопировать ссылку'}</Button>
-      </div>
+      </div>}
     </div>}
   </SetupDisclosure>;
 }
@@ -659,7 +661,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
               </Button>}
             {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
           </div>
-          {isStaff && saved && <Handoff key={state.business_id} state={state} />}
+          {isStaff && saved && (state.provisional || !state.viewer_is_owner) && <Handoff key={state.business_id} state={state} />}
         </>}
       </footer>}
     </article>

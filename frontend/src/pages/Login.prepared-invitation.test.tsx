@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Login from './Login';
 import { newAuth } from '@/lib/auth_new';
 
@@ -29,4 +29,20 @@ it('lets an owner request email confirmation after activating with an invitation
   expect(fetchMock).toHaveBeenCalledWith('/api/auth/resend-verification', expect.objectContaining({
     body: JSON.stringify({ email: 'owner@example.test' }),
   }));
+});
+
+it('returns the owner to the same initial setup after signing in', async () => {
+  vi.mocked(newAuth.signIn).mockResolvedValueOnce({ user: { id: 'owner', email: 'owner@example.test' }, error: null });
+  function SetupDestination() {
+    return <p>{useLocation().search}</p>;
+  }
+  render(<MemoryRouter initialEntries={['/login?setup_business_id=pilot-jinlian']}><Routes>
+    <Route path="/login" element={<Login />} />
+    <Route path="/dashboard/operator" element={<SetupDestination />} />
+  </Routes></MemoryRouter>);
+
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'owner@example.test' } });
+  fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'synthetic-test-only' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Войти' }));
+  expect(await screen.findByText('?business_id=pilot-jinlian&setup=1')).toBeVisible();
 });

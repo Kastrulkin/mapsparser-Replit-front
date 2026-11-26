@@ -65,6 +65,12 @@ beforeEach(() => {
   vi.mocked(api.get).mockResolvedValue({ data: { messages: [], conversation: { id: 'chat-hamik' } } });
 });
 
+it('keeps the invited business when an owner opens a setup link while signed out', async () => {
+  auth.getCurrentUser.mockResolvedValueOnce(null);
+  open('/dashboard/operator?business_id=jinlian&setup=1');
+  await waitFor(() => expect(screen.getByLabelText('Текущий адрес')).toHaveTextContent('/login?setup_business_id=jinlian'));
+});
+
 it('keeps the open chat and draft across sections, then expands the same workspace', async () => {
   open('/dashboard/profile?command=ignore-me');
   const trigger = await launcher();

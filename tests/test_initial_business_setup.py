@@ -502,7 +502,8 @@ def test_website_audit_refresh_is_separate_from_saved_catalog_and_uses_same_perm
     assert state['facts'] == facts and state['saved'] and not state['seo_dirty']
 
 
-def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monkeypatch):
+@pytest.mark.parametrize('recipient_id', ['owner', 'staff'])
+def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monkeypatch, recipient_id):
     client, conn = pilot
     from services import company_registry_service
 
@@ -519,7 +520,7 @@ def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monke
     assert client.post(SETUP + 'lead/new-lead', json={}, headers=staff).get_json()['business_id'] == business
     assert client.get(SETUP + business).status_code == 403
     state = client.get(SETUP + business, headers=staff).get_json()['setup']
-    assert state['provisional']
+    assert state['provisional'] and state['viewer_is_owner']
     assert state['profile']['contact_email'] == ''
     assert any(choice['text'] == 'business@example.com' for choice in state['profile_choices'])
     owner_url = SETUP + business + '/owner'
@@ -530,12 +531,44 @@ def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monke
         change = client.post(SETUP + business, json={'action': name, 'revision': state['revision']}, headers=staff)
         assert change.status_code == 200, change.get_json()
         state = change.get_json()['setup']
-    owner = client.post(owner_url, json={'email': 'pilot-owner@example.com', 'revision': state['revision']}, headers=staff)
+    owner = client.post(owner_url, json={'email': f'pilot-{recipient_id}@example.com', 'revision': state['revision']}, headers=staff)
     assert owner.status_code == 200, owner.get_json()
-    assert owner.get_json()['existing_account']
-    assert client.get(SETUP + business).get_json()['setup']['provisional'] is False
+    access = owner.get_json()
+    assert access['existing_account']
+    assert access['already_signed_in'] is (recipient_id == 'staff')
+    assert access['login_path'] == f'/dashboard/operator?business_id={business}&setup=1'
+    assert 'invite_url' not in access
+    confirmed = client.get(SETUP + business, headers={'X-Pilot-Actor': recipient_id}).get_json()['setup']
+    assert confirmed['viewer_is_owner'] and not confirmed['provisional']
+    assert client.get(SETUP + business, headers=staff).get_json()['setup']['viewer_is_owner'] is (recipient_id == 'staff')
     cursor.execute('SELECT relation_role FROM business_company_links WHERE business_id=%s', (business,))
     assert cursor.fetchone()['relation_role'] == 'owner'
+
+
+def test_signed_in_owner_without_password_does_not_get_an_invitation(pilot):
+    client, conn = pilot
+    cursor = conn.cursor()
+    cursor.execute("UPDATE businesses SET owner_id='staff' WHERE id=%s", (HAMIK,))
+    cursor.execute("UPDATE users SET password_hash=NULL WHERE id='staff'")
+    row = setup.init(cursor, HAMIK, 'staff')
+    row['data'].update(started=True, seo_prepared=True, saved=True)
+    setup.persist(cursor, row)
+    conn.commit()
+
+    path = SETUP + HAMIK
+    staff = {'X-Pilot-Actor': 'staff'}
+    state = client.get(path, headers=staff).get_json()['setup']
+    assert state['viewer_is_owner'] and state['saved']
+    response = client.post(path + '/owner', headers=staff, json={
+        'email': 'pilot-staff@example.com', 'revision': state['revision'],
+    })
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()['already_signed_in']
+    assert 'invite_url' not in response.get_json()
+    assert client.get(path, headers=staff).get_json()['setup']['revision'] == state['revision']
+    cursor.execute('SELECT 1 FROM prepared_cabinets WHERE business_id=%s', (HAMIK,))
+    assert cursor.fetchone() is None
+
 
 def test_blocked_map_leaves_draft_incomplete_and_retry_collects_catalog_and_gallery(pilot, monkeypatch):
     client, _conn = pilot
@@ -785,8 +818,10 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
     stored = setup.init(cursor, business, 'staff', provisional=True)
     stored['data']['activity_type'] = 'Посуточная аренда квартиры' if business == HAMIK else 'Wholesale vegan ice cream in Phuket'
     setup.persist(cursor, stored)
+    email = business + '@example.com'
     if business == JINLIAN:
         cursor.execute("UPDATE businesses SET city='Phuket' WHERE id=%s", (business,))
+        cursor.execute("INSERT INTO users(id,email,is_active) VALUES ('passwordless-recipient',%s,TRUE)", (email,))
     conn.commit()
 
     def read(actor='staff'):
@@ -834,7 +869,6 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
     cursor.execute('SELECT owner_id FROM businesses WHERE id=%s', (business,))
     assert cursor.fetchone()['owner_id'] == 'staff'
 
-    email = business + '@example.com'
     invite_route = SETUP + business + '/owner'
     assert client.post(invite_route, headers=staff, json={'email': email, 'revision': state['revision']}).status_code == 409
     state = send('save', state)
@@ -856,7 +890,10 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
         session_actor = auth_system.verify_session(cookie.value)
         assert not session_actor['is_superadmin']
         owner_id = session_actor['user_id']
+        if business == JINLIAN:
+            assert owner_id == 'passwordless-recipient'
         assert read(owner_id)['saved']
+        assert read(owner_id)['viewer_is_owner']
         assert client.get(SETUP + business + '/report', headers={'X-Pilot-Actor': owner_id}).status_code == 200
         other = HAMIK if business == JINLIAN else JINLIAN
         assert client.get(SETUP + other + '/report', headers={'X-Pilot-Actor': owner_id}).status_code in (403, 404)
