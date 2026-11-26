@@ -598,3 +598,23 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
         other = HAMIK if business == JINLIAN else JINLIAN
         assert client.get(SETUP + other + '/report', headers={'X-Pilot-Actor': owner_id}).status_code in (403, 404)
         assert owner.post('/api/auth/set-password', json=activation).status_code == 400
+
+
+def test_report_keeps_multilingual_queries_and_avoids_repeated_evidence():
+    from pypdf import PdfReader
+    from services.initial_setup_report import render_report
+
+    terms = [{'text': 'վարձով բնակարան', 'views': 18, 'source': 'Wordstat'},
+             {'text': 'ไอศกรีมวีแกน ภูเก็ต', 'views': None, 'source': 'Тема'}]
+    state = {
+        'business_id': 'fixture', 'profile': {'name': 'Проверка PDF'}, 'sources': [], 'profile_choices': [],
+        'facts': [], 'comparisons': [], 'category_keywords': terms,
+        'services': [{'original': 'Мороженое', 'proposed': 'Мороженое', 'keywords': terms}],
+    }
+    document = PdfReader(render_report(state))
+    content = '\n'.join(page.extract_text() for page in document.pages)
+    assert all(content.count(item['text']) == 1 for item in terms)
+    fonts = {str(ref.get_object().get('/BaseFont')) for page in document.pages
+             for ref in page['/Resources']['/Font'].values()}
+    assert any('NotoSansArmenian' in font for font in fonts)
+    assert any('NotoSansThai' in font for font in fonts)

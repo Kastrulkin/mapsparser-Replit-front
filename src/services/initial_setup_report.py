@@ -1,6 +1,7 @@
 """Private PDF export of the current first-setup proposal."""
 from io import BytesIO
 from pathlib import Path
+import re
 from urllib.parse import quote, urlencode, urlsplit
 from xml.sax.saxutils import escape, quoteattr
 
@@ -18,6 +19,10 @@ PLATFORMS = {'yandex': 'Яндекс Карты', '2gis': '2ГИС', 'google': '
 SOURCE_STATUS = {'ready': 'Прочитано', 'link_only': 'Ссылка сохранена', 'unavailable': 'Данные не получены'}
 FIELDS = {'name': 'Название', 'address': 'Адрес', 'city': 'Город', 'website': 'Сайт', 'contact_phone': 'Телефон', 'contact_email': 'Почта'}
 
+FONTS_PATH = Path(__file__).with_name('setup_report_fonts')
+SCRIPT_RUN = re.compile(r'([\u0530-\u058f\ufb13-\ufb17]+|[\u0e00-\u0e7f]+)')
+SCRIPT_FONTS = {'Armenian': 'LocalOSArmenian', 'Thai': 'LocalOSThai'}
+
 
 def _font():
     name = 'LocalOSSetup'
@@ -32,11 +37,22 @@ def _font():
         if not font:
             raise RuntimeError('PDF font unavailable')
         pdfmetrics.registerFont(TTFont(name, str(font)))
+    for script, family in SCRIPT_FONTS.items():
+        if family not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(family, str(FONTS_PATH / f'NotoSans{script}.ttf')))
     return name
 
 
 def _text(value):
-    return escape(''.join(c for c in str(value or '') if c in '\n\t' or ord(c) >= 32)).replace('\n', '<br/>')
+    value = ''.join(c for c in str(value or '') if c in '\n\t' or ord(c) >= 32)
+    pieces = SCRIPT_RUN.split(value)
+    for index, text in enumerate(pieces):
+        safe = escape(text).replace('\n', '<br/>')
+        if index % 2 and text:
+            script = 'Thai' if '\u0e00' <= text[0] <= '\u0e7f' else 'Armenian'
+            safe = f'<font name="{SCRIPT_FONTS[script]}">{safe}</font>'
+        pieces[index] = safe
+    return ''.join(pieces)
 
 
 def _link(label, url):
@@ -60,6 +76,7 @@ def render_report(state):
     title_style = ParagraphStyle('title', parent=heading, fontSize=24, leading=29)
     group = ParagraphStyle('entry', parent=body, spaceBefore=6, textColor=colors.HexColor('#253e61'), keepWithNext=True)
     story = []
+    written_queries = set()
 
     def paragraph(value, style=body):
         story.append(Paragraph(_text(value), style))
@@ -73,6 +90,10 @@ def render_report(state):
     def keywords(items):
         for item in items:
             views = item.get('views')
+            key = (str(item.get('text', '')).strip().casefold(), views, item.get('source'), item.get('dated'))
+            if key in written_queries:
+                continue
+            written_queries.add(key)
             detail = f'{views:,} показов'.replace(',', ' ') if isinstance(views, int) else 'Частотность не подтверждена'
             paragraph(' · '.join(filter(None, [item.get('text'), detail, item.get('source'), display_date(item['dated']) if item.get('dated') else ''])), small)
 
@@ -126,8 +147,10 @@ def render_report(state):
     if photo.get('status') == 'ready':
         paragraph(f'В медиатеке · {photo["library_count"]}' +
                   (' · ' + ', '.join(photo['library_categories']) if photo['library_categories'] else ''))
-        for item in photo['missing']:
-            paragraph(f'Доснять {item["label"].lower()}. {item["tip"]}')
+        if photo['missing']:
+            paragraph('Что доснять', group)
+            for item in photo['missing']:
+                paragraph(item['tip'])
         for item in photo['shortlist']:
             rich(_link(item['label'], item['image_url']) + ' · ' + _link('Источник', item['source_url']), small)
         if photo.get('review'):
