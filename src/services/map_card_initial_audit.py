@@ -406,11 +406,28 @@ def read_apify(payload, save_provider_run, *, max_charge=APIFY_CAP, enrich_yande
     save_provider_run({'apify_run_id':run_id,'usage_total_usd':final.get('usageTotalUsd'),'apify_run_status':final.get('status')})
     if final.get('status') != 'SUCCEEDED':
         raise AuditReadError('Apify не завершил чтение. Автоматический повтор остановлен.')
-    candidates = service.fetch_dataset_items(final.get('defaultDatasetId') or '')
+    return _apify_dataset_card(service, payload, final), payload['url'], {
+        'apify_run_id': run_id, 'usage_total_usd': final.get('usageTotalUsd'),
+    }
+
+
+def read_completed_apify_card(payload, run_id):
+    """Read the result of a previous run without starting or modifying it."""
+    from services.prospecting_service import ProspectingService
+
+    service = ProspectingService(source='apify_' + payload['provider'])
+    run = service.get_run(run_id)
+    if run.get('id') != run_id or run.get('status') != 'SUCCEEDED':
+        raise AuditReadError('Результат предыдущего чтения недоступен.')
+    return _apify_dataset_card(service, payload, run)
+
+
+def _apify_dataset_card(service, payload, run):
+    candidates = service.fetch_dataset_items(run.get('defaultDatasetId') or '')
     candidates = [i for i in candidates if matches_entity(service, payload, i)]
     if len(candidates) != 1:
         raise AuditReadError('Apify не подтвердил единственную нужную карточку. Результат не используется.')
-    return candidates[0], payload['url'], {'apify_run_id':run_id,'usage_total_usd':final.get('usageTotalUsd')}
+    return candidates[0]
 
 
 def matches_entity(service, payload, item):

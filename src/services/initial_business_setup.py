@@ -259,6 +259,19 @@ def _previous_apify_launch(cursor, claimed):
     return bool(cursor.fetchone())
 
 
+def _completed_apify_run(cursor, claimed, source_key):
+    cursor.execute("""SELECT payload_json->>'apify_run_id' AS run_id,
+                             payload_json->'map_snapshot' AS map_snapshot
+        FROM operator_async_jobs
+        WHERE business_id=%s AND kind=%s AND id<>%s AND status='completed'
+          AND payload_json->>'source_key'=%s AND payload_json->>'apify_run_status'='SUCCEEDED'
+          AND jsonb_exists(payload_json, 'apify_started')
+          AND nullif(payload_json->>'apify_run_id', '') IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1""",
+                   (claimed['business_id'], JOB_KIND, claimed['id'], source_key))
+    return cursor.fetchone()
+
+
 def _read_with_apify(db, claimed, source, source_key):
     # Reuse the existing single capped Apify launch. Reserve the paid POST under
     # the source job lease before sending it, including when Apify never replies.
@@ -287,6 +300,10 @@ def _read_with_apify(db, claimed, source, source_key):
     raw, url, _ = map_card_initial_audit.read_apify(
         source, record_run, max_charge=SETUP_APIFY_CAP, enrich_yandex=True,
     )
+    return _read_apify_card(source, raw, url)
+
+
+def _read_apify_card(source, raw, url):
     # A matching name is insufficient for a chain with several branches.
     card_id = map_card_initial_audit.entity_key('yandex', url)
     supplied_id = clean(raw.get('source_external_id'))
@@ -350,14 +367,24 @@ def process_source(claimed):
             result = {'status': 'unavailable', 'note': 'Не удалось прочитать источник. Попробуйте ещё раз позже.'}
         db.conn.rollback()
         if not approved_apify and not item_snapshot and result['status'] == 'unavailable' and _is_own_yandex_card(item):
+            previous_run = _completed_apify_run(cursor, claimed, key)
             used = _previous_apify_launch(cursor, claimed)
             db.conn.rollback()
-            if not used:
-                try:
+            try:
+                if previous_run:
+                    cached = previous_run['map_snapshot']
+                    if isinstance(cached, dict) and cached.get('status') == 'ready':
+                        result = dict(cached)
+                    else:
+                        raw = map_card_initial_audit.read_completed_apify_card(item, previous_run['run_id'])
+                        result = _read_apify_card(item, raw, item['url'])
+                    if result['status'] == 'ready':
+                        result['note'] = 'Использован сохранённый снимок этой карточки.'
+                elif not used:
                     result = _read_with_apify(db, claimed, item, key)
-                except Exception as exc:
-                    db.conn.rollback()
-                    logger.info('Initial setup map fallback stopped for job %s (%s)', claimed['id'], type(exc).__name__)
+            except Exception as exc:
+                db.conn.rollback()
+                logger.info('Initial setup map fallback stopped for job %s (%s)', claimed['id'], type(exc).__name__)
         row = load(cursor, business_id, lock=True)
         actor = load_actor(cursor, actor_id)
         require_permission(cursor, business_id, actor, 'business.settings.write')
@@ -376,6 +403,11 @@ def process_source(claimed):
             db.conn.commit()
             return {'state': audit['status']}
         current.update({k: v for k, v in result.items() if k != 'links'})
+        if result.get('capture_method') == 'apify' and result['status'] == 'ready':
+            # Keep the verified, bounded result with the charged job through setup resets.
+            cursor.execute("""UPDATE operator_async_jobs SET payload_json=payload_json || %s
+                WHERE id=%s AND jsonb_exists(payload_json, 'apify_started')""",
+                           (Json({'map_snapshot': result}), claimed['id']))
         current['checked_at'] = datetime.now(timezone.utc).isoformat()
         if not current.get('competitor'):
             row['data']['seo_dirty'] = True

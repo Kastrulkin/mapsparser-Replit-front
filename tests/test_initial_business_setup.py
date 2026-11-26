@@ -580,8 +580,8 @@ def test_first_map_link_checks_website_and_socials_before_marking_draft_ready(pi
     assert state['report_ready']
 
 
-@pytest.mark.parametrize('provider_returns_card', [True, False])
-def test_primary_setup_uses_one_capped_fallback_after_native_failure(pilot, monkeypatch, provider_returns_card):
+@pytest.mark.parametrize(('provider_returns_card', 'cached_snapshot'), [(True, True), (True, False), (False, False)])
+def test_primary_setup_uses_one_capped_fallback_after_native_failure(pilot, monkeypatch, provider_returns_card, cached_snapshot):
     client, conn = pilot
     path = SETUP + HAMIK
     url = 'https://yandex.ru/maps/org/clinic/123456'
@@ -642,6 +642,30 @@ def test_primary_setup_uses_one_capped_fallback_after_native_failure(pilot, monk
         assert state['services'][0]['original'] == 'Laser consultation'
         assert state['sources'][0]['photo_candidate_count'] == 1
         assert state['sources'][0]['note'] == 'Карточка прочитана.'
+
+        def get_previous_run(_service, run_id):
+            assert run_id == 'fixture-apify'
+            calls.append('reuse')
+            return {'id': run_id, 'status': 'SUCCEEDED', 'defaultDatasetId': 'fixture'}
+
+        monkeypatch.setattr(ProspectingService, 'get_run', get_previous_run)
+        # Reset the chat while preserving the previous job and its charge record.
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE operator_async_jobs SET idempotency_key='archived-initial-setup:'||id WHERE business_id=%s", (HAMIK,))
+            if not cached_snapshot:
+                cursor.execute("UPDATE operator_async_jobs SET payload_json=payload_json-'map_snapshot' WHERE business_id=%s", (HAMIK,))
+            cursor.execute("UPDATE initial_business_setups SET data='{}'::jsonb,revision=revision+1 WHERE business_id=%s", (HAMIK,))
+        conn.commit()
+        action(client, HAMIK, 'start', message=url, auto=True)
+        assert process_next_operator_async_job()['result']['state'] == 'ready'
+        assert process_next_operator_async_job()['result']['state'] == 'ready'
+        assert process_next_operator_async_job()['status'] == 'completed'
+        state = client.get(path).get_json()['setup']
+        assert state['report_ready']
+        assert state['services'][0]['original'] == 'Laser consultation'
+        assert state['sources'][0]['photo_candidate_count'] == 1
+        assert state['sources'][0]['note'] == 'Использован сохранённый снимок этой карточки.'
+        assert calls.count('reuse') == int(not cached_snapshot)
     else:
         state = action(client, HAMIK, 'retry', state, key=state['sources'][0]['key'])
         assert process_next_operator_async_job()['status'] == 'failed'
@@ -651,6 +675,7 @@ def test_primary_setup_uses_one_capped_fallback_after_native_failure(pilot, monk
     assert process_next_operator_async_job()['status'] == 'failed'
     assert calls.count('POST') == 1
     assert calls.count('GET') == 1
+    assert calls.count('reuse') == int(provider_returns_card and not cached_snapshot)
 
 
 def test_generated_topics_do_not_replace_an_unread_source():
