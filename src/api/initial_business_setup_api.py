@@ -123,6 +123,7 @@ def download_setup_report(business_id):
         if not row or not profile:
             return reply({'error': 'Отчёт ещё не подготовлен.'}, 409)
         state = setup.status(cursor, row, profile, False)
+        state['report_follow_up'] = row['data'].get('report_follow_up')
     finally:
         db.rollback_and_close()
     if not state['report_ready']:

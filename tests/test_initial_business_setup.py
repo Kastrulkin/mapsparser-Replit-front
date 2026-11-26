@@ -616,10 +616,17 @@ def test_report_keeps_multilingual_queries_and_avoids_repeated_evidence():
         'business_id': 'fixture', 'profile': {'name': 'Проверка PDF'}, 'sources': [], 'profile_choices': [],
         'facts': [], 'comparisons': [], 'category_keywords': terms,
         'services': [{'original': 'Мороженое', 'proposed': 'Мороженое', 'keywords': terms}],
+        'report_follow_up': {
+            'requests': {'photos': 'Дневной снимок входа', 'data': 'Адрес выдачи', 'access': 'Роль управляющего'},
+            'listings': [{'label': 'Google Maps', 'text': 'Точка закрыта', 'url': 'https://www.google.com/maps?cid=123'}],
+        },
     }
     document = PdfReader(render_report(state))
     content = '\n'.join(page.extract_text() for page in document.pages)
     assert all(content.count(item['text']) == 1 for item in terms)
+    assert all(item in content for item in (
+        'Что нужно от вас', 'Дневной снимок входа', 'Адрес выдачи', 'Роль управляющего', 'Точка закрыта',
+    ))
     fonts = {str(ref.get_object().get('/BaseFont')) for page in document.pages
              for ref in page['/Resources']['/Font'].values()}
     assert any('NotoSansArmenian' in font for font in fonts)

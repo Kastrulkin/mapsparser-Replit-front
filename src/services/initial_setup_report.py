@@ -98,11 +98,15 @@ def render_report(state):
             paragraph(' · '.join(filter(None, [item.get('text'), detail, item.get('source'), display_date(item['dated']) if item.get('dated') else ''])), small)
 
     profile = state['profile']
+    follow_up = state.get('report_follow_up') or {}
     business_name = profile.get('name') or 'Компания'
     paragraph(business_name, title_style)
     paragraph('Первичная настройка LocalOS', heading)
     paragraph('Кабинет сохранён' if state.get('saved') else 'Черновик для согласования', small)
-    context = ' · '.join(filter(None, [profile.get('city'), profile.get('address'), state.get('activity_type')]))
+    address = profile.get('address')
+    if address and follow_up.get('address_label'):
+        address = f'{follow_up["address_label"]} · {address}'
+    context = ' · '.join(filter(None, [profile.get('city'), address, state.get('activity_type')]))
     if context:
         paragraph(context)
     sources = state['sources']
@@ -115,8 +119,18 @@ def render_report(state):
         _link('Поисковые запросы', localos('card', tab='keywords')), _link('Медиатека', localos('content', tab='media')),
     ]), small)
 
+    requests = follow_up.get('requests') or {}
+    if any(requests.values()):
+        paragraph('Что нужно от вас', heading)
+        for key, label in [('photos', 'Фото'), ('data', 'Данные'), ('access', 'Доступы')]:
+            if value := requests.get(key):
+                rich(f'<b>{_text(label)}</b> · {_text(value)}')
+
     paragraph('Карты, сайт и контакты', heading)
-    if not any(item['kind'] == 'map' and item['status'] == 'ready' and not item.get('competitor') for item in sources):
+    findings = follow_up.get('listings', [])
+    for finding in findings:
+        rich(_link(finding['label'], finding.get('url')) + ' · ' + _text(finding['text']))
+    if not findings and not any(item['kind'] == 'map' and item['status'] == 'ready' and not item.get('competitor') for item in sources):
         paragraph('Проверьте действующие карточки компании. Пришлите ссылки, если они уже есть.')
     if not any(item['kind'] == 'website' and not item.get('competitor') for item in sources):
         paragraph('Если у компании есть сайт, добавьте ссылку для SEO-проверки.')
@@ -147,7 +161,7 @@ def render_report(state):
     if photo.get('status') == 'ready':
         paragraph(f'В медиатеке · {photo["library_count"]}' +
                   (' · ' + ', '.join(photo['library_categories']) if photo['library_categories'] else ''))
-        if photo['missing']:
+        if photo['missing'] and not requests.get('photos'):
             paragraph('Что доснять', group)
             for item in photo['missing']:
                 paragraph(item['tip'])
