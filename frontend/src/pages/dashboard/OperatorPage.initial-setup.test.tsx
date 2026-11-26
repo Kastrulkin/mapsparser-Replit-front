@@ -56,7 +56,6 @@ it('routes the existing chat composer to the selected company and opens the same
   </MemoryRouter>);
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' }, { timeout: 5000 })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Провести SEO-аудит сайта' })).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Семантическое ядро' })).toHaveAttribute('href', '/dashboard/card?tab=keywords&business_id=' + businessId);
   const input = screen.getByRole('textbox', { name: 'Сообщение для первичной настройки' });
   fireEvent.change(input, { target: { value: 'Вид деятельности: Веганское мороженое' } });
   fireEvent.keyDown(input, { key: 'Enter' });
@@ -64,7 +63,10 @@ it('routes the existing chat composer to the selected company and opens the same
     action: 'message', message: 'Вид деятельности: Веганское мороженое', revision: 3,
   }));
   expect(await screen.findByText('Вид деятельности сохранён.')).toBeInTheDocument();
-  fireEvent.click(screen.getByText('Семантическое ядро', { selector: 'summary' }));
+  const queries = screen.getByText('Поисковые запросы');
+  expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
+  fireEvent.click(queries);
+  expect(screen.getByRole('link', { name: 'Семантическое ядро' })).toHaveAttribute('href', '/dashboard/card?tab=keywords&business_id=' + businessId);
   fireEvent.click(screen.getByText('Vegan ice cream', { selector: 'summary' }));
   expect(screen.getByText('Vegan ice cream Bangkok')).toBeVisible();
 });
@@ -84,7 +86,7 @@ it('reviews new and existing services in the same list and only shows original d
     return <InitialSetupChat setup={initialSetup} isStaff={false} onExit={() => {}} />;
   }
   render(<MemoryRouter><SetupChat /></MemoryRouter>);
-  fireEvent.click(await screen.findByText('Услуги и предложенные изменения · 2'));
+  fireEvent.click(await screen.findByText('Услуги и правки'));
 
   const newRow = await screen.findByRole('button', { name: 'Пошив мерча на заказ Новая услуга' });
   expect(screen.queryByText(added.proposed_description)).not.toBeInTheDocument();
@@ -185,7 +187,10 @@ it('refreshes a previously read site and shows the page and proposed SEO fix', a
   render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Провести SEO-аудит сайта' }));
+  expect(await screen.findByText('Кабинет сохранён')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' })).not.toBeVisible();
+  fireEvent.click(screen.getByText('Данные и источники'));
+  fireEvent.click(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' }));
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
     action: 'website_audit', key: 'site', revision: 3,
   }));
@@ -225,7 +230,7 @@ it('opens the existing setup steps when the server accepts a chat command', asyn
 
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/operator/chat', expect.objectContaining({ business_id: businessId, message: command })));
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
-  expect(screen.getByLabelText('Текущий адрес')).toHaveTextContent('setup=1');
+  await waitFor(() => expect(screen.getByLabelText('Текущий адрес')).toHaveTextContent('setup=1'));
 });
 
 it('shows the linked shortlist and offers to label an unclassified photo', async () => {
