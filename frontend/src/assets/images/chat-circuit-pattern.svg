@@ -1,11 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500" preserveAspectRatio="none">
   <g fill="none" stroke="black" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round">
+    <path vector-effect="non-scaling-stroke" d="M-27 185H68L152 135H240L348 69H455L532 22H688"/>
     <path vector-effect="non-scaling-stroke" d="M-24 255H134L236 193H365L478 124H570L665 66H793"/>
+    <path vector-effect="non-scaling-stroke" d="M-20 284H131L230 224H351L465 155H549L645 97H754"/>
     <path vector-effect="non-scaling-stroke" d="M-25 362H72L170 300H244L355 232H437L547 165H730"/>
     <path vector-effect="non-scaling-stroke" d="M125 522L216 466H292L392 405H484L604 332H688L800 263H905"/>
+    <path vector-effect="non-scaling-stroke" d="M-18 465H33L103 422H160"/>
     <path vector-effect="non-scaling-stroke" d="M-16 105H45L98 73H142L274 -8 M762 511L841 463H879L952 418H1016"/>
+    <path vector-effect="non-scaling-stroke" d="M902 508L945 481H973L1018 453"/>
     <!-- Round stroke caps keep the terminal dots circular at any chat aspect ratio. -->
     <path vector-effect="non-scaling-stroke" stroke-width="6.5"
-      d="M793 66h.01 M730 165h.01 M905 263h.01"/>
+      d="M688 22h.01 M793 66h.01 M754 97h.01 M730 165h.01 M905 263h.01 M160 422h.01"/>
   </g>
 </svg>
