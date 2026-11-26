@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { getApiEndpoint } from '@/config/api';
 import { browserBearerToken, browserCookieAuthEnabled } from '@/lib/browserSessionFetch';
 import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LocalOSChatAvatar } from '@/components/operator/LocalOSChatAvatar';
@@ -85,7 +85,7 @@ function PhotoCheck({ report, businessId, send, busy }: {
   busy: boolean;
 }) {
   const [copyStatus, setCopyStatus] = useState('');
-  const library = companyUrl('/dashboard/content?tab=media', businessId);
+  const library = companyUrl('/dashboard/content?section=media', businessId);
   const pending = report?.status === 'queued' || report?.status === 'running';
   const copyReport = async () => {
     if (report?.status !== 'ready') return;
@@ -200,6 +200,39 @@ function SetupLink({ path, businessId, children }: { path: string; businessId: s
   return <Button size="sm" variant="ghost" asChild>
     <Link to={companyUrl(path, businessId)}>{children}<ArrowUpRight aria-hidden="true" className="ml-1.5 h-3.5 w-3.5" /></Link>
   </Button>;
+}
+
+function SetupNextStep({ state }: { state: Setup }) {
+  const [params] = useSearchParams();
+  const mapReady = state.sources.some(source => source.kind === 'map' && !source.competitor && source.status === 'ready');
+  const requested = params.get('business_id') === state.business_id ? params.get('setup_step') : null;
+  const step = requested === 'channels' ? 'channels' : requested === 'content' || !mapReady ? 'content' : 'maps';
+  const stepPath = (next: string) => companyUrl(`/dashboard/operator?setup=1&setup_step=${next}`, state.business_id);
+  const returning = (path: string) => `${path}&return_to=${encodeURIComponent(stepPath(step))}`;
+  return <section aria-label="Следующий шаг настройки" className="space-y-1.5 rounded-md bg-muted/50 px-3 py-2.5">
+    {step === 'maps' ? <>
+      <p className="font-medium">Обновим карточки на картах</p>
+      <p className="text-xs text-muted-foreground">Подключите карточки или возьмите правки из отчёта и внесите их сами.</p>
+      <div className="flex flex-wrap items-center gap-1">
+        <SetupLink businessId={state.business_id} path={returning('/dashboard/settings?focus=integrations')}>Подключить карты</SetupLink>
+        <Button size="sm" variant="ghost" asChild><Link to={stepPath('content')}>Перейти к контенту</Link></Button>
+      </div>
+    </> : step === 'content' ? <>
+      <p className="font-medium">Подготовим контент-план</p>
+      <p className="text-xs text-muted-foreground">{state.facts.some(fact => fact.accepted) ? 'Проверьте сохранённые факты. Используем их в черновиках постов.' : 'Добавьте факты о компании, чтобы использовать их в постах.'} Фото можно подключить и распознать в медиатеке.</p>
+      <div className="flex flex-wrap items-center gap-1">
+        <SetupLink businessId={state.business_id} path={returning('/dashboard/content?section=calendar')}>Открыть контент-план</SetupLink>
+        <SetupLink businessId={state.business_id} path={returning('/dashboard/profile?section=knowledge')}>Проверить факты</SetupLink>
+        <SetupLink businessId={state.business_id} path={returning('/dashboard/content?section=media')}>Подключить папку с фото</SetupLink>
+        <Button size="sm" variant="ghost" asChild><Link to={stepPath('channels')}>Дальше к соцсетям</Link></Button>
+      </div>
+    </> : <>
+      <p className="font-medium">Подключим соцсети</p>
+      <p className="text-xs text-muted-foreground">Выберите каналы, в которых хотите публиковать посты.</p>
+      <SetupLink businessId={state.business_id} path={returning('/dashboard/settings?focus=channels')}>Подключить соцсети</SetupLink>
+      <Button size="sm" variant="ghost" asChild><Link to={stepPath('content')}>К контент-плану</Link></Button>
+    </>}
+  </section>;
 }
 
 function Keywords({ state }: { state: Setup }) {
@@ -662,6 +695,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
             {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
           </div>
           {isStaff && saved && (state.provisional || !state.viewer_is_owner) && <Handoff key={state.business_id} state={state} />}
+          {saved && canChange && <SetupNextStep key={state.business_id} state={state} />}
         </>}
       </footer>}
     </article>

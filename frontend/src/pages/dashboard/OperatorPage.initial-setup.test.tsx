@@ -251,7 +251,7 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   expect(screen.getByText('Интерьер', { selector: 'li' })).toBeVisible();
   expect(screen.getByText('Доснять')).toBeVisible();
   expect(screen.getByText('Снимите дверь крупным планом.')).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Открыть медиатеку' })).toHaveAttribute('href', '/dashboard/content?tab=media&business_id=' + businessId);
+  expect(screen.getByRole('link', { name: 'Открыть медиатеку' })).toHaveAttribute('href', '/dashboard/content?section=media&business_id=' + businessId);
   fireEvent.click(screen.getByText('Подборка с карт'));
   expect(screen.getByRole('link', { name: 'Фасад' })).toHaveAttribute('href', image);
   expect(screen.getByText('Обложка · Фасад')).toBeVisible();
@@ -301,6 +301,7 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   const input = await screen.findByRole('textbox', { name: 'Сообщение для первичной настройки' });
   await waitFor(() => expect(input).toBeEnabled());
   expect(screen.getByTestId('operator-message-list')).toBeEmptyDOMElement();
+  expect(input).toHaveAccessibleDescription('Пришлите ссылку на карточку компании. Соберём данные и предложим правки.');
   const map = 'https://yandex.com/maps/org/fixture/123456';
   fireEvent.change(input, { target: { value: map } });
   fireEvent.keyDown(input, { key: 'Enter' });
@@ -309,6 +310,7 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   }));
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
   expect(await screen.findByText('Черновик готов к проверке')).toBeVisible();
+  expect(screen.queryByText('Пришлите ссылку на карточку компании. Соберём данные и предложим правки.')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
 });
@@ -356,6 +358,25 @@ it('gives the signed-in owner one direct link to the saved cabinet', async () =>
   const cabinet = await screen.findByRole('link', { name: 'Открыть кабинет' });
   expect(cabinet).toHaveAttribute('href', expect.stringContaining(`business_id=${businessId}`));
   expect(screen.queryByText('Доступ владельцу')).not.toBeInTheDocument();
+});
+
+it('guides the owner from map edits to the calendar, photos and social connections', async () => {
+  vi.mocked(api.get).mockResolvedValue({ data: { available: true, setup: { ...setup, saved: true, viewer_is_owner: true } } });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
+  }
+  const chatPath = `/dashboard/operator?setup=1&business_id=${businessId}`;
+  render(<MemoryRouter initialEntries={[chatPath]}><SetupChat /></MemoryRouter>);
+
+  const guide = within(await screen.findByRole('region', { name: 'Следующий шаг настройки' }));
+  expect(guide.getByRole('link', { name: 'Подключить карты' })).toHaveAttribute('href', expect.stringContaining('focus=integrations'));
+  fireEvent.click(guide.getByRole('link', { name: 'Перейти к контенту' }));
+  const photos = guide.getByRole('link', { name: 'Подключить папку с фото' });
+  expect(photos).toHaveAttribute('href', expect.stringContaining('section=media'));
+  expect(decodeURIComponent(photos.getAttribute('href') || '')).toContain('setup_step=content');
+  expect(guide.getByRole('link', { name: 'Проверить факты' })).toHaveAttribute('href', expect.stringContaining('section=knowledge'));
+  fireEvent.click(guide.getByRole('link', { name: 'Дальше к соцсетям' }));
+  expect(guide.getByRole('link', { name: 'Подключить соцсети' })).toHaveAttribute('href', expect.stringContaining('focus=channels'));
 });
 
 it.each([

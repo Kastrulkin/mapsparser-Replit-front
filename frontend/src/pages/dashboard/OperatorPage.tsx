@@ -339,6 +339,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
     if (!panel && routeParams.has('setup')) {
       const next = new URLSearchParams(routeParams);
       next.delete('setup');
+      next.delete('setup_step');
       setSearchParams(next, { replace: true });
     }
   };
@@ -362,6 +363,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
   const [commandWaiting, setCommandWaiting] = useState(false);
   const [commandAccepted, setCommandAccepted] = useState(false);
   const setupState = initialSetup.state;
+  const showSetupHint = setupMode && initialSetup.available && initialSetup.canEdit && !setupState?.started;
   const setupProgress = setupMode ? JSON.stringify([
     setupState?.revision, initialSetup.pendingSources, setupState?.draft_status, setupState?.photo_report?.status,
     setupState?.sources.map(source => [source.status, source.website_audit?.status]),
@@ -1110,11 +1112,12 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
             <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />
           </div>}
           {demoMode && <p id="operator-demo-readonly" role="note" className="text-sm text-muted-foreground">{demoNotice}</p>}
+          {showSetupHint && <p id="operator-setup-hint" className="text-sm text-muted-foreground">Пришлите ссылку на карточку компании. Соберём данные и предложим правки.</p>}
           <div className="flex min-w-0 items-end gap-2">
             <textarea
               ref={chatInputRef}
               disabled={demoMode || (setupMode && (initialSetup.available !== true || !initialSetup.canEdit || initialSetup.busy))}
-              aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
+              aria-describedby={demoMode ? 'operator-demo-readonly' : showSetupHint ? 'operator-setup-hint' : undefined}
               rows={1}
               aria-label={setupMode ? 'Сообщение для первичной настройки' : toolbar.input}
               className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"

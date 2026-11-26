@@ -242,7 +242,7 @@ export const DashboardLayout = () => {
       setControlScope(nextScope);
       if (!requestedKind) {
         const params = new URLSearchParams(location.search);
-        for (const key of ['journey_action','work_ref','return_to','item_id','plan_id','lead','lead_id','campaign_id','collaboration_id','creator_id','run_id','draft_id','entry','search_task_id','company_filter','field','rule','document','source_entry']) params.delete(key);
+        for (const key of ['journey_action','work_ref','return_to','item_id','plan_id','lead','lead_id','campaign_id','collaboration_id','creator_id','run_id','draft_id','entry','search_task_id','company_filter','field','rule','document','source_entry','setup_step']) params.delete(key);
         params.set('business_id', businessId); params.set('scope_type', nextScope.kind);
         navigate({pathname: location.pathname, search: '?' + params, hash: ''}, {replace:true});
       }
