@@ -55,12 +55,13 @@ def pilot(monkeypatch):
         CREATE TABLE usersessions(id text, user_id text, token text, expires_at timestamptz, ip_address text,
             user_agent text, created_at timestamptz, session_kind text, scope_business_id text);
         CREATE TABLE businesses(id text PRIMARY KEY, owner_id text, name text, address text, city text, country text,
-            business_type text, website text, phone text, email text, is_active boolean DEFAULT true, network_id text,
+            business_type text, website text, site text, phone text, email text, is_active boolean DEFAULT true, network_id text,
+            geo_lat real, geo_lon real, subscription_tier text, subscription_status text, subscription_ends_at timestamptz,
             entity_group text DEFAULT 'client', moderation_status text, updated_at timestamptz DEFAULT now());
         CREATE TABLE business_members(business_id text, user_id text, role text, status text);
         CREATE TABLE network_members(network_id text, user_id text, role text, status text);
         CREATE TABLE networks(id text, owner_id text);
-        CREATE TABLE businessprofiles(business_id text PRIMARY KEY, contact_phone text, contact_email text);
+        CREATE TABLE businessprofiles(business_id text PRIMARY KEY, contact_phone text, contact_email text, updated_at timestamptz);
         CREATE TABLE businessmaplinks(id text PRIMARY KEY, user_id text, business_id text, url text, map_type text,
             created_at timestamptz DEFAULT now());
         CREATE TABLE userservices(id text PRIMARY KEY, user_id text, business_id text, name text, description text,
@@ -237,6 +238,57 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     }
 
 
+def test_one_save_completes_a_legacy_draft_and_does_not_duplicate_data(pilot, monkeypatch):
+    client, conn = pilot
+    city = 'Bangkok'
+    url = 'https://yandex.com/maps/org/jinlian/123456'
+    site = 'https://shop.example/'
+    shared_fact = 'Orders accepted in Bangkok'
+    phone = '+66 1234 5678'
+    monkeypatch.setattr(setup, '_wordstat', lambda *_args: [])
+    cursor = conn.cursor()
+    row = setup.init(cursor, JINLIAN, 'staff')
+    map_key = setup.register_source(row, url)
+    site_key = setup.register_source(row, site)
+    row['data']['sources'][map_key].update(status='ready', catalog=[{
+        'name': 'Coconut scoop', 'description': 'Coconut dessert', 'url': url,
+    }], profile=[
+        {'field': 'contact_phone', **initial_setup_sources.dated(phone, url)},
+        {'field': 'address', **initial_setup_sources.dated('A conflicting address', url)},
+        {'field': 'contact_email', **initial_setup_sources.dated('maps@example.com', url)},
+    ], facts=[initial_setup_sources.dated(shared_fact, url)])
+    row['data']['sources'][site_key].update(status='ready', profile=[
+        {'field': 'contact_phone', **initial_setup_sources.dated('+6612345678', site)},
+        {'field': 'contact_email', **initial_setup_sources.dated('site@example.com', site)},
+    ], facts=[initial_setup_sources.dated(shared_fact, site)])
+    row['data'].update(started=True, saved=True)
+    setup.prepare_seo(cursor, row, setup.read_business(cursor, JINLIAN), live_wordstat=False)
+    setup.persist(cursor, row)
+    conn.commit()
+
+    state = client.get(SETUP + JINLIAN).get_json()['setup']
+    assert state['draft_ready'] and not state['saved']
+    state = action(client, JINLIAN, 'save', state)
+    assert state['saved'] and not state['seo_dirty']
+    assert state['profile']['website'] == site
+    assert state['profile']['address'] == 'Fixture address'
+    assert state['profile']['contact_phone'] == phone
+    assert not state['profile']['contact_email']
+    assert all(service['accepted'] for service in state['services'])
+    assert all(fact['accepted'] for fact in state['facts'])
+    action(client, JINLIAN, 'save', state)
+    cursor.execute('SELECT name,description,optimized_description FROM userservices WHERE business_id=%s ORDER BY name', (JINLIAN,))
+    services = cursor.fetchall()
+    assert [(item['name'], item['description']) for item in services] == [
+        ('Coconut scoop', 'Coconut dessert'), ('Vegan ice cream', 'Wholesale orders'),
+    ]
+    assert all(city in item['optimized_description'] for item in services)
+    cursor.execute("SELECT count(*) AS count FROM business_knowledge_records WHERE scope_id=%s AND kind='rule'", (JINLIAN,))
+    assert cursor.fetchone()['count'] == 1
+    cursor.execute('SELECT count(*) AS count FROM businessmaplinks WHERE business_id=%s', (JINLIAN,))
+    assert cursor.fetchone()['count'] == 1
+
+
 def test_prepare_searches_wordstat_for_each_service_and_saves_after_review(pilot, monkeypatch):
     from wordstat_client import WordstatClient
     from wordstat_config import config
@@ -410,7 +462,6 @@ def test_website_audit_refresh_is_separate_from_saved_catalog_and_uses_same_perm
     assert process_next(conn)['state'] == 'ready'
     state = client.get(SETUP + HAMIK).get_json()['setup']
     key = state['sources'][0]['key']
-    facts = state['facts']
     row = setup.load(cursor, HAMIK, lock=True)
     photo_report = {'status': 'ready', 'shortlist': [{'key': 'fixture-photo'}]}
     row['data'].update(photo_report=photo_report, photo_report_scope=setup._photo_scope(row))
@@ -422,6 +473,8 @@ def test_website_audit_refresh_is_separate_from_saved_catalog_and_uses_same_perm
     state = action(client, HAMIK, 'prepare', state)
     state = action(client, HAMIK, 'save', state)
     assert state['saved'] and not state['seo_dirty']
+    facts = state['facts']
+    assert all(fact['accepted'] for fact in facts)
     refused = client.post(SETUP + HAMIK, json={'action': 'website_audit', 'key': key, 'revision': state['revision']},
                           headers={'X-Pilot-Actor': 'other'})
     assert refused.status_code == 403

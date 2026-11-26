@@ -357,7 +357,7 @@ function sourceFailed(source: Source) {
   return source.status === 'unavailable' || source.website_audit?.status === 'unavailable';
 }
 
-function SetupProfile({ state, busy, send }: { state: Setup; busy: boolean; send: (action: Action) => Promise<boolean> }) {
+function SetupProfile({ state }: { state: Setup }) {
   const profileFields = Object.entries(fieldNames).filter(([key]) => Boolean(state.profile[key]));
   return <>
     {(state.activity_type || profileFields.length > 0) && <dl className="grid gap-x-5 gap-y-2 py-2 text-sm sm:grid-cols-2">
@@ -373,7 +373,6 @@ function SetupProfile({ state, busy, send }: { state: Setup; busy: boolean; send
       <p className="text-xs text-muted-foreground">Сейчас · {state.profile[item.field] || 'не заполнено'}</p>
       <div className="flex flex-wrap items-center gap-2">
         {item.url && <a className="text-xs underline" href={item.url} target="_blank" rel="noreferrer">Источник</a>}
-        {state.can_edit && item.text !== state.profile[item.field] && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'profile', key: item.key })}>Применить</Button>}
       </div>
     </li>)}</ul>}
   </>;
@@ -494,8 +493,6 @@ function SetupReportDownload({ businessId, name }: { businessId: string; name?: 
 
 export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType<typeof useInitialBusinessSetup>; isStaff: boolean; onExit: () => void }) {
   const { state, send, available, loading, canEdit, error, notice, busy, saving, saveError, reading, pendingSources } = setup;
-  const resultRef = useRef<HTMLElement>(null);
-  const [reviewing, setReviewing] = useState(false);
   if (loading || (available === undefined && !error)) return <p role="status">Открываем чат…</p>;
   if (available !== true) return <div className="space-y-3"><p role="status">{error || 'Настройка для этой компании недоступна.'}</p>
     {error && <Button variant="outline" onClick={() => void setup.refresh()}>Повторить</Button>}
@@ -536,24 +533,12 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
   const queryCount = state ? new Set([...state.category_keywords, ...state.services.flatMap(item => item.keywords)]
     .map(keyword => keyword.text.trim().toLowerCase()).filter(Boolean)).size : 0;
   const contactsToReview = state?.profile_choices.filter(item => item.text !== state.profile[item.field]).length ?? 0;
-  const factsToReview = state?.facts.some(fact => !fact.accepted);
   const canReview = analysisDone && !checkingPhotos && !checkingSite;
   const saved = Boolean(state?.saved);
   const working = gathering || preparing || checkingPhotos || checkingSite;
   const showGathering = gathering && !mapsReading && !sitesReading && !socialsReading;
   const hasIssues = !!(needsSource || draftFailed || siteFailed || report?.status === 'unavailable'
     || sources.some(source => source.status === 'unavailable'));
-
-  const openReview = () => {
-    setReviewing(true);
-    const section = contactsToReview ? 'profile' : state?.services.length ? 'services'
-      : factsToReview ? 'facts' : showPhotos ? 'photos' : sites.length ? 'site' : 'profile';
-    const detail = resultRef.current?.querySelector<HTMLDetailsElement>('#setup-result-' + section);
-    if (detail) {
-      detail.open = true;
-      detail.querySelector('summary')?.focus();
-    }
-  };
 
   return <section className="mx-auto max-w-3xl space-y-3" aria-labelledby="initial-setup-title">
     <header className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
@@ -566,7 +551,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
     <SetupChatMessages activity={state?.activity ?? []} notice={notice} />
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
-    <article ref={resultRef} aria-labelledby="setup-result-title" className="w-full min-w-0 rounded-2xl border bg-card px-2.5 py-2 text-sm sm:px-3.5">
+    <article aria-labelledby="setup-result-title" className="w-full min-w-0 rounded-2xl border bg-card px-2.5 py-2 text-sm sm:px-3.5">
       <header className="flex items-center gap-2.5 px-2.5 pb-2">
         <LocalOSChatAvatar />
         <h3 id="setup-result-title" className="min-w-0 font-semibold">
@@ -603,7 +588,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
         </SetupResultRow>}
         <SetupResultRow id="setup-result-profile" title="Данные компании" icon={Building2}
           summary={contactsToReview ? 'Есть данные для проверки' : state.profile.address ? 'Профиль и адрес' : 'Профиль'}>
-          <SetupProfile state={state} busy={busy} send={send} />
+          <SetupProfile state={state} />
           <SetupLink businessId={state.business_id} path="/dashboard/profile">Профиль компании</SetupLink>
         </SetupResultRow>
         {showServices && <SetupResultRow id="setup-result-services" title="Услуги" icon={ListChecks} working={preparing}
@@ -617,8 +602,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
               </Button> : undefined}>
           {state.seo_prepared && state.services.length > 0 ? <>
             <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
-            <ServiceProposals key={state.business_id} items={state.services} send={canChange ? send : undefined}
-              disabled={busy} error={error} />
+            <ServiceProposals key={state.business_id} items={state.services} />
           </> : undefined}
         </SetupResultRow>}
         {state.seo_prepared && queryCount > 0 && <SetupResultRow id="setup-result-keywords" title="Поисковые запросы" icon={Search}
@@ -645,8 +629,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
           <ul className="divide-y text-sm">{state.facts.map(fact => <li key={fact.key} className="space-y-1 py-2">
             <p>{fact.text}</p><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <a className="underline" href={fact.url} target="_blank" rel="noreferrer">Источник{fact.observed_at && ' · ' + fact.observed_at.slice(0, 10)}</a>
-              {fact.accepted ? <span>Сохранено</span> : canChange && <Button size="sm" variant="outline" disabled={busy}
-                onClick={() => void send({ action: 'fact', key: fact.key })}>Подтвердить факт</Button>}
+              {fact.accepted && <span>Сохранено</span>}
             </div>
           </li>)}</ul>
           <SetupLink businessId={state.business_id} path="/dashboard/profile?section=knowledge">Факты о компании</SetupLink>
@@ -663,19 +646,17 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
           onClick={() => void send({ action: 'read' })}>Собрать данные</Button>}
         {saveError && <p role="alert" className="text-xs text-destructive">{saveError}</p>}
         {canReview && <>
-          {reviewing && !saveError && <p role="status" className="text-xs text-muted-foreground">
-            {saved ? 'Кабинет сохранён.' : saving ? 'Ждём подтверждения от LocalOS…' : 'Проверьте данные компании и предложения перед сохранением.'}
+          {(saved || canChange) && !saveError && <p role="status" className="text-xs text-muted-foreground">
+            {saved ? 'Кабинет сохранён.' : saving ? 'Ждём подтверждения от LocalOS…' : 'Собранные данные, услуги и факты сохранятся в LocalOS.'}
           </p>}
           <div className="flex flex-wrap items-start gap-2">
             {saved ? <Button size="sm" asChild>
               <Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link>
-            </Button> : canChange && (reviewing
-              ? <Button size="sm" className={cn('min-w-44', saving && 'disabled:opacity-100')} disabled={busy} aria-busy={saving}
+            </Button> : canChange && <Button size="sm" className={cn('min-w-44', saving && 'disabled:opacity-100')} disabled={busy} aria-busy={saving}
                 onClick={() => void send({ action: 'save' })}>
                 {saving && <Loader2 aria-hidden="true" className="motion-safe:animate-spin" />}
                 {saving ? 'Сохраняем кабинет…' : 'Сохранить кабинет'}
-              </Button>
-              : <Button size="sm" onClick={openReview}>Проверить черновик</Button>)}
+              </Button>}
             {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
           </div>
           {isStaff && saved && <Handoff key={state.business_id} state={state} />}

@@ -757,6 +757,36 @@ def source_findings(row, kind):
     return findings
 
 
+def _profile_fill_values(row, profile):
+    from services.business_settings_registry import normalize_patch
+
+    found = {}
+    for item in source_findings(row, 'profile').values():
+        field = item.get('field')
+        if field not in ('address', 'contact_phone', 'contact_email') or profile.get(field):
+            continue
+        text = clean(item['text'])
+        if not text:
+            continue
+        try:
+            value = normalize_patch({field: text})[field]
+        except ValueError:
+            continue
+        key = re.sub(r'\D', '', value) if field == 'contact_phone' else value.casefold()
+        if field == 'contact_phone' and not 7 <= len(key) <= 15:
+            continue
+        found.setdefault(field, {}).setdefault(key, value)
+    return {field: next(iter(values.values())) for field, values in found.items() if len(values) == 1}
+
+
+def _cabinet_saved(row, profile):
+    data = row['data']
+    if not data.get('saved') or any(not item.get('accepted') for item in data.get('services', [])):
+        return False
+    return (set(source_findings(row, 'facts')).issubset(data.get('accepted_facts', []))
+            and not _profile_fill_values(row, profile))
+
+
 def _service_review_items(cursor, row):
     proposals = row['data'].get('services', [])
     ids = [item['service_id'] for item in proposals if item.get('service_id')]
@@ -833,7 +863,7 @@ def status(cursor, row, profile, can_edit):
     return {'business_id': row['business_id'], 'revision': row['revision'], 'origin': row['origin'], 'can_edit': can_edit,
             'provisional': row['provisional'], 'profile': {k: profile.get(k) for k in CURRENT_FIELDS},
             'sources': sources, 'services': _service_review_items(cursor, row), 'seo_dirty': bool(data.get('seo_dirty')),
-            'seo_prepared': bool(data.get('seo_prepared')), 'saved': bool(data.get('saved')),
+            'seo_prepared': bool(data.get('seo_prepared')), 'saved': _cabinet_saved(row, profile),
             'started': bool(data.get('started')), 'activity_type': data.get('activity_type'),
             'category_keywords': data.get('category_keywords', []),
             'photo_report': photo_report, 'draft_status': draft_status, 'draft_ready': ready, 'report_ready': report_ready,
@@ -853,10 +883,10 @@ def log(row, message, reply):
     del history[:-12]
 
 
-def _update_profile(cursor, row, actor_id, patch):
+def _update_profile(cursor, row, actor_id, patch, *, invalidate_seo=True):
     from services.business_chat_changes import save_values
     save_values(cursor, row['business_id'], actor_id, patch, 'initial-setup:' + str(uuid.uuid4()))
-    if set(patch).intersection(('name', 'city', 'address', 'business_type')):
+    if invalidate_seo and set(patch).intersection(('name', 'city', 'address', 'business_type')):
         row['data']['seo_dirty'] = True
 
 
@@ -922,6 +952,12 @@ def _save_fact(cursor, row, actor, payload):
     fact_text = clean(payload.get('text', fact['text']), 700)
     if not fact_text:
         raise ValueError('Укажите текст подтверждаемого факта.')
+    cursor.execute("""SELECT 1 FROM business_knowledge_records
+        WHERE scope_type='business' AND scope_id=%s AND kind='rule' AND archived=FALSE
+          AND LOWER(BTRIM(payload_json->>'text'))=LOWER(%s) LIMIT 1""", (row['business_id'], fact_text))
+    if cursor.fetchone():
+        approved.append(key)
+        return 'Факт уже сохранён.'
     business_knowledge.mutate(cursor, 'business', row['business_id'], actor, {
         'operation': 'rule',
         'request_id': 'initial-setup-fact:' + key,
@@ -932,7 +968,15 @@ def _save_fact(cursor, row, actor, payload):
     return 'Факт сохранён в «Знаниях о бизнесе». Его можно использовать в черновиках материалов.'
 
 
-def _save_sources(cursor, row, actor, profile):
+def _save_cabinet(cursor, row, actor, profile):
+    for service in row['data'].get('services', []):
+        if not service.get('accepted'):
+            _apply_service(cursor, row, actor['user_id'], profile, {'key': service['key']})
+
+    for key in source_findings(row, 'facts'):
+        if key not in row['data'].get('accepted_facts', []):
+            _save_fact(cursor, row, actor, {'key': key})
+
     business_id = row['business_id']
     website = []
     cursor.execute('SELECT url FROM businessmaplinks WHERE business_id=%s', (business_id,))
@@ -947,8 +991,11 @@ def _save_sources(cursor, row, actor, profile):
                 cursor.execute('''INSERT INTO businessmaplinks(id,user_id,business_id,url,map_type) VALUES(%s,%s,%s,%s,%s)''',
                                (str(uuid.uuid4()), actor['user_id'], business_id, item['url'], item['provider']))
                 map_urls.append(item['url'])
+    patch = _profile_fill_values(row, profile)
     if not profile.get('website') and len(website) == 1:
-        _update_profile(cursor, row, actor['user_id'], {'website': website[0]})
+        patch['website'] = website[0]
+    if patch:
+        _update_profile(cursor, row, actor['user_id'], patch, invalidate_seo=False)
     row['data']['saved'] = True
     return 'Данные сохранены. Кабинет и подготовленные разделы доступны через меню.'
 
@@ -1098,7 +1145,7 @@ def operate(cursor, row, actor, profile, payload):
     if action == 'save':
         if not status(cursor, row, profile, True)['draft_ready']:
             raise Conflict('Сначала завершите разбор услуг.')
-        return _save_sources(cursor, row, actor, profile)
+        return _save_cabinet(cursor, row, actor, profile)
     raise ValueError('Выберите действие настройки.')
 
 
@@ -1228,7 +1275,7 @@ def prepare_owner(cursor, business_id, actor_id, email, revision):
     profile = read_business(cursor, business_id, lock=True)
     row = load(cursor, business_id, lock=True)
     if (not profile or not row or row['revision'] != revision
-            or not row['data'].get('saved') or row['data'].get('seo_dirty') or row['data'].get('draft_job', {}).get('id')
+            or not _cabinet_saved(row, profile) or row['data'].get('seo_dirty') or row['data'].get('draft_job', {}).get('id')
             or any(source['status'] in ('added', 'queued') for source in row['data'].get('sources', {}).values())):
         raise Conflict('Сначала проверьте и сохраните данные кабинета.')
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('initial-setup-owner:' + email,))

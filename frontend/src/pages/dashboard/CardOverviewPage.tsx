@@ -3,7 +3,7 @@ import { CompetitorsTab, KeywordsTab, NewsTab, ReviewsTab } from '@/components/d
 import { DemoReviews } from './demo/DemoReviews';
 import { InitialSetupMenuResult } from '@/components/initial-setup/InitialBusinessSetup';
 import { useInitialBusinessSetup } from '@/components/initial-setup/useInitialBusinessSetup';
-import type { SaveServiceProposal, ServiceProposal } from '@/components/initial-setup/ServiceProposals';
+import type { ServiceProposal } from '@/components/initial-setup/ServiceProposals';
 import {
 	CardServiceAddForm,
 	CardServiceCatalogCompressionDialog,
@@ -532,12 +532,6 @@ const CardOverviewWorkspace = () => {
       return proposal ? { ...service, setupProposal: proposal } : service;
     }), ...additions];
   }, [initialSetup.state, userServices]);
-
-  const saveSetupProposal: SaveServiceProposal = async (action) => {
-    if (!await initialSetup.send(action)) return false;
-    await loadUserServices();
-    return true;
-  };
 
   const serviceCategories = useMemo(() => {
     const set = new Set<string>();
@@ -1188,9 +1182,6 @@ const CardOverviewWorkspace = () => {
                 services={pagedServices}
                 filteredCount={filteredServices.length}
                 loading={loadingServices}
-                saveSetupProposal={initialSetup.state?.can_edit ? saveSetupProposal : undefined}
-                setupProposalDisabled={initialSetup.busy || Boolean(initialSetup.state?.seo_dirty)}
-                setupProposalError={initialSetup.error}
                 servicesSearch={servicesSearch}
                 servicesCategoryFilter={servicesCategoryFilter}
                 language={language}

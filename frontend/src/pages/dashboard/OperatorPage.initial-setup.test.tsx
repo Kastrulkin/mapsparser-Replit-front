@@ -66,7 +66,7 @@ it('routes the existing chat composer to the selected company and opens the same
   expect(within(setupChat).getByText('Вид деятельности сохранён.')).toBeVisible();
   const setupCard = screen.getByRole('region', { name: 'Первичная настройка компании' });
   expect(screen.getAllByText('Вид деятельности сохранён.')).toHaveLength(1);
-  expect(within(setupCard).getByRole('button', { name: 'Проверить черновик' })).toBeVisible();
+  expect(within(setupCard).getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
   const queries = screen.getByText('Поисковые запросы');
   expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
   fireEvent.click(queries);
@@ -102,25 +102,9 @@ it('reviews new and existing services in the same list and only shows original d
   expect(dialog.queryByRole('textbox')).not.toBeInTheDocument();
   expect(api.post).not.toHaveBeenCalled();
 
-  fireEvent.click(dialog.getByRole('button', { name: 'Изменить' }));
-  expect(dialog.getByRole('textbox', { name: 'Описание' })).toHaveValue(added.proposed_description);
-  expect(dialog.queryByText(added.proposed_description, { selector: 'p' })).not.toBeInTheDocument();
-  const editedName = 'Пошив мерча для компаний';
-  fireEvent.change(dialog.getByRole('textbox', { name: 'Название' }), { target: { value: editedName } });
-  vi.mocked(api.post).mockRejectedValueOnce({ response: { data: { error: 'Повторите сохранение.' } } });
-  fireEvent.click(dialog.getByRole('button', { name: 'Сохранить вариант' }));
-  expect(await dialog.findByRole('alert')).toHaveTextContent('Повторите сохранение.');
-  expect(dialog.getByRole('textbox', { name: 'Название' })).toHaveValue(editedName);
-
-  vi.mocked(api.post).mockResolvedValueOnce({ data: { available: true, setup: {
-    ...state, revision: 4, services: [existing, { ...added, accepted: true, proposed: editedName }],
-  } } });
-  fireEvent.click(dialog.getByRole('button', { name: 'Сохранить вариант' }));
-  const savedRow = await screen.findByRole('button', { name: `${editedName} Сохранено` });
-  expect(api.post).toHaveBeenLastCalledWith(endpoint, {
-    action: 'service', key: 'new', revision: 3, name: editedName, description: added.proposed_description,
-  });
-  await waitFor(() => expect(savedRow).toHaveFocus());
+  expect(dialog.queryByRole('button', { name: 'Добавить в услуги' })).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку услуги' }));
+  expect(newRow).toHaveFocus();
 
   const existingRow = screen.getByRole('button', { name: 'Vegan ice cream На проверке' });
   fireEvent.click(existingRow);
@@ -129,7 +113,7 @@ it('reviews new and existing services in the same list and only shows original d
   expect(edit.getByText('Текущее описание')).toBeVisible();
   expect(edit.getByText(existing.description)).toBeVisible();
   expect(edit.getByText(existing.proposed_description)).toBeVisible();
-  expect(edit.getByRole('button', { name: 'Оставить исходную' })).toBeVisible();
+  expect(edit.queryByRole('button', { name: 'Сохранить вариант' })).not.toBeInTheDocument();
   fireEvent.click(edit.getByRole('button', { name: 'Закрыть карточку услуги' }));
   expect(existingRow).toHaveFocus();
   expect(existingRow).toHaveAttribute('aria-pressed', 'false');
@@ -326,10 +310,7 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
   expect(await screen.findByText('Черновик готов к проверке')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
-  expect(screen.queryByRole('button', { name: 'Сохранить кабинет' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Проверить черновик' }));
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
-  expect(screen.getByText('Услуги').closest('summary')).toHaveFocus();
 });
 
 it.each([false, true])('shows progress and reconciles an unconfirmed save (committed=%s)', async committed => {
@@ -345,7 +326,7 @@ it.each([false, true])('shows progress and reconciles an unconfirmed save (commi
     return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
   }
   render(<MemoryRouter><SetupChat /></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Проверить черновик' }));
+  await screen.findByRole('button', { name: 'Сохранить кабинет' });
   vi.useFakeTimers();
   try {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить кабинет' }));
