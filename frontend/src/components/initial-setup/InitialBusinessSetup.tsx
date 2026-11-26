@@ -458,12 +458,16 @@ function SetupReportDownload({ businessId, name }: { businessId: string; name?: 
 
 export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType<typeof useInitialBusinessSetup>; isStaff: boolean; onExit: () => void }) {
   const { state, send, available, loading, canEdit, error, notice, busy, reading, pendingSources } = setup;
-  if (loading || (available === undefined && !error)) return <p role="status">Открываем настройку…</p>;
+  if (loading || (available === undefined && !error)) return <p role="status">Открываем чат…</p>;
   if (available !== true) return <div className="space-y-3"><p role="status">{error || 'Настройка для этой компании недоступна.'}</p>
     {error && <Button variant="outline" onClick={() => void setup.refresh()}>Повторить</Button>}
     <Button variant="ghost" onClick={onExit}>Рабочий чат</Button></div>;
 
   const gathering = reading || pendingSources;
+  const hasProgress = state?.started || state?.sources.length || state?.activity.length || state?.seo_prepared;
+  if (!hasProgress && !gathering) {
+    return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
+  }
   const sourcesToRead = state?.sources.some(source => source.status === 'added') ?? false;
   const needsSeo = !state?.seo_prepared || state.seo_dirty;
   const preparing = state?.draft_status === 'queued' || state?.draft_status === 'running';
@@ -493,12 +497,6 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
     </header>
     <SetupChatMessages activity={state?.activity ?? []} notice={notice} />
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-
-    {!state?.started && !gathering && <SetupStep title="С какой компании начнём?" icon={MessageSquare}>
-      <p className="text-muted-foreground">Вставьте ссылку на карточку, сайт или соцсеть.</p>
-      {canChange && <Button size="sm" variant="ghost" disabled={busy}
-        onClick={() => void send({ action: 'start' })}>Начать с данных кабинета</Button>}
-    </SetupStep>}
 
     {state && (completedSources.length > 0 || state.started && !gathering) && <SetupStep
       title={completedSources.length ? 'Источники' : 'Данные компании'} icon={Building2}>

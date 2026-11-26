@@ -962,6 +962,11 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
             </SheetContent>
           </Sheet>
           <DropdownMenu><DropdownMenuTrigger asChild><Button ref={menuTriggerRef} size="icon" variant="ghost" aria-label={toolbar.menu}><MoreHorizontal aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+            {setupMode && <DropdownMenuItem onSelect={exitInitialSetup}>Рабочий чат</DropdownMenuItem>}
+            {setupMode && initialSetup.available && initialSetup.canEdit && !initialSetup.state?.started &&
+              <DropdownMenuItem disabled={initialSetup.busy} onSelect={() => void initialSetup.send({ action: 'start' })}>
+                Начать с данных кабинета
+              </DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>{copy.feedback.button}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>{toolbar.history}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setHelpOpen(true)}>{toolbar.help}</DropdownMenuItem>

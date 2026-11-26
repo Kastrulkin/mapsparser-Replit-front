@@ -298,9 +298,12 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   expect(await screen.findByText('Проверяем фото…')).toBeVisible();
 });
 
-it('starts from the first link in an empty setup and exposes the PDF when the draft is ready', async () => {
+it.each([false, true])('opens a blank chat and starts from the first link (saved empty setup: %s)', async savedEmptySetup => {
+  const empty = savedEmptySetup ? {
+    ...setup, started: false, seo_prepared: false, sources: [], services: [],
+  } : null;
   vi.mocked(api.get).mockImplementation(async path => ({
-    data: path === endpoint ? { available: true, can_edit: true, setup: null } : { messages: [], conversation: null },
+    data: path === endpoint ? { available: true, can_edit: true, setup: empty } : { messages: [], conversation: null },
   }));
   vi.mocked(api.post).mockResolvedValue({
     data: { available: true, setup: { ...setup, draft_ready: true, report_ready: true } },
@@ -311,15 +314,16 @@ it('starts from the first link in an empty setup and exposes the PDF when the dr
   render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
-  await screen.findByRole('heading', { name: 'Первичная настройка компании' });
-  const input = screen.getByRole('textbox', { name: 'Сообщение для первичной настройки' });
-  expect(input).toBeEnabled();
+  const input = await screen.findByRole('textbox', { name: 'Сообщение для первичной настройки' });
+  await waitFor(() => expect(input).toBeEnabled());
+  expect(screen.getByTestId('operator-message-list')).toBeEmptyDOMElement();
   const map = 'https://yandex.com/maps/org/fixture/123456';
   fireEvent.change(input, { target: { value: map } });
   fireEvent.keyDown(input, { key: 'Enter' });
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
-    action: 'start', message: map, auto: true, revision: undefined,
+    action: 'start', message: map, auto: true, revision: empty?.revision,
   }));
+  expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
   expect(await screen.findByText('Черновик кабинета готов')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
