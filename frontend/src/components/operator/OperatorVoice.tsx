@@ -192,7 +192,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
         aria-label={compact ? 'Загрузить аудио' : undefined} title="Загрузить аудио" disabled={disabled || busy || starting || recording || hasDraft} onClick={() => fileInput.current?.click()}>
         {compact ? <FileAudio aria-hidden="true" /> : 'Загрузить аудио'}
       </Button>
-      <input ref={fileInput} className="sr-only" tabIndex={-1} aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a"
+      <input ref={fileInput} className={compact ? 'hidden' : 'sr-only'} tabIndex={-1} aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a"
         disabled={disabled || busy || starting || recording || hasDraft} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
   </div>;
   const feedback = (!compact || hasDraft || clipUrl || text || starting || recording || busy || error) && <div

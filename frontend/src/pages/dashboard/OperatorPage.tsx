@@ -378,7 +378,11 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
       const node = workspaceRef.current;
       if (!node) return;
       const viewport = window.visualViewport;
-      setWorkspaceHeight(Math.max(160, (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0) - node.getBoundingClientRect().top - 12 - (window.matchMedia("(max-width: 767px)").matches ? 40 : 0)));
+      const shell = node.closest('main');
+      const bottomPadding = shell ? parseFloat(window.getComputedStyle(shell).paddingBottom) || 0 : 0;
+      const workspaceTop = node.getBoundingClientRect().top + window.scrollY;
+      const viewportBottom = (viewport?.height || window.innerHeight) + (viewport?.offsetTop || 0);
+      setWorkspaceHeight(Math.max(160, viewportBottom - workspaceTop - Math.max(12, bottomPadding)));
     };
     resize();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : null;

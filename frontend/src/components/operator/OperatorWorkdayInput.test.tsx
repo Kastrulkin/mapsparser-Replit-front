@@ -67,6 +67,7 @@ it('opens compact material settings away from the toolbar and restores its trigg
   expect(within(menu).getByRole('heading', { name: 'Настройки материалов' })).toBeVisible();
   expect(within(menu).getByRole('combobox', { name: 'Получатель тестовых сообщений' })).toBeVisible();
   expect(menu.contains(attachment)).toBe(false);
+  expect(menu).toHaveFocus();
   await user.keyboard('{Escape}');
   await waitFor(() => expect(menu).not.toBeInTheDocument());
   expect(trigger).toHaveFocus();

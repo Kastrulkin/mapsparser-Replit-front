@@ -21,6 +21,7 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
   const [notice, setNotice] = useState('');
   const [materialsOpen, setMaterialsOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const materialsMenu = useRef<HTMLDivElement>(null);
   const lifetime = useRef(new AbortController());
   async function request(path: string, body?: unknown) {
     const signal = lifetime.current.signal;
@@ -143,8 +144,12 @@ export function OperatorWorkdayInput({ businessId, channel, conversationId, disa
             Материалы<ChevronDown aria-hidden="true" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent side="top" align="start" sideOffset={8} collisionPadding={12}
+        <PopoverContent ref={materialsMenu} side="top" align="start" sideOffset={8} collisionPadding={12}
           aria-label={config.can_configure ? 'Настройки материалов' : 'Материалы'}
+          tabIndex={-1} onOpenAutoFocus={event => {
+            event.preventDefault();
+            materialsMenu.current?.focus({ preventScroll: true });
+          }}
           className="max-h-[var(--radix-popover-content-available-height)] w-96 max-w-[calc(100vw-1.5rem)] space-y-4 overflow-y-auto overscroll-contain rounded-xl">
           <h3 className="text-base font-semibold">{config.can_configure ? 'Настройки материалов' : 'Материалы'}</h3>
           {clearMaterial}
