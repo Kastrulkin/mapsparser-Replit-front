@@ -2,9 +2,10 @@ import {
   ArrowUpRight, Building2, Check, ChevronDown, Download, FileText, Images,
   ListChecks, Loader2, MapPin, MessageSquare, Search, UserRoundPlus, X, type LucideIcon,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { newAuth } from '@/lib/auth_new';
+import { getApiEndpoint } from '@/config/api';
+import { browserBearerToken, browserCookieAuthEnabled } from '@/lib/browserSessionFetch';
 import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -424,32 +425,68 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
   </>;
 }
 
+const REPORT_DOWNLOAD_TIMEOUT_MS = 15_000;
+
 function SetupReportDownload({ businessId, name }: { businessId: string; name?: string | null }) {
   const [downloading, setDownloading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  return <div className="space-y-1">
-    <Button size="sm" variant="outline" disabled={downloading} onClick={async () => {
-      setDownloading(true);
-      setFailed(false);
+  const [error, setError] = useState('');
+  const activeRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    const request = activeRequest.current;
+    activeRequest.current = null;
+    request?.abort();
+  }, []);
+
+  const download = async () => {
+    if (activeRequest.current) return;
+    const request = new AbortController();
+    activeRequest.current = request;
+    const timer = window.setTimeout(() => request.abort(), REPORT_DOWNLOAD_TIMEOUT_MS);
+    setDownloading(true);
+    setError('');
+    try {
+      const token = browserBearerToken();
+      const response = await fetch(getApiEndpoint('/api' + setupUrl(businessId) + '/report'), {
+        cache: 'no-store',
+        signal: request.signal,
+        credentials: browserCookieAuthEnabled() ? 'include' : 'same-origin',
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+      });
+      if (!response.ok || !response.headers.get('content-type')?.startsWith('application/pdf')) throw new Error('PDF unavailable');
+      const pdf = await response.blob();
+      if (request.signal.aborted || activeRequest.current !== request) return;
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `LocalOS - ${name?.replace(/[\\/:*?"<>|]/g, '_') || 'первичная настройка'}.pdf`;
+      link.hidden = true;
+      document.body.appendChild(link);
       try {
-        const token = newAuth.getToken();
-        const response = await fetch('/api' + setupUrl(businessId) + '/report', {
-          cache: 'no-store', headers: token ? { Authorization: 'Bearer ' + token } : {},
-        });
-        if (!response.ok || !response.headers.get('content-type')?.startsWith('application/pdf')) throw new Error('PDF unavailable');
-        const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `LocalOS - ${name?.replace(/[\\/:*?"<>|]/g, '_') || 'первичная настройка'}.pdf`;
         link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch {
-        setFailed(true);
       } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch {
+      if (activeRequest.current === request) {
+        setError(request.signal.aborted
+          ? 'Сервер долго не отвечал. Попробуйте скачать отчёт ещё раз.'
+          : 'Не удалось скачать отчёт. Попробуйте ещё раз.');
+      }
+    } finally {
+      window.clearTimeout(timer);
+      if (activeRequest.current === request) {
+        activeRequest.current = null;
         setDownloading(false);
       }
-    }}><Download aria-hidden="true" />{downloading ? 'Готовим файл…' : 'Скачать отчёт PDF'}</Button>
-    {failed && <p role="alert" className="text-xs text-destructive">Не удалось скачать отчёт. Попробуйте ещё раз.</p>}
+    }
+  };
+
+  return <div className="space-y-1">
+    <Button size="sm" variant="outline" disabled={downloading} onClick={() => void download()}>
+      <Download aria-hidden="true" />{downloading ? 'Готовим файл…' : 'Скачать отчёт PDF'}
+    </Button>
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
   </div>;
 }
 

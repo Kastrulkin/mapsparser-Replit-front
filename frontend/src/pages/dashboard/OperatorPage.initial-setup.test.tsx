@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InitialSetupChat } from '@/components/initial-setup/InitialBusinessSetup';
@@ -323,4 +323,56 @@ it('starts from the first link in an empty setup and exposes the PDF when the dr
   expect(await screen.findByText('Черновик кабинета готов')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
+});
+
+it('releases a stalled PDF request and downloads the report on retry', async () => {
+  vi.mocked(api.get).mockResolvedValue({
+    data: { available: true, setup: { ...setup, report_ready: true, draft_ready: true } },
+  });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+  const button = await screen.findByRole('button', { name: 'Скачать отчёт PDF' });
+
+  const fetchPdf = vi.fn()
+    .mockImplementationOnce((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }))
+    .mockResolvedValueOnce(new Response('%PDF-1.4', { headers: { 'content-type': 'application/pdf' } }));
+  const createObjectURL = vi.fn(() => 'blob:http://localhost/setup-report');
+  const revokeObjectURL = vi.fn();
+  class DownloadURL extends URL {
+    static createObjectURL = createObjectURL;
+    static revokeObjectURL = revokeObjectURL;
+  }
+  const downloads: { filename: string; attached: boolean }[] = [];
+  const clickLink = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    downloads.push({ filename: this.download, attached: this.isConnected });
+  });
+  vi.stubGlobal('fetch', fetchPdf);
+  vi.stubGlobal('URL', DownloadURL);
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(button).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Сервер долго не отвечал');
+    expect(downloads).toHaveLength(0);
+
+    await act(async () => { fireEvent.click(button); });
+    expect(button).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(downloads).toEqual([{ filename: 'LocalOS - Jinlian Vegan Ice Cream.pdf', attached: true }]);
+    expect(fetchPdf).toHaveBeenCalledTimes(2);
+    expect(fetchPdf.mock.calls[1][0]).toMatch(/\/api\/operator\/initial-setup\/pilot-jinlian\/report$/);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/setup-report');
+  } finally {
+    clickLink.mockRestore();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
 });
