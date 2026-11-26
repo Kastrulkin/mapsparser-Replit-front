@@ -57,13 +57,14 @@ def business_setup(business_id):
         if not roles_allow(roles, 'business.read'):
             return reply({'error': 'Нет доступа к компании.'}, 403)
         can_edit = roles_allow(roles, 'business.settings.write')
+        can_approve_apify = bool(actor.get('is_superadmin'))
         if request.method == 'GET':
             row = setup.load(cursor, business_id)
             profile = setup.read_business(cursor, business_id)
             if not profile:
                 return reply({'error': 'Компания недоступна.'}, 404)
             return reply({'available': True, 'can_edit': can_edit,
-                          'setup': setup.status(cursor, row, profile, can_edit) if row else None})
+                          'setup': setup.status(cursor, row, profile, can_edit, can_approve_apify=can_approve_apify) if row else None})
         if not can_edit:
             return reply({'error': 'Настройку может сохранить владелец или сотрудник с правом настройки.'}, 403)
         data = payload()
@@ -88,7 +89,7 @@ def business_setup(business_id):
             message = setup.operate(cursor, row, actor, profile, data)
         setup.persist(cursor, row)
         profile = setup.read_business(cursor, business_id)
-        result = setup.status(cursor, row, profile, can_edit)
+        result = setup.status(cursor, row, profile, can_edit, can_approve_apify=can_approve_apify)
         db.conn.commit()
         return reply({'available': True, 'setup': result, 'message': message})
     except setup.Conflict as error:

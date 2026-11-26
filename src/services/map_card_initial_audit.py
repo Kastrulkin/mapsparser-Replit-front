@@ -346,7 +346,7 @@ def read_google(cursor, payload):
     return data, (data.get('metadata') or {}).get('mapsUri') or '', {}
 
 
-def read_apify(payload, save_provider_run):
+def read_apify(payload, save_provider_run, *, max_charge=APIFY_CAP, enrich_yandex=False):
     """Reuse current HTTP transport/input/normalization, never SDK POST retries."""
     from services.prospecting_service import ProspectingService
     service = ProspectingService(source='apify_'+payload['provider'])
@@ -364,8 +364,10 @@ def read_apify(payload, save_provider_run):
         pricing = max(versions, key=lambda p: str(p.get('startedAt') or ''), default={})
     if pricing.get('pricingModel') != 'PAY_PER_EVENT':
         raise AuditReadError('Для выбранного Apify-парсера не подтверждён тариф с ограничением расходов за события. Платный запуск остановлен.')
-    if Decimal(str(pricing.get('minimalMaxTotalChargeUsd') or 0)) > APIFY_CAP:
+    if Decimal(str(pricing.get('minimalMaxTotalChargeUsd') or 0)) > max_charge:
         raise AuditReadError('Минимальный лимит Apify выше согласованного. Запуск остановлен.')
+    if pricing.get('isPPEPlatformUsagePaidByUser') is True and max_charge < APIFY_CAP:
+        raise AuditReadError('Apify указал отдельную плату за ресурсы. Запуск с этим лимитом остановлен.')
     run_input = service._build_run_input_for_map_url(payload['url'], limit=1)
     run_input.update({'maxReviews':20, 'maxImages':20, 'maxPhotos':20,
                       'startUrls':[{'url':payload['url']}]})
@@ -376,12 +378,12 @@ def read_apify(payload, save_provider_run):
         # name query can consume the budget on a namesake in a different city.
         run_input.update(query=[], category='', location='',
             businessIds=[entity_key('yandex', payload['url'])],
-            enrichBusinessData=False, includeReviews=True, maxPosts=10)
+            enrichBusinessData=enrich_yandex, includeReviews=True, maxPosts=10)
     # Existing requests transport has no retry adapter; redirects are forbidden
     # as 307/308 could resend the paid POST. Never call the SDK start method.
     save_provider_run(None)  # Durable ambiguous-POST boundary, even without run ID.
     response = service._apify_request('POST', 'https://api.apify.com/v2/acts/'+actor_id+'/runs',
-        params={'token':service.api_token,'maxTotalChargeUsd':str(APIFY_CAP),'maxItems':1,
+        params={'token':service.api_token,'maxTotalChargeUsd':str(max_charge),'maxItems':1,
                 'timeout':180,'restartOnError':'false','waitForFinish':0},
         json=run_input, timeout=30, allow_redirects=False)
     if not 200 <= response.status_code < 300:

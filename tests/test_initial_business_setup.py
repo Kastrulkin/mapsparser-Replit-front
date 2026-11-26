@@ -2,6 +2,7 @@
 import importlib
 import json
 import os
+from types import SimpleNamespace
 
 import psycopg2
 import pytest
@@ -12,6 +13,7 @@ import database_manager
 from api import initial_business_setup_api
 from services import initial_business_setup as setup
 from services import initial_setup_sources
+from services.prospecting_service import ProspectingService
 from services.operator_async_jobs import claim_next_operator_async_job, process_next_operator_async_job
 
 SETUP = '/api/operator/initial-setup/'
@@ -519,6 +521,75 @@ def test_placeholder_map_title_does_not_confirm_a_card():
     source = {'provider': 'yandex', 'url': 'https://yandex.com/maps/org/clinic/123456'}
     result = initial_setup_sources.read_map(source, {'name': 'Untitled'})
     assert result['status'] == 'unavailable'
+
+
+def test_primary_setup_apify_is_one_explicit_capped_read(pilot, monkeypatch):
+    client, conn = pilot
+    staff = {'X-Pilot-Actor': 'staff'}
+    path = SETUP + HAMIK
+    url = 'https://yandex.ru/maps/org/clinic/123456'
+    calls = []
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers',
+                        lambda **_: {'yandex': lambda _: {'error': 'yandex_rate_limited'}})
+    monkeypatch.setenv('APIFY_TOKEN', 'disposable-token')
+
+    def transport(self, method, endpoint, **kwargs):
+        calls.append(method)
+        if method == 'GET':
+            data = {'pricingInfo': {'pricingModel': 'PAY_PER_EVENT'}}
+        else:
+            assert method == 'POST'
+            assert kwargs['params']['maxTotalChargeUsd'] == '0.02'
+            assert kwargs['params']['restartOnError'] == 'false'
+            assert kwargs['allow_redirects'] is False
+            assert kwargs['json']['maxResults'] == 1
+            assert kwargs['json']['query'] == []
+            assert kwargs['json']['businessIds'] == ['123456']
+            assert kwargs['json']['enrichBusinessData'] is True
+            with conn.cursor() as cursor:
+                cursor.execute("""SELECT payload_json FROM operator_async_jobs
+                    WHERE idempotency_key=%s""", (f'initial-setup-apify:{HAMIK}:123456',))
+                assert cursor.fetchone()['payload_json']['apify_started'] is True
+            data = {'id': 'fixture-apify', 'status': 'SUCCEEDED', 'defaultDatasetId': 'fixture', 'usageTotalUsd': 0.0155}
+        return SimpleNamespace(status_code=200, raise_for_status=lambda: None, json=lambda: {'data': data})
+
+    gallery = 'https://avatars.mds.yandex.net/get-altay/12345/a-b/XXXL'
+    monkeypatch.setattr(ProspectingService, '_apify_request', transport)
+    monkeypatch.setattr(ProspectingService, 'fetch_dataset_items', lambda _service, _dataset: [{
+        'source': 'apify_yandex', 'source_external_id': '123456', 'source_url': url, 'name': 'Clinic',
+        'services_json': [{'name': 'Laser consultation'}], 'raw_payload_json': {'photos': [gallery]},
+    }])
+    action(client, HAMIK, 'start', message=url, auto=True)
+    assert process_next_operator_async_job()['status'] == 'failed'
+    assert process_next_operator_async_job()['result']['state'] == 'needs_source'
+    assert calls == []
+    state = client.get(path, headers=staff).get_json()['setup']
+    key = state['sources'][0]['key']
+    assert state['sources'][0]['apify_max_charge_usd'] == '0.02'
+    assert 'apify_max_charge_usd' not in client.get(path).get_json()['setup']['sources'][0]
+    payload = {'action': 'read_apify', 'revision': state['revision'], 'key': key}
+    assert client.post(path, json=payload, headers=staff).status_code == 400
+    payload['approved_max_charge_usd'] = '0.02'
+    assert client.post(path, json=payload).status_code == 403
+
+    response = client.post(path, json=payload, headers=staff)
+    assert response.status_code == 200, response.get_json()
+    queued = response.get_json()['setup']
+    assert queued['sources'][0]['reading_with_apify'] is True
+    assert process_next_operator_async_job()['result']['state'] == 'ready'
+    assert process_next_operator_async_job()['result']['state'] == 'ready'
+    assert process_next_operator_async_job()['status'] == 'completed'
+    assert calls == ['GET', 'POST']
+    state = client.get(path, headers=staff).get_json()['setup']
+    assert state['report_ready'] and state['services'][0]['original'] == 'Laser consultation'
+    assert state['sources'][0]['capture_method'] == 'apify'
+    assert state['sources'][0]['photo_candidate_count'] == 1
+    assert client.post(path, json={**payload, 'revision': state['revision']}, headers=staff).status_code == 409
+    state = action(client, HAMIK, 'message', state, message='https://yandex.com/maps/org/123456', auto=True)
+    assert process_next_operator_async_job()['status'] == 'failed'
+    state = client.get(path, headers=staff).get_json()['setup']
+    assert all('apify_max_charge_usd' not in source for source in state['sources'])
+    assert calls == ['GET', 'POST']
 
 
 def test_generated_topics_do_not_replace_an_unread_source():

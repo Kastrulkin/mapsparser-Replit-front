@@ -367,6 +367,38 @@ it('adds results below each completed chat step and keeps an unread card out of 
   expect(screen.getByRole('heading', { name: 'Услуги и SEO' }).querySelector('img')).toBeNull();
 }, 12500);
 
+it('offers the capped Apify read only as a confirmed action after a map failure', async () => {
+  const source = { ...setup.sources[0], status: 'unavailable', apify_max_charge_usd: '0.02' };
+  const limited = { ...setup, sources: [source], draft_status: 'needs_source' };
+  vi.mocked(api.post).mockClear();
+  vi.mocked(api.get).mockResolvedValue({ data: { available: true, setup: limited } });
+  vi.mocked(api.post).mockResolvedValue({
+    data: { available: true, setup: {
+      ...limited, sources: [{ ...source, status: 'queued', reading_with_apify: true, apify_max_charge_usd: undefined }],
+      draft_status: 'queued',
+    } },
+  });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+  const button = await screen.findByRole('button', { name: 'Прочитать через Apify · до $0,02' });
+  fireEvent.click(button);
+  let dialog = screen.getByRole('alertdialog', { name: 'Прочитать карточку через Apify?' });
+  expect(within(dialog).getByText(/Лимит расходов \$0,02/)).toBeVisible();
+  expect(api.post).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(api.post).not.toHaveBeenCalled();
+  fireEvent.click(button);
+  dialog = screen.getByRole('alertdialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Запустить Apify' }));
+  expect(await screen.findByText('Читаем карточку через Apify')).toBeVisible();
+  expect(api.post).toHaveBeenCalledExactlyOnceWith(endpoint, {
+    action: 'read_apify', key: 'map', approved_max_charge_usd: '0.02', revision: 3,
+  });
+});
+
 it('releases a stalled PDF request and downloads the report on retry', async () => {
   vi.mocked(api.get).mockResolvedValue({
     data: { available: true, setup: { ...setup, report_ready: true, draft_ready: true } },

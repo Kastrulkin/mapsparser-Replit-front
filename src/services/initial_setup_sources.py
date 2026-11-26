@@ -176,11 +176,12 @@ def catalog_rows(raw, url):
     return rows
 
 
-def read_map(source, snapshot):
+def read_map(source, snapshot, *, capture_method=None):
     provider, url = source['provider'], source['url']
     if snapshot:
         raw = snapshot
-        message = 'Использован сохранённый снимок этой карточки.'
+        message = ('Карточка прочитана через Apify.' if capture_method == 'apify'
+                   else 'Использован сохранённый снимок этой карточки.')
     elif provider in ('yandex', '2gis') and map_card_initial_audit.public_url(provider, url):
         raw = map_card_initial_audit.initial_native_readers(content_only=True)[provider](url)
         message = 'Карточка прочитана.'
@@ -208,4 +209,4 @@ def read_map(source, snapshot):
             'facts': [dated(description, url)] if description else [],
             'metrics': {'rating': clean(raw.get('rating'), 20), 'reviews': clean(raw.get('reviews_count'), 20)},
             'observed_at': clean(observed_at, 60), 'photo_candidates': photos,
-            'capture_method': 'snapshot' if snapshot else 'live'}
+            'capture_method': capture_method or ('snapshot' if snapshot else 'live')}

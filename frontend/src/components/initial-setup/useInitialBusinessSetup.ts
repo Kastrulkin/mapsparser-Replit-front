@@ -28,6 +28,8 @@ export type Source = {
   competitor: boolean;
   service_count: number;
   photo_candidate_count?: number;
+  apify_max_charge_usd?: string;
+  reading_with_apify?: boolean;
   website_audit?: WebsiteAudit;
 };
 type Finding = { key: string; text: string; url: string; accepted?: boolean; observed_at?: string };
@@ -67,7 +69,7 @@ export type Setup = {
   activity: { message: string; reply: string; at: string }[];
 };
 type SetupResponse = { available: boolean; can_edit?: boolean; setup?: Setup | null; message?: string };
-export type Action = { action: string; key?: string; message?: string; name?: string; description?: string; text?: string; category?: string; auto?: boolean };
+export type Action = { action: string; key?: string; message?: string; name?: string; description?: string; text?: string; category?: string; auto?: boolean; approved_max_charge_usd?: string };
 export type Invite = { email: string; invite_url?: string; login_path?: string; existing_account: boolean };
 
 export const setupUrl = (id: string) => '/operator/initial-setup/' + encodeURIComponent(id);
@@ -146,7 +148,7 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
     const issued = ++mutation.current;
     const isCurrent = () => scope.current === context && mutation.current === issued;
     setBusy(true);
-    setPendingSources(action.action === 'read' || action.action === 'retry'
+    setPendingSources(action.action === 'read' || action.action === 'retry' || action.action === 'read_apify'
       || Boolean((action.action === 'start' || action.action === 'message') && action.message?.includes('://')));
     setError('');
     setNotice('');
