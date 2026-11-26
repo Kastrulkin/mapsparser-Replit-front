@@ -515,6 +515,11 @@ def test_placeholder_map_title_does_not_confirm_a_card():
     assert result['status'] == 'unavailable'
 
 
+def test_generated_topics_do_not_replace_an_unread_source():
+    data = {'auto_draft': True, 'category_keywords': [{'text': 'Company category'}]}
+    assert setup._draft_needs_source(data, [{'status': 'unavailable'}])
+
+
 def test_website_audit_can_use_pinned_node_on_existing_images(monkeypatch, tmp_path):
     from types import SimpleNamespace
 

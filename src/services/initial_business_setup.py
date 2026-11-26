@@ -344,7 +344,7 @@ def _draft_needs_source(data, sources):
     own = [source for source in sources if not source.get('competitor')]
     return bool(data.get('auto_draft') and own
                 and all(source['status'] in ('unavailable', 'link_only') for source in own)
-                and not any(data.get(key) for key in ('services', 'declared_services', 'activity_type', 'category_keywords')))
+                and not any(data.get(key) for key in ('services', 'declared_services', 'activity_type')))
 
 
 def process_draft(claimed):
