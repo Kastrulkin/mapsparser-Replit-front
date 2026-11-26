@@ -48,12 +48,10 @@ def business_setup(business_id):
     actor = require_auth_from_request()
     if not actor or actor.get('session_kind') == 'demo':
         return reply({'error': 'Требуется вход.'}, 401)
-    if not setup.allowed(business_id):
-        return reply({'available': False})
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        if not setup.installed(cursor):
+        if not setup.actor_allowed(cursor, business_id, actor):
             return reply({'available': False})
         roles = actor_roles(cursor, business_id, actor)
         if not roles_allow(roles, 'business.read'):
@@ -80,6 +78,8 @@ def business_setup(business_id):
             setup.queue_added(cursor, row, actor['user_id'])
             row['data']['started'] = True
             message = 'Подготовка началась. Данные компании уже в карточке.'
+            if data.get('message'):
+                message += ' ' + setup.message(cursor, row, actor, profile, data)
         elif not row:
             return reply({'error': 'Сначала начните первичную настройку.'}, 409)
         else:
@@ -146,12 +146,12 @@ def setup_owner(business_id):
     actor = require_auth_from_request()
     if not actor or actor.get('session_kind') == 'demo':
         return reply({'error': 'Требуется вход.'}, 401)
-    if not actor.get('is_superadmin') or not setup.allowed(business_id):
+    if not actor.get('is_superadmin'):
         return reply({'error': 'Нужен доступ к подготовке клиентских аккаунтов.'}, 403)
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
-        if not setup.installed(cursor):
+        if not setup.actor_allowed(cursor, business_id, actor):
             return reply({'error': 'Подготовка кабинета сейчас недоступна.'}, 404)
         data = payload()
         email = str(data.get('email') or '').strip().lower()

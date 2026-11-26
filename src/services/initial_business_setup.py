@@ -47,6 +47,23 @@ def allowed(business_id):
     return enabled() and (not cohort or business_id in cohort)
 
 
+def actor_allowed(cursor, business_id, actor):
+    """Keep owner rollout bounded while letting staff activate a selected business."""
+    if not enabled() or not installed(cursor):
+        return False
+    return allowed(business_id) or bool(actor.get('is_superadmin'))
+
+
+def runtime_allowed(cursor, business_id):
+    """A staff-started setup row is the durable worker authorization."""
+    if not enabled() or not installed(cursor):
+        return False
+    if allowed(business_id):
+        return True
+    cursor.execute('SELECT 1 FROM initial_business_setups WHERE business_id=%s', (business_id,))
+    return bool(cursor.fetchone())
+
+
 def installed(cursor):
     cursor.execute("SELECT to_regclass('public.initial_business_setups') AS present")
     return bool(cursor.fetchone()['present'])
@@ -217,11 +234,11 @@ def process_source(claimed):
     payload = claimed['payload_json']
     key = payload['source_key']
     audit_only = payload.get('audit_only', False)
-    if not allowed(business_id):
-        return {'state': 'setup_disabled'}
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
+        if not runtime_allowed(cursor, business_id):
+            return {'state': 'setup_disabled'}
         actor = load_actor(cursor, actor_id)
         require_permission(cursor, business_id, actor, 'business.settings.write')
         row = load(cursor, business_id)
@@ -259,7 +276,7 @@ def process_source(claimed):
         tracker = current.get('website_audit_job', {}) if audit_only else current
         cursor.execute("SELECT 1 FROM operator_async_jobs WHERE id=%s AND lease_token=%s AND status='running' FOR UPDATE",
                        (claimed['id'], claimed['lease_token']))
-        if not cursor.fetchone() or tracker.get('job_id') != str(claimed['id']) or not allowed(business_id):
+        if not cursor.fetchone() or tracker.get('job_id') != str(claimed['id']) or not runtime_allowed(cursor, business_id):
             return {'state': 'obsolete'}
         if audit_only:
             audit = result.get('website_audit') or audit_unavailable(
@@ -335,11 +352,11 @@ def process_photos(claimed):
 
     business_id, actor_id = claimed['business_id'], claimed['user_id']
     scope = claimed['payload_json']['scope']
-    if not allowed(business_id):
-        return {'state': 'setup_disabled'}
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
+        if not runtime_allowed(cursor, business_id):
+            return {'state': 'setup_disabled'}
         require_permission(cursor, business_id, load_actor(cursor, actor_id), 'business.settings.write')
         row = load(cursor, business_id)
         if not row or row['data'].get('photo_job', {}).get('id') != str(claimed['id']) or _photo_scope(row) != scope:
@@ -368,7 +385,7 @@ def process_photos(claimed):
         cursor.execute("SELECT 1 FROM operator_async_jobs WHERE id=%s AND lease_token=%s AND status='running' FOR UPDATE",
                        (claimed['id'], claimed['lease_token']))
         if (not cursor.fetchone() or tracker.get('id') != str(claimed['id']) or _photo_scope(row) != scope
-                or not allowed(business_id)):
+                or not runtime_allowed(cursor, business_id)):
             return {'state': 'obsolete'}
         profile = read_business(cursor, business_id)
         if not profile:
@@ -846,6 +863,52 @@ def operate(cursor, row, actor, profile, payload):
             raise Conflict('Сначала завершите разбор услуг.')
         return _save_sources(cursor, row, actor, profile)
     raise ValueError('Выберите действие настройки.')
+
+
+def start_from_operator(cursor, business_id, user_id, source_message, actor_context=None):
+    """Start the selected business setup from one explicit Operator command."""
+    from services.business_permissions import load_actor, require_permission
+
+    context = actor_context if isinstance(actor_context, dict) else {}
+    actor = load_actor(cursor, user_id)
+    if context.get('is_superadmin'):
+        actor['is_superadmin'] = True
+    if not actor_allowed(cursor, business_id, actor):
+        return {
+            'status': 'blocked',
+            'chat_response': 'Первичная настройка пока недоступна для этой компании.',
+            'blocked_reasons': ['initial_setup_unavailable'],
+            'external_writes_performed': False,
+        }
+    require_permission(cursor, business_id, actor, 'business.settings.write')
+    profile = read_business(cursor, business_id, lock=True)
+    if not profile:
+        return {
+            'status': 'blocked',
+            'chat_response': 'Выбранная компания недоступна.',
+            'blocked_reasons': ['business_not_found'],
+            'external_writes_performed': False,
+        }
+    row = load(cursor, business_id, lock=True)
+    if not row:
+        row = init(cursor, business_id, 'staff' if actor.get('is_superadmin') else 'owner')
+    seed_profile_sources(cursor, row, profile)
+    row['data']['started'] = True
+    reply = message(cursor, row, actor, profile, {'message': source_message})
+    persist(cursor, row)
+    queued = any(item.get('status') == 'queued' for item in row['data'].get('sources', {}).values())
+    return {
+        'status': 'queued' if queued else 'completed',
+        'chat_response': 'Первичная настройка начата. ' + reply,
+        'result_ref': {
+            'href': '/dashboard/operator?setup=1&business_id=' + business_id,
+            'label': 'Открыть первичную настройку',
+        },
+        'external_writes_performed': False,
+        'internal_writes_performed': True,
+        'credit_charged': False,
+        'paid_actions_performed': False,
+    }
 
 
 def lead_allowed(lead_id):
