@@ -626,6 +626,20 @@ def build_content_plan_skeleton(
     if _content_mix_value(content_mix, "templates"):
         candidates.extend(build_template_candidates(context, recent_blob))
 
+    for fact in context.get('business_facts') or []:
+        fact_text = ' '.join(_safe_text(fact.get('text')).split())
+        if not fact_text:
+            continue
+        topic = re.split(r'(?<=[.!?])\s+(?=[А-ЯA-ZЁ])', fact_text, maxsplit=1)[0].rstrip('.')
+        if len(topic) > 110:
+            topic = topic[:110].rsplit(' ', 1)[0] + '…'
+        candidates.append({
+            'content_type': 'news', 'theme': topic, 'goal': 'Рассказать клиентам об этой особенности компании.',
+            'source_kind': 'business_fact', 'source_ref': _safe_text(fact.get('id')),
+            'strength_score': 120,
+            'ranking_reasons': [_ranking_reason('confirmed_business_fact', 120)],
+        })
+
     if _content_mix_value(content_mix, "services"):
         today = period_start
         for service in services[:10]:

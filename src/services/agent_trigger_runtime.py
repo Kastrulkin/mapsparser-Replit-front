@@ -370,6 +370,21 @@ def dispatch_due_scheduled_agent_blueprints(
     dispatched = []
     skipped = []
     for blueprint in blueprints:
+        if _metadata(blueprint).get('native_executor') == 'monthly_content_drafts_v1':
+            if trigger != 'schedule.daily':
+                continue
+            from services.setup_content_journey import scheduled_dispatch
+            cursor.execute('SAVEPOINT monthly_content_dispatch')
+            try:
+                job = scheduled_dispatch(cursor, blueprint, now)
+                if job:
+                    dispatched.append({'blueprint_id': blueprint['id'], 'business_id': blueprint['business_id'], 'job_id': job['id']})
+            except Exception:
+                cursor.execute('ROLLBACK TO SAVEPOINT monthly_content_dispatch')
+                skipped.append({'blueprint_id': blueprint['id'], 'reason': 'monthly_content_needs_attention'})
+            finally:
+                cursor.execute('RELEASE SAVEPOINT monthly_content_dispatch')
+            continue
         canary = evaluate_agent_canary_budget(
             cursor,
             blueprint=blueprint,

@@ -570,6 +570,116 @@ def test_signed_in_owner_without_password_does_not_get_an_invitation(pilot):
     assert cursor.fetchone() is None
 
 
+def test_saved_setup_progress_and_monthly_content_use_the_existing_queue(pilot, monkeypatch):
+    from datetime import date, datetime, timedelta, timezone
+    from services import business_knowledge, content_plan_service, setup_content_journey as journey
+    from core.content_plan_generator import build_content_plan_skeleton
+
+    client, conn = pilot
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE agent_blueprints(id text PRIMARY KEY, business_id text, name text, category text,
+            description text, status text, created_by_user_id text, metadata_json jsonb, created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now());
+        CREATE TABLE agent_blueprint_versions(id text PRIMARY KEY, blueprint_id text, version_number integer,
+            goal text, inputs_schema_json jsonb, steps_json jsonb, persona_agent_id text, capability_allowlist_json jsonb,
+            approval_policy_json jsonb, output_schema_json jsonb, execution_mode text, trigger text, schedule_json jsonb,
+            runtime_config_json jsonb, limits_json jsonb, required_integration_bindings_json jsonb,
+            compiled_artifact_json jsonb, compiled_artifact_hash text, compiled_state text, created_by_user_id text);
+        CREATE TABLE contentplans(id text PRIMARY KEY, business_id text, title text, plan_status text,
+            scope_type text, period_start date, period_end date, generated_plan_json jsonb, created_at timestamptz DEFAULT now());
+        CREATE TABLE contentplanitems(id text PRIMARY KEY, business_id text, plan_id text, theme text, goal text,
+            scheduled_for date, draft_text text, status text);
+        CREATE TABLE social_posts(business_id text, content_plan_item_id text, status text, base_text text, platform_text text);
+        CREATE TABLE externalbusinessaccounts(business_id text, source text, external_id text, is_active boolean, last_error text);
+    """)
+    row = setup.init(cursor, HAMIK, 'registration')
+    row['data'].update(started=True, seo_prepared=True, saved=True)
+    setup.persist(cursor, row)
+    business_knowledge.mutate(cursor, 'business', HAMIK, {'user_id': 'owner'}, {
+        'operation': 'rule', 'request_id': 'initial-setup-fact:qa',
+        'payload': {'label': 'Факт из первичной настройки', 'text': 'У апартаментов есть отдельный вход.',
+                    'source': 'https://example.com/'},
+    })
+    business_knowledge.mutate(cursor, 'business', HAMIK, {'user_id': 'owner'}, {
+        'operation': 'rule', 'request_id': 'publishing-rule:qa',
+        'payload': {'label': 'Правило редакции', 'text': 'Не обещать раннее заселение.'},
+    })
+    business_knowledge.mutate(cursor, 'business', HAMIK, {'user_id': 'owner'}, {
+        'operation': 'rule', 'request_id': 'private-fact:qa', 'audience': 'management',
+        'payload': {'label': 'Факт для руководства', 'text': 'Сведения только для руководства.'},
+    })
+    conn.commit()
+    monkeypatch.setattr(journey, 'resolve', lambda *_: {'timezone': 'Asia/Yerevan'})
+    monkeypatch.setattr(journey, 'get_subscription_access', lambda _: {'capabilities': ['maps.news', 'automation']})
+
+    def build(user_id, business_id, **values):
+        assert business_id == HAMIK and user_id == 'owner'
+        assert values['needs_setup_review'] and values['operator_request_id']
+        facts = business_knowledge.planning_facts(cursor, business_id, user_id)
+        assert len(facts) == 1
+        start = values.get('period_start') or date.today() - timedelta(days=24)
+        skeleton = build_content_plan_skeleton({'business_facts': facts}, period_days=30, density='standard',
+                                               period_start=start)
+        topic = next(item for item in skeleton['items'] if item['source_kind'] == 'business_fact')
+        assert topic['theme'] == 'У апартаментов есть отдельный вход'
+        plan_id = values['operator_request_id']
+        cursor.execute("""INSERT INTO contentplans VALUES (%s,%s,'Темы на утверждение','generated',
+            'single_business',%s,%s,'{}',NOW())""", (plan_id, business_id, start, start + timedelta(days=29)))
+        cursor.execute("""INSERT INTO contentplanitems VALUES (%s,%s,%s,%s,'Показать вход гостям',%s,NULL,'planned')""",
+                       (plan_id, business_id, plan_id, topic['theme'], start))
+        conn.commit()
+        return {'id': plan_id}
+
+    monkeypatch.setattr(content_plan_service, 'create_generated_content_plan', build)
+    endpoint = SETUP + HAMIK + '/next-steps'
+
+    def read():
+        response = client.get(endpoint)
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()
+
+    def post(action, **values):
+        response = client.post(endpoint, json={'action': action, **values})
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()
+
+    assert read()['fact_count'] == 1 and read()['step'] == 'plan'
+    assert post('generate')['step'] == 'generating'
+    assert post('generate')['job']['id'] == read()['job']['id']
+    assert process_next_operator_async_job()['status'] == 'waiting_for_review'
+    prepared = read()
+    assert prepared['step'] == 'photos'
+    cursor.execute("INSERT INTO photo_assets(id,business_id,analysis_status) VALUES ('analyzed',%s,'analyzed')", (HAMIK,))
+    conn.commit()
+    ready = read()['plan']
+    assert read()['step'] == 'review' and 'У апартаментов есть отдельный вход' in ready['topics']
+    assert client.post(endpoint, json={'action': 'approve', 'plan_id': ready['id'], 'version': 'old'}).status_code == 409
+    assert post('approve', plan_id=ready['id'], version=ready['version'])['step'] == 'texts'
+    cursor.execute("UPDATE contentplanitems SET draft_text='Проверьте наш отдельный вход' WHERE plan_id=%s", (ready['id'],))
+    cursor.execute("INSERT INTO social_posts VALUES (%s,%s,'approved','Готово',NULL)", (HAMIK, ready['id']))
+    cursor.execute("INSERT INTO externalbusinessaccounts VALUES (%s,'vk_group','group-qa',TRUE,NULL)", (HAMIK,))
+    conn.commit()
+    assert read()['step'] == 'monthly'
+    settings = post('enable_monthly')['monthly']
+    assert settings['active']
+    assert post('enable_monthly')['monthly']['id'] == settings['id']
+    blueprint = {'id': settings['id'], 'business_id': HAMIK}
+    from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
+
+    due = datetime.fromisoformat(settings['first_month']).replace(tzinfo=timezone.utc) + timedelta(days=8, hours=8)
+    assert journey.scheduled_dispatch(cursor, blueprint, due - timedelta(days=35)) is None
+    dispatched = dispatch_due_scheduled_agent_blueprints(cursor, now=due)
+    assert dispatched['dispatched_count'] == 1 and dispatched['dispatched'][0]['blueprint_id'] == settings['id']
+    assert journey.scheduled_dispatch(cursor, blueprint, due + timedelta(days=1)) is None
+    conn.commit()
+    assert process_next_operator_async_job()['status'] == 'waiting_for_review'
+    assert read()['step'] == 'review'
+    assert read()['plan']['id'] != ready['id']
+    assert not post('pause_monthly')['monthly']['active']
+    assert journey.scheduled_dispatch(cursor, blueprint, due + timedelta(days=31)) is None
+
+
 def test_blocked_map_leaves_draft_incomplete_and_retry_collects_catalog_and_gallery(pilot, monkeypatch):
     client, _conn = pilot
     url = 'https://yandex.com/maps/org/clinic/123456'

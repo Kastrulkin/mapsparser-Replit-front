@@ -142,6 +142,48 @@ def download_setup_report(business_id):
     return response
 
 
+@initial_setup_bp.route('/<business_id>/next-steps', methods=['GET', 'POST'])
+def next_steps(business_id):
+    from services import setup_content_journey as journey
+
+    actor = require_auth_from_request()
+    if not actor or actor.get('session_kind') == 'demo':
+        return reply({'error': 'Требуется вход.'}, 401)
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        if not setup.actor_allowed(cursor, business_id, actor):
+            return reply({'error': 'Настройка компании недоступна.'}, 404)
+        roles = actor_roles(cursor, business_id, actor)
+        if not roles_allow(roles, 'business.read'):
+            return reply({'error': 'Нет доступа к компании.'}, 403)
+        can_edit = roles_allow(roles, 'business.settings.write')
+        review = request.method == 'POST'
+        if review:
+            journey.lock(cursor, business_id)
+        profile = setup.read_business(cursor, business_id, lock=review)
+        row = setup.load(cursor, business_id, lock=review)
+        if not profile or not row or not setup._cabinet_saved(row, profile):
+            return reply({'error': 'Сначала сохраните кабинет.'}, 409)
+        if review:
+            result = journey.update(cursor, row, profile, actor, can_edit, payload())
+            db.conn.commit()
+        else:
+            result = journey.state(cursor, row, profile, actor, can_edit)
+        return reply(result)
+    except setup.Conflict as error:
+        return reply({'error': str(error)}, 409)
+    except PermissionError as error:
+        return reply({'error': str(error)}, 403)
+    except ValueError as error:
+        return reply({'error': str(error)}, 400)
+    except Exception as error:
+        logger.warning('Initial setup content steps failed: %s', type(error).__name__)
+        return reply({'error': 'Не удалось загрузить следующие шаги. Попробуйте ещё раз.'}, 503)
+    finally:
+        db.rollback_and_close()
+
+
 @initial_setup_bp.route('/lead/<lead_id>', methods=['POST'])
 def setup_from_lead(lead_id):
     actor = require_auth_from_request()

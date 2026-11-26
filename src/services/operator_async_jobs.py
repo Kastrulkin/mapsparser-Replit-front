@@ -569,6 +569,12 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             from services.initial_business_setup import process_photos
             result = process_photos(claimed)
             status, stage, progress = "completed", "Проверка фото завершена", 100
+        elif kind == "content_plan_generate" and payload.get('setup_content') is True:
+            from services.setup_content_journey import generate_for_review
+            result = generate_for_review(claimed)
+            status = 'cancelled' if result.get('status') == 'cancelled' else 'waiting_for_review'
+            stage = 'Подготовка остановлена' if status == 'cancelled' else 'Темы контент-плана ждут утверждения'
+            progress = 100
         elif kind == "content_plan_generate":
             from services.content_plan_service import create_generated_content_plan
 

@@ -360,23 +360,40 @@ it('gives the signed-in owner one direct link to the saved cabinet', async () =>
   expect(screen.queryByText('Доступ владельцу')).not.toBeInTheDocument();
 });
 
-it('guides the owner from map edits to the calendar, photos and social connections', async () => {
-  vi.mocked(api.get).mockResolvedValue({ data: { available: true, setup: { ...setup, saved: true, viewer_is_owner: true } } });
+it('reads the real next step and can review a plan before enabling monthly drafts', async () => {
+  const stepsEndpoint = endpoint + '/next-steps';
+  const plan = { id: 'first-plan', title: 'Темы на декабрь', version: 'reviewed-version',
+    topics: ['Дегустация новых вкусов'], reviewed: false, needs_text: 1, needs_post_review: 1 };
+  const monthly = { active: false, first_month: null, can_enable: true, can_pause: false };
+  const progress = { fact_count: 1, can_edit: true, can_plan: true, viewer_is_owner: true,
+    photos: { total: 3, analyzed: 3 }, timezone: 'Asia/Bangkok', monthly, job: null, plan: null };
+  vi.mocked(api.get).mockImplementation(async path => ({ data: path === stepsEndpoint
+    ? { ...progress, step: 'maps' }
+    : { available: true, setup: { ...setup, saved: true, viewer_is_owner: true } } }));
+  vi.mocked(api.post)
+    .mockResolvedValueOnce({ data: { ...progress, step: 'plan' } })
+    .mockResolvedValueOnce({ data: { ...progress, step: 'review', plan } })
+    .mockResolvedValueOnce({ data: { ...progress, step: 'monthly', plan: { ...plan, reviewed: true } } })
+    .mockResolvedValueOnce({ data: { ...progress, step: 'monthly', plan: { ...plan, reviewed: true },
+      monthly: { ...monthly, active: true, can_pause: true } } });
   function SetupChat() {
     return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
   }
-  const chatPath = `/dashboard/operator?setup=1&business_id=${businessId}`;
-  render(<MemoryRouter initialEntries={[chatPath]}><SetupChat /></MemoryRouter>);
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
 
   const guide = within(await screen.findByRole('region', { name: 'Следующий шаг настройки' }));
   expect(guide.getByRole('link', { name: 'Подключить карты' })).toHaveAttribute('href', expect.stringContaining('focus=integrations'));
-  fireEvent.click(guide.getByRole('link', { name: 'Перейти к контенту' }));
-  const photos = guide.getByRole('link', { name: 'Подключить папку с фото' });
-  expect(photos).toHaveAttribute('href', expect.stringContaining('section=media'));
-  expect(decodeURIComponent(photos.getAttribute('href') || '')).toContain('setup_step=content');
-  expect(guide.getByRole('link', { name: 'Проверить факты' })).toHaveAttribute('href', expect.stringContaining('section=knowledge'));
-  fireEvent.click(guide.getByRole('link', { name: 'Дальше к соцсетям' }));
-  expect(guide.getByRole('link', { name: 'Подключить соцсети' })).toHaveAttribute('href', expect.stringContaining('focus=channels'));
+  fireEvent.click(guide.getByRole('button', { name: 'Перейти к контенту' }));
+  expect(await guide.findByText('Подберём темы по сохранённым фактам и услугам.')).toBeVisible();
+  fireEvent.click(guide.getByRole('button', { name: 'Подготовить план' }));
+  expect(await guide.findByText('План ждёт утверждения')).toBeVisible();
+  fireEvent.click(guide.getByText(plan.title));
+  expect(guide.getByText(plan.topics[0])).toBeVisible();
+  fireEvent.click(guide.getByRole('button', { name: 'Утвердить темы' }));
+  expect(await guide.findByText('Готовить план раз в месяц')).toBeVisible();
+  expect(api.post).toHaveBeenLastCalledWith(stepsEndpoint, { action: 'approve', plan_id: plan.id, version: plan.version });
+  fireEvent.click(guide.getByRole('button', { name: 'Включить раз в месяц' }));
+  expect(await guide.findByText('Ежемесячный контент-план включён')).toBeVisible();
 });
 
 it.each([

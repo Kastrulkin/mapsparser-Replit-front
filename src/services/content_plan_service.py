@@ -1863,6 +1863,8 @@ def create_generated_content_plan(
     editorial_brief: str | None = None,
     operator_request_id: str | None = None,
     continuation_context: dict[str, Any] | None = None,
+    period_start: date | None = None,
+    needs_setup_review: bool = False,
 ) -> dict[str, Any]:
     db = DatabaseManager()
     cursor = db.conn.cursor()
@@ -1904,6 +1906,9 @@ def create_generated_content_plan(
         )
         if not bool(context.get("subscription", {}).get("maps_content_access")):
             raise PermissionError("Новости для карт входят в тариф «Карты»")
+        if len(scope_resolution['business_ids']) == 1:
+            from services.business_knowledge import planning_facts
+            context['business_facts'] = planning_facts(cursor, str(scope_resolution['business_ids'][0]), user_id)
         knowledge_metadata: dict[str, Any] = {}
         raw_knowledge_foundation = (
             content_mix.get("knowledge_foundation")
@@ -1947,7 +1952,7 @@ def create_generated_content_plan(
             period_days=normalized_period,
             density=str(density or "standard"),
             content_mix=content_mix if isinstance(content_mix, dict) else {},
-            period_start=continuation['period_start'] if continuation else None,
+            period_start=continuation['period_start'] if continuation else period_start,
         )
         if continuation_context:
             dates = continuation['dates']
@@ -1978,6 +1983,8 @@ def create_generated_content_plan(
         skeleton.setdefault('meta', {})
         if operator_request_id:
             skeleton['meta']['operator_request_id'] = operator_request_id
+        if needs_setup_review:
+            skeleton['meta']['initial_setup_review'] = {'required': True}
         if continuation:
             skeleton['meta']['previous_plan_id'] = continuation['previous_plan_id']
             skeleton['meta']['excluded_themes_count'] = len(continuation['excluded_themes'])
@@ -4986,11 +4993,16 @@ def _build_content_brief_v1(
     goal = _clean_brief_answer(item.get("goal"), 700)
     source_kind = _clean_brief_answer(item.get("source_kind"), 80).lower()
     source_ref = _clean_brief_answer(item.get("source_ref"), 800)
+    if source_kind == 'business_fact':
+        fact_id = source_ref
+        source_ref = next((str(source.get('fact') or '') for source in evidence_sources or [] if source.get('id') == fact_id), '')
     seo_keyword = _clean_brief_answer(item.get("seo_keyword"), 300)
     content_type = _clean_brief_answer(item.get("content_type"), 80).lower()
     owner_event = _clean_brief_answer(answers.get("infopovod") or answers.get("event") or "", 12000)
     event = owner_event
-    if not event and source_kind not in {"seo_keyword", "audit_signal", "search", "seasonal"}:
+    if not event and source_kind == 'business_fact':
+        event = source_ref
+    elif not event and source_kind not in {"seo_keyword", "audit_signal", "search", "seasonal"}:
         event = source_ref or theme
     detail_answer = _clean_brief_answer(answers.get("confirmed_details") or answers.get("details") or "", 4000)
     story_facts = _clean_brief_answer(answers.get("story_facts"), 12000)
@@ -5560,6 +5572,13 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
         content_evidence = _load_business_content_evidence(cursor, item, limit=6) if generation_v2 else []
         from services.operator_editorial import editorial_evidence
         content_evidence = editorial_evidence(cursor,str(item.get('business_id') or '')) + content_evidence
+        if source_kind == 'business_fact':
+            from services.business_knowledge import planning_facts
+            fact = next((fact for fact in planning_facts(cursor, str(item['business_id']), user_id)
+                         if fact['id'] == item.get('source_ref')), None)
+            if fact:
+                content_evidence.insert(0, {'id': fact['id'], 'type': 'business_fact',
+                                           'label': 'Факт о компании', 'fact': fact['text']})
         content_brief = _build_content_brief_v1(item, business_facts, content_evidence)
         editorial_patterns = _load_editorial_pattern_library(cursor, item, limit=5, industry_key=industry_key) if generation_v2 else []
         editorial_pattern_context = _format_editorial_pattern_context(editorial_patterns)

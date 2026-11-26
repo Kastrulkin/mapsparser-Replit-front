@@ -475,6 +475,23 @@ def context(cursor,business_id,user_id):
             'sources':sources,'revision':revision,'omitted_sources':omitted}
 
 
+def planning_facts(cursor, business_id, user_id):
+    """Current facts the planning team can use in shared drafts."""
+    if not installed(cursor):
+        return []
+    actor = access(cursor, 'business', business_id, load_actor(cursor, user_id))
+    facts = []
+    for row in reversed(_effective(cursor, actor, 'rule')):
+        payload = row['payload_json']
+        label = str(payload.get('label') or '').casefold().split()
+        text = str(payload.get('text') or '').strip()
+        if row['audience'] == 'team' and text and label[:1] == ['факт'] and is_current(payload):
+            facts.append({'id': str(row['id']), 'text': text[:700], 'version': row['version']})
+        if len(facts) == 12:
+            break
+    return facts
+
+
 def changed_sources(cursor,business_id,user_id,sources):
     current={row['id']:(row['version'],row.get('field_version')) for row in context(cursor,business_id,user_id)['sources']}
     return [source['id'] for source in sources if current.get(source['id'])!=(source['version'],source.get('field_version'))]
