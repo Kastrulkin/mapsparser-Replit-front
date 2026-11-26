@@ -62,7 +62,11 @@ it('routes the existing chat composer to the selected company and opens the same
   await waitFor(() => expect(api.post).toHaveBeenCalledWith(endpoint, {
     action: 'message', message: 'Вид деятельности: Веганское мороженое', revision: 3,
   }));
-  expect(await screen.findByText('Вид деятельности сохранён.')).toBeInTheDocument();
+  const setupChat = await screen.findByRole('log', { name: 'Сообщения настройки' });
+  expect(within(setupChat).getByText('Вид деятельности сохранён.')).toBeVisible();
+  const setupCard = screen.getByRole('region', { name: 'Первичная настройка компании' });
+  expect(within(setupCard).queryByText('Вид деятельности сохранён.')).not.toBeInTheDocument();
+  expect(within(setupCard).getByText('Проверьте контакты, правки услуг и факты перед сохранением.')).toBeVisible();
   const queries = screen.getByText('Поисковые запросы');
   expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
   fireEvent.click(queries);
@@ -188,6 +192,9 @@ it('refreshes a previously read site and shows the page and proposed SEO fix', a
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
   expect(await screen.findByText('Кабинет сохранён')).toBeVisible();
+  expect(screen.getByText('Прочитано · 1')).toBeVisible();
+  expect(screen.getByText('Услуги · 1 / Запросы · 1')).toBeVisible();
+  expect(screen.queryByText('Проверьте контакты, правки услуг и факты перед сохранением.')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' })).not.toBeVisible();
   fireEvent.click(screen.getByText('Данные и источники'));
   fireEvent.click(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' }));

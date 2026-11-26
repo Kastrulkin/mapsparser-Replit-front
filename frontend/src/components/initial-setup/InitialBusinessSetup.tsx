@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Building2, Check, CheckCircle2, ChevronDown, FileText, Images,
+  ArrowUpRight, Building2, Check, ChevronDown, FileText, Images,
   ListChecks, Loader2, MapPin, MessageSquare, Search, UserRoundPlus, X, type LucideIcon,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -294,25 +294,70 @@ function Handoff({ state }: { state: Setup }) {
   </SetupDisclosure>;
 }
 
-const setupStages = ['Профиль', 'Источники', 'Услуги и SEO', 'Проверка'];
+const setupStages = [
+  { title: 'Профиль', hint: 'Добавьте ссылку на сайт, карту или соцсеть. Контакты можно указать сообщением, например «Телефон: …».' },
+  { title: 'Источники', hint: 'Для сравнения напишите «Конкурент:» и вставьте ссылку на его карточку.' },
+  { title: 'Услуги и SEO', hint: 'Дополните каталог в чате. Пример: «Услуга: название | описание».' },
+  { title: 'Проверка', hint: 'Проверьте контакты, правки услуг и факты перед сохранением.' },
+];
 
-function SetupProgress({ stage, saved }: { stage: number; saved: boolean }) {
-  return <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Этапы настройки">
-    {setupStages.map((label, index) => {
+function setupOutcome(state: Setup) {
+  const fields = Object.keys(fieldNames).filter(key => state.profile[key]).length + Number(Boolean(state.activity_type));
+  const collected = state.sources.filter(source => source.status === 'ready').length;
+  const linked = state.sources.filter(source => source.status === 'link_only').length;
+  const unavailable = state.sources.filter(source => source.status === 'unavailable').length;
+  const queries = new Set([...(state.category_keywords ?? []), ...state.services.flatMap(item => item.keywords)]
+    .map(keyword => keyword.text.trim().toLowerCase()).filter(Boolean)).size;
+  const sources = [
+    collected > 0 && `Прочитано · ${collected}`,
+    linked > 0 && `Ссылки · ${linked}`,
+    unavailable > 0 && `Не прочитано · ${unavailable}`,
+  ].filter(Boolean).join(' / ');
+  return [
+    fields ? `Заполнено полей · ${fields}` : 'Поля пока пустые',
+    sources || (state.sources.length ? 'Данные не получены' : 'Без источников'),
+    `Услуги · ${state.services.length} / Запросы · ${queries}`,
+    'Кабинет сохранён',
+  ];
+}
+
+function SetupProgress({ stage, saved, state }: { stage: number; saved: boolean; state: Setup | null }) {
+  const outcomes = state ? setupOutcome(state) : [];
+  return <ol className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-2" aria-label="Этапы настройки">
+    {setupStages.map(({ title }, index) => {
       const complete = index < stage || saved;
       const current = index === stage && !saved;
-      return <li key={label} aria-current={current ? 'step' : undefined}
-        className={cn('flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-xs leading-tight',
+      return <li key={title} aria-current={current ? 'step' : undefined}
+        className={cn('flex min-w-0 items-start gap-2 rounded-lg px-2 py-2 text-xs',
           current ? 'bg-card font-semibold text-foreground ring-1 ring-border' : 'text-muted-foreground')}>
         <span aria-hidden="true" className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs tabular-nums',
           current ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>
           {complete ? <Check className="h-3 w-3" /> : index + 1}
         </span>
-        {complete && <span className="sr-only">Пройдено. </span>}
-        {label}
+        <div className="min-w-0">
+          {complete && <span className="sr-only">Пройдено. </span>}
+          <span className="font-medium leading-5 text-foreground">{title}</span>
+          {complete && outcomes[index] && <p className="break-words font-normal leading-tight">{outcomes[index]}</p>}
+        </div>
       </li>;
     })}
   </ol>;
+}
+
+function SetupChatMessages({ activity, notice }: { activity: Setup['activity']; notice: string }) {
+  const reply = notice === activity.at(-1)?.reply ? '' : notice;
+  if (!activity.length && !reply) return null;
+  return <div role="log" aria-label="Сообщения настройки" className="mx-auto max-w-4xl space-y-3">
+    {activity.map(item => <div key={item.at} className="flex flex-col gap-2">
+      <p className="max-w-[90%] self-end whitespace-pre-wrap break-words rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground">
+        <span className="sr-only">Вы. </span>{item.message}
+      </p>
+      <p className="max-w-[90%] self-start whitespace-pre-wrap break-words rounded-2xl border bg-card px-3 py-2 text-sm">
+        <span className="sr-only">LocalOS. </span>{item.reply}
+      </p>
+    </div>)}
+    {reply && <div className="flex"><p className="max-w-[90%] rounded-2xl border bg-card px-3 py-2 text-sm">{reply}</p></div>}
+  </div>;
 }
 
 const sourceGroups: { kind: Source['kind']; label: string }[] = [
@@ -375,14 +420,6 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
         </div>
       </li>)}</ul>
     </SetupDisclosure>}
-    {(state.can_edit || state.activity.length > 0) && <SetupDisclosure title="Подсказки и последние сообщения" className="border-t text-xs" compact>
-      {state.can_edit && <ul className="space-y-1 text-muted-foreground">
-        {['Конкурент: ссылка на карту', 'Вид деятельности: …', 'Услуга: название | описание', 'Телефон: …', 'Почта: …'].map(example => <li key={example}>{example}</li>)}
-      </ul>}
-      {state.activity.slice(-2).map((item, index) => <div key={item.at + index} className="mt-2 break-words rounded-md bg-muted/50 p-2">
-        <p className="text-muted-foreground">{item.message}</p><p>{item.reply}</p>
-      </div>)}
-    </SetupDisclosure>}
   </>;
 }
 
@@ -398,6 +435,9 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
   const saved = Boolean(state?.saved && !needsSeo && !reading && !sourcesToRead);
   const stage = !state?.started ? 0 : reading || sourcesToRead ? 1 : needsSeo ? 2 : 3;
   const canChange = state?.can_edit ?? canEdit;
+  const hint = stage === 2 && !state?.activity_type
+    ? 'Уточните вид деятельности в чате. Пример: «Вид деятельности: студия массажа».'
+    : setupStages[stage].hint;
   let nextAction: { title: string; action: string } | undefined;
   if (canChange && !reading) {
     if (!state?.started) nextAction = { title: 'Начать настройку', action: 'start' };
@@ -409,69 +449,72 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
   const showResults = Boolean(state && (state.started || state.services.length || showKeywords || state.facts.length || state.comparisons.length));
   const contactsToReview = state?.profile_choices.filter(item => item.text !== state.profile[item.field]).length ?? 0;
 
-  return <section className="mx-auto max-w-4xl overflow-hidden rounded-xl border bg-card" aria-labelledby="initial-setup-title">
-    <header className="space-y-3 border-b bg-muted/35 px-3 py-3 sm:px-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 id="initial-setup-title" className="text-lg font-semibold leading-tight tracking-tight">Первичная настройка компании</h2>
-          {state?.profile.name && <p className="mt-1 break-words text-sm text-muted-foreground">{state.profile.name}</p>}
+  return <>
+    <SetupChatMessages activity={state?.activity ?? []} notice={notice} />
+    <section className="mx-auto max-w-4xl overflow-hidden rounded-xl border bg-card" aria-labelledby="initial-setup-title">
+      <header className="space-y-3 border-b bg-muted/35 px-3 py-3 sm:px-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 id="initial-setup-title" className="text-lg font-semibold leading-tight tracking-tight">Первичная настройка компании</h2>
+            {state?.profile.name && <p className="mt-1 break-words text-sm text-muted-foreground">{state.profile.name}</p>}
+          </div>
+          <Button size="sm" variant="ghost" onClick={onExit}><MessageSquare aria-hidden="true" className="mr-1.5 h-4 w-4" />Рабочий чат</Button>
         </div>
-        <Button size="sm" variant="ghost" onClick={onExit}><MessageSquare aria-hidden="true" className="mr-1.5 h-4 w-4" />Рабочий чат</Button>
+        <SetupProgress stage={stage} saved={saved} state={state} />
+      </header>
+      <div className="space-y-3 p-3 sm:p-4">
+        {(nextAction || reading || saved) && <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {reading && <span role="status" className="inline-flex items-center gap-2 text-sm">
+            <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Собираем данные
+          </span>}
+          {!saved && canChange && <p className="min-w-0 flex-1 basis-40 text-sm text-muted-foreground">{hint}</p>}
+          {nextAction && <Button size="sm" className="ml-auto whitespace-normal" disabled={busy}
+            onClick={() => void send({ action: nextAction.action })}>{busy && <Loader2 aria-hidden="true" className="mr-1.5 h-4 w-4 motion-safe:animate-spin" />}{nextAction.title}</Button>}
+          {saved && state && <Button size="sm" variant="outline" className="ml-auto" asChild>
+            <Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link>
+          </Button>}
+        </div>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {state && <SetupDisclosure title="Данные и источники" icon={Building2} open={reading || undefined}
+          meta={contactsToReview ? 'Контакты к проверке · ' + contactsToReview : state.sources.length ? 'Ссылки · ' + state.sources.length : undefined}>
+          <div className="space-y-2"><SetupSources state={state} busy={busy} send={send} />
+            <SetupLink businessId={state.business_id} path="/dashboard/profile">Профиль компании</SetupLink>
+          </div>
+        </SetupDisclosure>}
+        {state && showResults && <section aria-labelledby="setup-results-title" className="space-y-1.5">
+          <h3 id="setup-results-title" className="px-1 text-xs font-medium text-muted-foreground">Результаты</h3>
+          <div className="divide-y rounded-lg border">
+            {state.services.length > 0 && <SetupDisclosure title="Услуги и правки" count={state.services.length} icon={ListChecks} compact>
+              <ServiceProposals key={state.business_id} items={state.services} send={state.can_edit ? send : undefined}
+                disabled={busy || state.seo_dirty} error={error} />
+              <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
+            </SetupDisclosure>}
+            {showKeywords && <SetupDisclosure title="Поисковые запросы" icon={Search} compact>
+              <SetupLink businessId={state.business_id} path="/dashboard/card?tab=keywords">Семантическое ядро</SetupLink>
+              <Keywords state={state} />
+            </SetupDisclosure>}
+            {state.facts.length > 0 && <SetupDisclosure title="Факты для контента" count={state.facts.length} icon={FileText} compact>
+              <ul className="divide-y text-sm">{state.facts.map(fact => <li key={fact.key} className="space-y-1 py-2">
+                <p>{fact.text}</p><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <a className="underline" href={fact.url} target="_blank" rel="noreferrer">Источник{fact.observed_at && ' · ' + fact.observed_at.slice(0, 10)}</a>
+                  {fact.accepted ? <span>Сохранено</span> : state.can_edit && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'fact', key: fact.key })}>Подтвердить факт</Button>}
+                </div>
+              </li>)}</ul>
+              <SetupLink businessId={state.business_id} path="/dashboard/profile?section=knowledge">Факты о компании</SetupLink>
+            </SetupDisclosure>}
+            {state.comparisons.length > 0 && <SetupDisclosure title="Конкуренты" count={state.comparisons.length} icon={MapPin} compact>
+              <Comparisons rows={state.comparisons} />
+              <SetupLink businessId={state.business_id} path="/dashboard/card?tab=competitors">Все конкуренты</SetupLink>
+            </SetupDisclosure>}
+            {state.started && <PhotoCheck key={state.business_id} report={state.photo_report} businessId={state.business_id}
+              busy={busy || reading} send={state.can_edit ? send : undefined} />}
+          </div>
+          {state.seo_prepared && !state.services.length && <p className="px-1 text-xs text-muted-foreground">
+            Услуг пока нет. Добавьте их в чате или в <Link className="underline" to={companyUrl('/dashboard/card?tab=services', state.business_id)}>каталоге</Link>.
+          </p>}
+        </section>}
+        {isStaff && saved && state && <Handoff key={state.business_id} state={state} />}
       </div>
-      <SetupProgress stage={stage} saved={saved} />
-    </header>
-    <div className="space-y-3 p-3 sm:p-4">
-      {(nextAction || reading || saved) && <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0 text-sm">
-          {saved ? <span className="inline-flex items-center gap-1.5 font-medium"><CheckCircle2 aria-hidden="true" className="h-4 w-4 text-emerald-600" />Кабинет сохранён</span> :
-            reading ? <span role="status" className="inline-flex items-center gap-2"><Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Собираем данные</span> :
-            (stage < 2 && <p className="text-muted-foreground">Вставьте ссылку на сайт, карту или соцсеть в чат.</p>)}
-        </div>
-        {nextAction && <Button size="sm" className="ml-auto whitespace-normal" disabled={busy}
-          onClick={() => void send({ action: nextAction.action })}>{busy && <Loader2 aria-hidden="true" className="mr-1.5 h-4 w-4 motion-safe:animate-spin" />}{nextAction.title}</Button>}
-        {saved && state && <Button size="sm" variant="outline" asChild><Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link></Button>}
-      </div>}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-      {state && <SetupDisclosure title="Данные и источники" icon={Building2} open={reading || undefined}
-        meta={contactsToReview ? 'Контакты к проверке · ' + contactsToReview : state.sources.length ? 'Ссылки · ' + state.sources.length : undefined}>
-        <div className="space-y-2"><SetupSources state={state} busy={busy} send={send} />
-          <SetupLink businessId={state.business_id} path="/dashboard/profile">Профиль компании</SetupLink>
-        </div>
-      </SetupDisclosure>}
-      {state && showResults && <section aria-labelledby="setup-results-title" className="space-y-1.5">
-        <h3 id="setup-results-title" className="px-1 text-xs font-medium text-muted-foreground">Результаты</h3>
-        <div className="divide-y rounded-lg border">
-          {state.services.length > 0 && <SetupDisclosure title="Услуги и правки" count={state.services.length} icon={ListChecks} compact>
-            <ServiceProposals key={state.business_id} items={state.services} send={state.can_edit ? send : undefined}
-              disabled={busy || state.seo_dirty} error={error} />
-            <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
-          </SetupDisclosure>}
-          {showKeywords && <SetupDisclosure title="Поисковые запросы" icon={Search} compact>
-            <SetupLink businessId={state.business_id} path="/dashboard/card?tab=keywords">Семантическое ядро</SetupLink>
-            <Keywords state={state} />
-          </SetupDisclosure>}
-          {state.facts.length > 0 && <SetupDisclosure title="Факты для контента" count={state.facts.length} icon={FileText} compact>
-            <ul className="divide-y text-sm">{state.facts.map(fact => <li key={fact.key} className="space-y-1 py-2">
-              <p>{fact.text}</p><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <a className="underline" href={fact.url} target="_blank" rel="noreferrer">Источник{fact.observed_at && ' · ' + fact.observed_at.slice(0, 10)}</a>
-                {fact.accepted ? <span>Сохранено</span> : state.can_edit && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'fact', key: fact.key })}>Подтвердить факт</Button>}
-              </div>
-            </li>)}</ul>
-            <SetupLink businessId={state.business_id} path="/dashboard/profile?section=knowledge">Факты о компании</SetupLink>
-          </SetupDisclosure>}
-          {state.comparisons.length > 0 && <SetupDisclosure title="Конкуренты" count={state.comparisons.length} icon={MapPin} compact>
-            <Comparisons rows={state.comparisons} />
-            <SetupLink businessId={state.business_id} path="/dashboard/card?tab=competitors">Все конкуренты</SetupLink>
-          </SetupDisclosure>}
-          {state.started && <PhotoCheck key={state.business_id} report={state.photo_report} businessId={state.business_id}
-            busy={busy || reading} send={state.can_edit ? send : undefined} />}
-        </div>
-        {state.seo_prepared && !state.services.length && <p className="px-1 text-xs text-muted-foreground">
-          Услуг пока нет. Добавьте их в чате или в <Link className="underline" to={companyUrl('/dashboard/card?tab=services', state.business_id)}>каталоге</Link>.
-        </p>}
-      </section>}
-      {isStaff && saved && state && <Handoff key={state.business_id} state={state} />}
-    </div>
-  </section>;
+    </section>
+  </>;
 }
