@@ -42,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useLanguage } from '@/i18n/LanguageContext.logic';
 import { cn } from '@/lib/utils';
 import { api } from '@/services/api';
+import './OperatorPage.css';
 import {
 	localizeDemoBusinessName,
 	operatorPageCopyForLanguage,
@@ -996,7 +997,8 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
           setChatMessage(command);
           chatInputRef.current?.focus();
         }} /></div>}
-        <div ref={chatScroll.ref} data-testid="operator-message-list" className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-muted/30 px-3 py-4 [overflow-wrap:anywhere]">
+        <div className="operator-chat-surface relative isolate flex min-h-0 min-w-0 flex-1 bg-muted/30">
+        <div ref={chatScroll.ref} data-testid="operator-message-list" className="relative min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-3 py-4 [overflow-wrap:anywhere]">
           {setupMode ? (setupBusinessId ?
             <InitialSetupChat key={setupBusinessId} setup={initialSetup} isStaff={user?.is_superadmin === true} onExit={exitInitialSetup} /> :
             <div className="space-y-2 p-4"><p role="status">Выберите кабинет из ссылки, чтобы открыть его настройку.</p>
@@ -1096,6 +1098,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
           </div>}
           {pendingChatMessage && <OperatorActivity phase={pendingChatPhase} accepted={commandAccepted} waiting={commandWaiting} />}
           </>}
+        </div>
         </div>
 
         {!setupMode && chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
