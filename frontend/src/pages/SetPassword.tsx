@@ -123,11 +123,12 @@ const SetPassword: React.FC = () => {
         if (result.error) {
           setError(result.error);
         } else if (result.user) {
-          setInfo('Пароль успешно установлен! Выполняется вход...');
-          setTimeout(() => {
+          if (result.businessId) {
             const destination = result.initialSetup ? '/dashboard/operator?setup=1&business_id=' : '/dashboard/today?business_id=';
-            navigate(result.businessId ? destination + encodeURIComponent(result.businessId) : consumeMaxConnection() ? '/dashboard/max' : '/dashboard', { replace: true });
-          }, 2000);
+            navigate(destination + encodeURIComponent(result.businessId), { replace: true });
+          } else {
+            navigate(consumeMaxConnection() ? '/dashboard/max' : '/dashboard', { replace: true });
+          }
         }
       }
     } catch (error) {

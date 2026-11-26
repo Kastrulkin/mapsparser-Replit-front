@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import SetPassword from './SetPassword';
+import { newAuth } from '@/lib/auth_new';
 
 vi.mock('@/lib/auth_new', () => ({
   newAuth: {
@@ -62,5 +63,43 @@ describe('SetPassword reset URL logging', () => {
 
     expect(capturedConsole).not.toContain(email);
     expect(capturedConsole).not.toContain(token);
+  });
+});
+
+describe('SetPassword invitation', () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('opens the prepared cabinet immediately after the password is saved', async () => {
+    vi.useFakeTimers();
+    const email = 'owner@localos-e2e.invalid';
+    const invite = `/set-password#email=${encodeURIComponent(email)}&token=prepared.test-only`;
+    window.history.replaceState({}, '', invite);
+    let complete: (result: Awaited<ReturnType<typeof newAuth.setPassword>>) => void = () => undefined;
+    vi.mocked(newAuth.setPassword).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+
+    function Cabinet() {
+      return <p>Кабинет {new URLSearchParams(useLocation().search).get('business_id')}</p>;
+    }
+
+    render(<MemoryRouter initialEntries={[invite]}><Routes>
+      <Route path="/set-password" element={<SetPassword />} />
+      <Route path="/dashboard/operator" element={<Cabinet />} />
+    </Routes></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText('Новый пароль'), { target: { value: 'synthetic-password' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Установить пароль' }));
+    expect(screen.getByRole('button', { name: 'Сохраняем...' })).toBeDisabled();
+    expect(screen.queryByText('Кабинет pilot-owner')).not.toBeInTheDocument();
+
+    await act(async () => {
+      complete({ user: { id: 'new-owner', email }, error: null, businessId: 'pilot-owner', initialSetup: true });
+    });
+
+    expect(screen.getByText('Кабинет pilot-owner')).toBeVisible();
   });
 });
