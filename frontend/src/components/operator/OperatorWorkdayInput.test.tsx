@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { OperatorWorkdayInput } from './OperatorWorkdayInput';
@@ -52,4 +52,22 @@ it('offers Google independently and keeps local uploads available without OAuth 
   expect(screen.getByRole('button', { name: 'Подключить Google Диск' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Подключить Яндекс Диск' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Фото или файл' })).toBeEnabled();
+});
+
+it('opens compact material settings away from the toolbar and restores its trigger on Escape', async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal('fetch', vi.fn((url: RequestInfo | URL) => String(url).includes('/workday/config')
+    ? reply(config) : reply({ configured: false, connection: { status: 'disconnected' }, photos: [] })));
+  render(<OperatorWorkdayInput compact businessId="b" channel="web" headers={headers} onConversation={vi.fn()} />);
+  const trigger = await screen.findByRole('button', { name: 'Материалы' });
+  const attachment = screen.getByRole('button', { name: 'Фото или файл' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await user.click(trigger);
+  const menu = screen.getByRole('dialog', { name: 'Настройки материалов' });
+  expect(within(menu).getByRole('heading', { name: 'Настройки материалов' })).toBeVisible();
+  expect(within(menu).getByRole('combobox', { name: 'Получатель тестовых сообщений' })).toBeVisible();
+  expect(menu.contains(attachment)).toBe(false);
+  await user.keyboard('{Escape}');
+  await waitFor(() => expect(menu).not.toBeInTheDocument());
+  expect(trigger).toHaveFocus();
 });

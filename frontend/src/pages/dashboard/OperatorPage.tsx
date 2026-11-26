@@ -1086,10 +1086,10 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
 
         {chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
         <div className="shrink-0 space-y-2 border-t border-border bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          <div className="flex max-h-[30dvh] flex-wrap items-start gap-2 overflow-y-auto">
-            {visible && !setupMode && currentBusinessId && <OperatorVoiceInput compact key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
-            {!setupMode && currentBusinessId && <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />}
-          </div>
+          {!setupMode && currentBusinessId && <div className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-1">
+            {visible && <OperatorVoiceInput compact key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
+            <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />
+          </div>}
           {demoMode && <p id="operator-demo-readonly" role="note" className="text-sm text-muted-foreground">{demoNotice}</p>}
           <div className="flex min-w-0 items-end gap-2">
             <textarea
@@ -1098,7 +1098,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
               aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               rows={1}
               aria-label={setupMode ? 'Сообщение для первичной настройки' : toolbar.input}
-              className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-12 max-h-36 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               value={chatMessage}
               onChange={(event) => setChatMessage(event.target.value)}
               placeholder={setupMode ? 'Вставьте ссылку или дополните данные компании…' : language === 'ru' ? 'Напишите, что нужно сделать…' : copy.placeholder}
@@ -1120,7 +1120,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
                       onClick={() => void sendOperatorChatMessage()}
                       disabled={demoMode || panelHistoryLoading || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim() || (setupMode && (initialSetup.available !== true || !initialSetup.canEdit || initialSetup.busy))}
                     >
-                      {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                      {chatLoading ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Send aria-hidden="true" />}
                       <span className="hidden sm:inline">{copy.send}</span>
                     </Button>
                   </span>

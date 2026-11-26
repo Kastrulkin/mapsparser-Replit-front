@@ -1,7 +1,7 @@
 import { requestMiniAppMicrophone } from "@/lib/miniAppPlatform";
 import { Button } from '@/components/ui/button';
 import { useLatestCallback } from '@/hooks/useLatestCallback';
-import { Mic, Square } from 'lucide-react';
+import { FileAudio, Loader2, Mic, Square } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { jsonRequest, voiceHeaders, type HeadersProvider } from './OperatorVoice.logic';
 
@@ -38,7 +38,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   contextKey?: string; businessId: string; channel: string; conversationId?: string | null; disabled?: boolean; directSubmit?: boolean; compact?: boolean;
   onSubmit: (text: string, source: VoiceSubmission) => Promise<void>; headers?: HeadersProvider; submitLabel?: string; draftLabel?: string;
 }) {
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
   const [recording, setRecording] = useState(false);
   const [starting, setStarting] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -67,9 +67,10 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
   const clearStream = () => { stream.current?.getTracks().forEach((track) => track.stop()); stream.current = null; };
   useEffect(() => {
     const controller = new AbortController(); lifetime.current = controller;
-    setAvailable(false); setStarting(false); setRecording(false); setSeconds(0); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current=''; asset.current='';
+    setAvailable(null); setStarting(false); setRecording(false); setSeconds(0); setClip(null); setSource(null); setText(''); setQueuedJob(null); setError(''); setBusy(false); uploadRequest.current=''; asset.current='';
     void jsonRequest(`/api/operator/audio/config?business_id=${encodeURIComponent(businessId)}`, { headers: headers(), signal: controller.signal })
-      .then((config) => setAvailable(Boolean(config.input_enabled))).catch(() => setAvailable(false));
+      .then((config) => { if (!controller.signal.aborted) setAvailable(Boolean(config.input_enabled)); })
+      .catch(() => { if (!controller.signal.aborted) setAvailable(false); });
     return () => { controller.abort(); lifetime.current.abort(); if (recorder.current?.state === 'recording') recorder.current.stop(); clearStream(); };
   }, [businessId, channel, contextKey, headers]);
   useEffect(() => {
@@ -173,16 +174,31 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     } catch (failure) { if (!signal.aborted) setError(failure instanceof Error ? failure.message : 'Ошибка распознавания'); }
     finally { if (!signal.aborted) setBusy(false); }
   };
+  if (compact && available === null) return <div aria-hidden="true" className="col-start-1 row-start-3 flex gap-1">
+    <span className="h-11 w-11" /><span className="h-11 w-11" />
+  </div>;
   if (!available) return null;
-  return <div className="space-y-2" aria-label="Голосовая команда">
-    {!clip && !source && !queuedJob && <div className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="ghost" size={compact && !recording ? "icon" : "default"} aria-label={starting ? "Включаем микрофон" : recording ? "Остановить запись" : "Записать голосом"} title="Записать голосом" disabled={disabled || busy || starting} onClick={() => recording ? recorder.current?.stop() : void start()}>
-        {recording ? <Square className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{recording ? `Остановить · ${seconds} с` : starting ? 'Включаем микрофон…' : compact ? null : 'Записать голосом'}
+  const hasDraft = Boolean(clip || source || queuedJob);
+  const voiceButtonLabel = starting ? 'Включаем микрофон' : recording ? 'Остановить запись' : 'Записать голосом';
+  const compactButton = 'h-11 w-11 shrink-0 active:scale-100';
+  const controls = (compact || !hasDraft) && <div className={compact ? 'col-start-1 row-start-3 flex items-center gap-1' : 'flex flex-wrap items-center gap-2'} role="group" aria-label="Голосовая команда">
+      <Button type="button" variant="ghost" size={compact ? 'icon' : 'default'} className={compact ? compactButton : undefined}
+        aria-label={voiceButtonLabel} title={voiceButtonLabel} disabled={disabled || busy || starting || hasDraft}
+        onClick={() => recording ? recorder.current?.stop() : void start()}>
+        {recording ? <Square aria-hidden="true" /> : starting ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Mic aria-hidden="true" />}
+        {!compact && (recording ? `Остановить · ${seconds} с` : starting ? 'Включаем микрофон…' : 'Записать голосом')}
       </Button>
-      <Button type="button" variant="ghost" className={compact ? "px-2" : undefined} disabled={disabled || busy || starting || recording} onClick={() => fileInput.current?.click()}>Загрузить аудио</Button>
-      <input ref={fileInput} className="sr-only" aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a" disabled={disabled || busy || starting || recording} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
-    </div>}
-    {clipUrl && <audio controls src={clipUrl} preload="metadata" />}
+      <Button type="button" variant="ghost" size={compact ? 'icon' : 'default'} className={compact ? compactButton : undefined}
+        aria-label={compact ? 'Загрузить аудио' : undefined} title="Загрузить аудио" disabled={disabled || busy || starting || recording || hasDraft} onClick={() => fileInput.current?.click()}>
+        {compact ? <FileAudio aria-hidden="true" /> : 'Загрузить аудио'}
+      </Button>
+      <input ref={fileInput} className="sr-only" tabIndex={-1} aria-label="Загрузить аудио" type="file" accept="audio/*,.webm,.m4a"
+        disabled={disabled || busy || starting || recording || hasDraft} onChange={(event) => { setSource(null); setClip(event.target.files?.[0] || null); }} />
+  </div>;
+  const feedback = (!compact || hasDraft || clipUrl || text || starting || recording || busy || error) && <div
+    className={compact ? 'col-span-2 col-start-1 row-start-1 max-h-[30dvh] min-w-0 space-y-2 overflow-y-auto pb-2' : 'space-y-2'}>
+    {compact && recording && <p className="text-sm tabular-nums text-muted-foreground">Запись · {seconds} с</p>}
+    {clipUrl && <audio className="max-w-full" controls src={clipUrl} preload="metadata" />}
     {(clip || queuedJob) && !source && <Button type="button" disabled={busy || disabled} onClick={() => void transcribe()}>{busy ? 'Распознаю…' : queuedJob ? 'Проверить распознавание' : 'Распознать запись'}</Button>}
     {text && !source && <p role="status" className="text-sm">Распознано: {text}</p>}
     {source && <div className="space-y-2"><label className="block text-sm">{busy ? 'Распознано' : draftLabel}<textarea disabled={busy} className="block w-full rounded-md border bg-background p-2 text-foreground" value={text} onChange={(event) => setText(event.target.value)} /></label>
@@ -192,6 +208,7 @@ export function OperatorVoiceInput({ businessId, channel, conversationId, disabl
     {error && <p role="alert" className="text-sm">{error}</p>}
     {(!compact || recording || clip || busy || source) && <p className="text-xs text-muted-foreground">Запись до 2 минут. Перед отправкой можно проверить распознанный текст.</p>}
   </div>;
+  return compact ? <>{controls}{feedback}</> : <div className="space-y-2">{controls}{feedback}</div>;
 }
 
 export function OperatorSpeech({ messageId, businessId, prepare = false, headers = voiceHeaders, compact = false }: {
