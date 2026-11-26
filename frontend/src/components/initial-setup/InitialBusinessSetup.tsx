@@ -1,3 +1,4 @@
+import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
 import { Link } from 'react-router-dom';
@@ -87,70 +88,88 @@ function PhotoCheck({ report, businessId, send, busy }: {
   const pending = report?.status === 'queued' || report?.status === 'running';
   const copyReport = async () => {
     if (report?.status !== 'ready') return;
+    const inventory = [`В медиатеке ${report.library_count} фото`, ...report.library_categories];
     const lines = [
-      'Фотографии для карточек',
-      `В медиатеке ${report.library_count} фото.`,
-      ...(report.library_categories.length ? ['Категории в медиатеке — ' + report.library_categories.join(', ') + '.'] : []),
-      ...(report.shortlist.length ? ['Подборка с карт', ...report.shortlist.map(photo => `• ${photo.label} — ${photo.image_url}`)] : []),
-      ...(report.cover ? ['Кандидат для обложки — ' + report.cover.toLowerCase() + '.'] : []),
-      ...(report.missing.length ? ['Что доснять или подтвердить', ...report.missing.map(item => '• ' + item.tip)] : []),
+      'Фото для карт',
+      inventory.join(' · '),
+      ...(report.missing.length ? ['', 'Доснять', ...report.missing.map(item => '• ' + item.tip)] : []),
+      ...(report.shortlist.length ? ['', 'Подборка с карт', ...report.shortlist.map(photo => `• ${photo.label} · ${photo.image_url}`)] : []),
+      ...(report.cover ? ['Обложка · ' + report.cover] : []),
       ...(report.note ? [report.note] : []),
-      ...report.sources.map(source => (platforms[source.provider] || source.provider) + ' — '
-        + (source.status === 'sample' ? 'из галереи доступна выборка' : 'галерея не подтверждена') + '. ' + source.url),
-      'Медиатека LocalOS — ' + new URL(library, window.location.origin).href,
-      'Сохраните согласованные снимки на Яндекс Диске или Google Drive. Подключите папку в разделе «Материалы с Диска» в медиатеке.',
-      'Публикация на картах проводится после согласования.',
+      ...(report.sources.length ? ['', 'Источники', ...report.sources.map(source => (platforms[source.provider] || source.provider) + ' · '
+        + (source.status === 'sample' ? `${source.count} в выборке` : 'галерея не подтверждена') + ' · ' + source.url)] : []),
+      '', 'Медиатека LocalOS · ' + new URL(library, window.location.origin).href,
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopyStatus('Отчёт скопирован.');
     } catch {
-      setCopyStatus('Не удалось скопировать автоматически. Выделите и скопируйте текст отчёта.');
+      setCopyStatus('Не удалось скопировать отчёт.');
     }
   };
-  return <details className="rounded-lg border p-3">
-    <summary className="cursor-pointer font-medium">Фото для карт и отчёт
-      {pending ? ' · Проверяем' : report?.status === 'ready' ? ' · Готов' : ''}
+  const ready = report?.status === 'ready' ? report : null;
+  return <details className="group/photo rounded-lg border">
+    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 font-medium [&::-webkit-details-marker]:hidden">
+      <span>Фото для карт</span>
+      {(ready || pending) && <span className="ml-auto text-xs font-normal text-muted-foreground group-open/photo:hidden">
+        {ready ? `${ready.library_count} в медиатеке` : 'Проверяем…'}
+      </span>}
+      <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground group-open/photo:rotate-180" />
     </summary>
-    <div className="mt-2 space-y-3 text-sm">
-      {pending && <p role="status">Проверяем снимки с карт и из медиатеки.</p>}
-      {!report && <p>Подберём ссылки на фото с карт и покажем, что стоит доснять.</p>}
+    <div className="space-y-2 px-3 pb-3 text-sm">
+      {pending && <p role="status" className="text-muted-foreground">Проверяем фото…</p>}
       {report?.note && <p className="text-muted-foreground">{report.note}</p>}
-      {report?.status === 'ready' && <>
-        <p>В медиатеке {report.library_count} фото.{report.library_categories.length > 0
-          && ' Подтверждено — ' + report.library_categories.join(', ') + '.'}</p>
-        {report.shortlist.length > 0 && <div>
-          <h3 className="font-medium">Подборка с карт</h3>
-          <ul>{report.shortlist.map(photo => <li key={photo.key}>
-            <a className="underline" href={photo.image_url} target="_blank" rel="noreferrer">{photo.label}</a>
-            {' · '}
-            <a className="underline" href={photo.source_url} target="_blank" rel="noreferrer">Карточка-источник</a>
-          </li>)}</ul>
-        </div>}
-        {report.cover && <p>Кандидат для обложки — {report.cover.toLowerCase()}.</p>}
-        {report.missing.length > 0 && <div>
-          <h3 className="font-medium">Что доснять или подтвердить</h3>
-          <ul className="list-disc space-y-1 pl-5">{report.missing.map(item => <li key={item.label}>{item.tip}</li>)}</ul>
-        </div>}
-        {report.sources.length > 0 && <div>
-          <h3 className="font-medium">Проверенные площадки</h3>
-          <ul>{report.sources.map(source => <li key={source.url}>
-            <a className="underline" href={source.url} target="_blank" rel="noreferrer">{platforms[source.provider] || source.provider}</a>
-            {' · '}{source.status === 'sample' ? `Снимков в выборке: ${source.count}` : 'Галерея не подтверждена'}
-          </li>)}</ul>
-        </div>}
-        {report.rejected > 0 && <p className="text-muted-foreground">Не прошли проверку качества или не открылись: {report.rejected}.</p>}
-        {report.review.length > 0 && <details>
-          <summary className="cursor-pointer">Уточнить, что показано на фото · {report.review.length}</summary>
-          <ul className="mt-2">{report.review.map(item => <PhotoChoice key={item.key} item={item} send={send} busy={busy} />)}</ul>
+      {ready && <>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-md bg-muted/50 px-3 py-2">
+          <div className="min-w-0 flex-1 basis-52">
+            <h3 className="font-medium">В медиатеке <span className="tabular-nums">{ready.library_count}</span></h3>
+            {ready.library_categories.length > 0 && <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {ready.library_categories.map(label => <li key={label} className="rounded-md border bg-background px-2 py-0.5 text-xs">{label}</li>)}
+            </ul>}
+          </div>
+          <div className="min-w-0 flex-1 basis-40">
+            <h3 className="font-medium">Доснять</h3>
+            {ready.missing.length > 0 ? <details>
+              <summary className="min-h-10 cursor-pointer py-2 text-sm text-muted-foreground">{ready.missing.map(item => item.label).join(', ')}</summary>
+              <ul className="space-y-1 pb-1 pl-3 text-xs text-muted-foreground">
+                {ready.missing.map(item => <li key={item.label}>{item.tip}</li>)}
+              </ul>
+            </details> : <p className="mt-1 text-muted-foreground">По чек-листу всё есть</p>}
+          </div>
+        </div>
+        {ready.shortlist.length > 0 && <details className="border-b">
+          <summary className="min-h-10 cursor-pointer py-2 font-medium">Подборка с карт · <span className="tabular-nums">{ready.shortlist.length}</span></summary>
+          <ul className="space-y-1 pb-2 pl-3">
+            {ready.shortlist.map(photo => <li key={photo.key} className="flex flex-wrap items-baseline gap-x-2">
+              <a className="underline" href={photo.image_url} target="_blank" rel="noreferrer">{photo.label}</a>
+              <a className="text-xs text-muted-foreground underline" href={photo.source_url} target="_blank" rel="noreferrer">Карточка-источник</a>
+            </li>)}
+          </ul>
+          {ready.cover && <p className="pb-2 pl-3 text-xs text-muted-foreground">Обложка · {ready.cover}</p>}
         </details>}
-        <p className="text-muted-foreground">После согласования сохраните снимки на Яндекс Диске или Google Drive и подключите папку в медиатеке. Оригиналы останутся в облаке компании.</p>
+        {ready.review.length > 0 && <details className="border-b">
+          <summary className="min-h-10 cursor-pointer py-2 font-medium">Уточнить фото · <span className="tabular-nums">{ready.review.length}</span></summary>
+          <ul>{ready.review.map(item => <PhotoChoice key={item.key} item={item} send={send} busy={busy} />)}</ul>
+        </details>}
+        {(ready.sources.length > 0 || ready.rejected > 0 || send) && <details className="border-b">
+          <summary className="min-h-10 cursor-pointer py-2 font-medium">Проверка площадок</summary>
+          <div className="space-y-2 pb-2 pl-3 text-xs text-muted-foreground">
+            {ready.sources.length > 0 && <ul className="space-y-1">
+              {ready.sources.map(source => <li key={source.url}>
+                <a className="underline" href={source.url} target="_blank" rel="noreferrer">{platforms[source.provider] || source.provider}</a>
+                {' · '}{source.status === 'sample' ? `${source.count} в выборке` : 'Галерея не подтверждена'}
+              </li>)}
+            </ul>}
+            {ready.rejected > 0 && <p>Исключено при проверке · {ready.rejected}</p>}
+            {send && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'photo_check' })}>Обновить проверку</Button>}
+          </div>
+        </details>}
       </>}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link className="underline" to={library}>Открыть медиатеку</Link>
-        {report?.status === 'ready' && <Button size="sm" variant="outline" onClick={() => void copyReport()}>Скопировать отчёт</Button>}
-        {send && !pending && <Button size="sm" variant="outline" disabled={busy}
-          onClick={() => void send({ action: 'photo_check' })}>{report ? 'Обновить проверку' : 'Проверить фото'}</Button>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button asChild size="sm" variant="ghost" className="min-h-10"><Link to={library}>Открыть медиатеку</Link></Button>
+        {ready && <Button size="sm" variant="outline" className="min-h-10" onClick={() => void copyReport()}>Скопировать отчёт</Button>}
+        {send && !pending && !ready && <Button size="sm" variant="outline" disabled={busy}
+          onClick={() => void send({ action: 'photo_check' })}>Проверить фото</Button>}
       </div>
       {copyStatus && <p role="status">{copyStatus}</p>}
     </div>

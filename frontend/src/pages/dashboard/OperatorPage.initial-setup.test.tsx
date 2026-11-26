@@ -227,3 +227,63 @@ it('opens the existing setup steps when the server accepts a chat command', asyn
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
   expect(screen.getByLabelText('Текущий адрес')).toHaveTextContent('setup=1');
 });
+
+it('shows the linked shortlist and offers to label an unclassified photo', async () => {
+  const map = 'https://yandex.com/maps/org/fixture/123456';
+  const image = 'https://avatars.mds.yandex.net/get-altay/123/facade/XXXL';
+  const state = { ...setup, photo_report: {
+    status: 'ready', library_count: 2, library_categories: ['Интерьер', 'Команда'],
+    cover: 'Фасад', rejected: 0, checked_at: '2026-11-22T10:00:00Z',
+    shortlist: [{ key: 'photo', label: 'Фасад', source_url: map, image_url: image }],
+    missing: [{ label: 'Вход и ориентиры', tip: 'Снимите дверь крупным планом.' }],
+    sources: [{ url: map, provider: 'yandex', status: 'sample', count: 2 }],
+    review: [{ key: 'candidate', image_url: 'https://avatars.mds.yandex.net/get-altay/123/candidate/XXXL', provider: 'yandex' }],
+  } };
+  vi.mocked(api.get).mockImplementation(async path => ({
+    data: path === endpoint ? { available: true, setup: state } : { messages: [], conversation: null },
+  }));
+  vi.mocked(api.post).mockResolvedValue({
+    data: { available: true, setup: { ...state, photo_report: { status: 'queued' } } },
+  });
+  function Context() {
+    return <Outlet context={{ currentBusinessId: businessId, currentBusiness: { id: businessId, name: setup.profile.name } }} />;
+  }
+  render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
+    <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
+  </MemoryRouter>);
+  fireEvent.click(await screen.findByText('Фото для карт'));
+  expect(screen.getByText('Интерьер', { selector: 'li' })).toBeVisible();
+  expect(screen.getByText('Доснять')).toBeVisible();
+  expect(screen.getByText('Снимите дверь крупным планом.')).not.toBeVisible();
+  fireEvent.click(screen.getByText('Вход и ориентиры', { selector: 'summary' }));
+  expect(screen.getByText('Снимите дверь крупным планом.')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Открыть медиатеку' })).toHaveAttribute('href', '/dashboard/content?tab=media&business_id=' + businessId);
+  fireEvent.click(screen.getByText(/Подборка с карт/, { selector: 'summary' }));
+  expect(screen.getByRole('link', { name: 'Фасад' })).toHaveAttribute('href', image);
+  expect(screen.getByText('Обложка · Фасад')).toBeVisible();
+  const sampled = screen.getByText('2 в выборке', { exact: false });
+  expect(sampled).not.toBeVisible();
+  fireEvent.click(screen.getByText('Проверка площадок'));
+  expect(within(sampled).getByRole('link', { name: 'Яндекс Карты' })).toHaveAttribute('href', map);
+  expect(screen.getByRole('button', { name: 'Обновить проверку' })).toBeVisible();
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal('navigator', Object.create(navigator, { clipboard: { value: { writeText } } }));
+  try {
+    fireEvent.click(screen.getByRole('button', { name: 'Скопировать отчёт' }));
+    expect(await screen.findByText('Отчёт скопирован.')).toBeVisible();
+    const copied = writeText.mock.calls[0][0];
+    expect(copied).toContain('В медиатеке 2 фото · Интерьер · Команда');
+    expect(copied).toContain('Доснять\n• Снимите дверь крупным планом.');
+    expect(copied).toContain(image);
+    expect(copied).not.toContain('Google Drive');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+  fireEvent.click(screen.getByText(/Уточнить фото/, { selector: 'summary' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Что показано на фото' }), { target: { value: 'entrance' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Добавить в подборку' }));
+  await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
+    action: 'photo_pick', key: 'candidate', category: 'entrance', revision: 3,
+  }));
+  expect(await screen.findByText('Проверяем фото…')).toBeVisible();
+});
