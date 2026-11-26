@@ -4,7 +4,7 @@
   inset: 0;
   pointer-events: none;
   background-color: hsl(var(--muted-foreground) / 0.11);
-  mask: url('../../assets/images/chat-circuit-pattern.svg') center top / 552px 336px repeat;
+  mask: url('../../assets/images/chat-circuit-pattern.svg') center / 100% 100% no-repeat;
 }
 
 @media (forced-colors: active) {
