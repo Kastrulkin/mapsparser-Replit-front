@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, CheckCircle2, Clock3, Loader2 } from 'lucide-react';
+import { CheckCircle2, Clock3, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { LocalOSChatAvatar } from './LocalOSChatAvatar';
 
 // Reveal only fresh replies. The complete server response is already available;
 // this is a presentation effect, never a claim of model streaming or job progress.
@@ -39,7 +40,7 @@ export function OperatorReply({ text, animate = false }: { text: string; animate
 export function OperatorActivity({ phase, accepted, waiting = false }: { phase: string; accepted: boolean; waiting?: boolean }) {
   return <div className="flex justify-start" role="status" aria-live="polite" aria-atomic="true">
     <div className="flex max-w-3xl items-center gap-3 rounded-2xl border bg-background px-4 py-3 shadow-sm">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted"><Bot className="h-5 w-5" aria-hidden="true" /></div>
+      <LocalOSChatAvatar />
       <div>
         <p className="flex items-center gap-2 text-sm font-medium">{waiting ? <Clock3 className="h-4 w-4" aria-hidden="true" /> : <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />}{phase}</p>
         <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">{accepted && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}{accepted ? 'Команда принята · можно дождаться результата здесь' : 'Ждём подтверждения от сервера'}</p>

@@ -346,7 +346,10 @@ it('adds results below each completed chat step and keeps an unread card out of 
   expect(screen.queryByText('Услуги и SEO')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Скачать отчёт PDF' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Повторить сбор' }));
-  expect(await screen.findByText('Собираем данные')).toBeVisible();
+  const collecting = await screen.findByText('Собираем данные');
+  expect(collecting).toBeVisible();
+  expect(collecting.querySelector('img')).toHaveAttribute('src', expect.stringContaining('logo.png'));
+  expect(collecting.querySelector('svg')).toHaveClass('motion-safe:animate-spin');
   expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
 
   state = { ...pending, sources: [map], draft_status: 'running' };
@@ -361,6 +364,7 @@ it('adds results below each completed chat step and keeps an unread card out of 
   state = { ...setup, sources: [map], draft_ready: true, report_ready: true };
   expect(await screen.findByRole('button', { name: 'Скачать отчёт PDF' }, { timeout: 3500 })).toBeVisible();
   expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Услуги и SEO' }).querySelector('img')).toBeNull();
 }, 12500);
 
 it('releases a stalled PDF request and downloads the report on retry', async () => {

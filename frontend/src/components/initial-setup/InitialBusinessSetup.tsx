@@ -10,6 +10,7 @@ import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comp
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LocalOSChatAvatar } from '@/components/operator/LocalOSChatAvatar';
 import { api } from '@/services/api';
 import { ServiceProposals } from './ServiceProposals';
 
@@ -27,6 +28,7 @@ const companyUrl = (path: string, businessId: string) => path + (path.includes('
 function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: () => void; busy: boolean }) {
   if (audit?.status === 'queued' || audit?.status === 'running') {
     return <p role="status" className="flex items-center gap-2 text-muted-foreground">
+      <LocalOSChatAvatar />
       <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />
       {audit.status === 'queued' ? 'SEO-проверка в очереди' : 'Проверяем сайт для поиска'}
     </p>;
@@ -303,6 +305,7 @@ function SetupStep({ title, icon: Icon, working = false, children }: {
   const Indicator = working ? Loader2 : Icon;
   return <article className="w-fit max-w-full space-y-2 rounded-2xl border bg-card px-3 py-2.5 text-sm sm:px-4">
     <h3 role={working ? 'status' : undefined} className="flex items-center gap-2 font-medium">
+      {working && <LocalOSChatAvatar />}
       <Indicator aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground', working && 'motion-safe:animate-spin')} />
       {title}
     </h3>

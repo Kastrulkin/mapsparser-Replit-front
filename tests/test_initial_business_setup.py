@@ -144,9 +144,15 @@ def test_hamik_verified_registration_resumes_without_a_listing(pilot, monkeypatc
     monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers',
                         lambda **_: pytest.fail('A residential address must not launch a business card parser'))
     state = action(client, HAMIK, 'message', state, message='https://yandex.com/maps/house/example/123456')
+    assert state['activity'][-1]['reply'] == 'Ссылки появились в списке источников.'
     assert process_next(conn)['state'] == 'link_only'
+    row = setup.load(cursor, HAMIK, lock=True)
+    row['data']['activity'][-1]['reply'] += ' Ход чтения виден рядом с чатом.'
+    setup.persist(cursor, row)
+    conn.commit()
     state = client.get(SETUP + HAMIK).get_json()['setup']
     assert state['sources'][0]['status'] == 'link_only'
+    assert state['activity'][-1]['reply'] == 'Ссылки появились в списке источников.'
     state = action(client, HAMIK, 'message', state, message='Вид деятельности: Посуточная аренда квартиры')
     monkeypatch.setattr(setup, '_wordstat', lambda *_args: [])
     state = action(client, HAMIK, 'prepare', state)

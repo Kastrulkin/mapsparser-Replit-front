@@ -29,6 +29,8 @@ MAX_ANALYZED_SERVICES = 120
 MAX_WORDSTAT_LOOKUPS = 8
 WORDSTAT_LOOKUP_WINDOW = 8
 WORDSTAT_REQUEST_TIMEOUT = 2.5
+SOURCE_ADDED_REPLY = 'Ссылки появились в списке источников.'
+LEGACY_SOURCE_ADDED_REPLY = f'{SOURCE_ADDED_REPLY} Ход чтения виден рядом с чатом.'
 
 
 class Conflict(ValueError):
@@ -726,7 +728,11 @@ def status(cursor, row, profile, can_edit):
             'facts': [{'key': key, **value, 'accepted': key in data.get('accepted_facts', [])}
                       for key, value in source_findings(row, 'facts').items()],
             'profile_choices': [{'key': key, **value} for key, value in source_findings(row, 'profile').items()],
-            'comparisons': _comparison(row), 'activity': data.get('activity', [])}
+            'comparisons': _comparison(row),
+            'activity': [
+                {**item, 'reply': SOURCE_ADDED_REPLY} if item.get('reply') == LEGACY_SOURCE_ADDED_REPLY else item
+                for item in data.get('activity', [])
+            ]}
 
 
 def log(row, message, reply):
@@ -853,7 +859,7 @@ def message(cursor, row, actor, profile, payload):
         for value in links:
             key = register_source(row, value, competitor=competitor)
             queue_source(cursor, row, actor['user_id'], key)
-        reply = 'Ссылки появились в списке источников. Ход чтения виден рядом с чатом.'
+        reply = SOURCE_ADDED_REPLY
     elif declaration := DECLARATION.match(text):
         display = text
         if declaration[1].lower() == 'вид деятельности':
