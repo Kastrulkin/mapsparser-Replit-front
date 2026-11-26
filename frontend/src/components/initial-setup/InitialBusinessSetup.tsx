@@ -493,7 +493,7 @@ function SetupReportDownload({ businessId, name }: { businessId: string; name?: 
 }
 
 export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType<typeof useInitialBusinessSetup>; isStaff: boolean; onExit: () => void }) {
-  const { state, send, available, loading, canEdit, error, notice, busy, reading, pendingSources } = setup;
+  const { state, send, available, loading, canEdit, error, notice, busy, saving, saveError, reading, pendingSources } = setup;
   const resultRef = useRef<HTMLElement>(null);
   const [reviewing, setReviewing] = useState(false);
   if (loading || (available === undefined && !error)) return <p role="status">Открываем чат…</p>;
@@ -657,17 +657,24 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
           <SetupLink businessId={state.business_id} path="/dashboard/card?tab=competitors">Все конкуренты</SetupLink>
         </SetupResultRow>}
       </div>}
-      {state && (canReview || needsSource || (sourcesToRead && !gathering)) && <footer className="space-y-2 border-t px-2.5 pt-2">
+      {state && (canReview || needsSource || (sourcesToRead && !gathering) || saveError) && <footer className="space-y-2 border-t px-2.5 pt-2">
         {needsSource && !gathering && <p className="text-muted-foreground">Пришлите другую ссылку или добавьте услуги в чат.</p>}
         {sourcesToRead && !gathering && canChange && <Button size="sm" disabled={busy}
           onClick={() => void send({ action: 'read' })}>Собрать данные</Button>}
+        {saveError && <p role="alert" className="text-xs text-destructive">{saveError}</p>}
         {canReview && <>
-          {reviewing && !saved && <p className="text-xs text-muted-foreground">Проверьте данные компании и предложения перед сохранением.</p>}
+          {reviewing && !saveError && <p role="status" className="text-xs text-muted-foreground">
+            {saved ? 'Кабинет сохранён.' : saving ? 'Ждём подтверждения от LocalOS…' : 'Проверьте данные компании и предложения перед сохранением.'}
+          </p>}
           <div className="flex flex-wrap items-start gap-2">
             {saved ? <Button size="sm" asChild>
               <Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link>
             </Button> : canChange && (reviewing
-              ? <Button size="sm" disabled={busy} onClick={() => void send({ action: 'save' })}>Сохранить кабинет</Button>
+              ? <Button size="sm" className={cn('min-w-44', saving && 'disabled:opacity-100')} disabled={busy} aria-busy={saving}
+                onClick={() => void send({ action: 'save' })}>
+                {saving && <Loader2 aria-hidden="true" className="motion-safe:animate-spin" />}
+                {saving ? 'Сохраняем кабинет…' : 'Сохранить кабинет'}
+              </Button>
               : <Button size="sm" onClick={openReview}>Проверить черновик</Button>)}
             {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
           </div>

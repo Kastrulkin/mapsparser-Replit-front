@@ -71,6 +71,15 @@ export type Action = { action: string; key?: string; message?: string; name?: st
 export type Invite = { email: string; invite_url?: string; login_path?: string; existing_account: boolean };
 
 export const setupUrl = (id: string) => '/operator/initial-setup/' + encodeURIComponent(id);
+const SAVE_TIMEOUT_MS = 15_000;
+const VERIFY_SAVE_TIMEOUT_MS = 5_000;
+
+function requestDeadline(duration: number) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), duration);
+  return { signal: controller.signal, clear: () => window.clearTimeout(timer) };
+}
+
 export function visibleError(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === 'object' && 'response' in error) {
@@ -86,7 +95,9 @@ export function visibleError(error: unknown) {
 export function useInitialBusinessSetup(businessId: string | null, active: boolean) {
   const [data, setData] = useState<SetupResponse | null>(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
+  const busy = pendingAction !== null;
   const [pendingSources, setPendingSources] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
@@ -104,6 +115,7 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
       if (scope.current === context && generation.current === issued && !signal?.aborted) {
         setData(response.data);
         setError('');
+        return response.data;
       }
     } catch (err) {
       if (scope.current === context && generation.current === issued && !signal?.aborted) setError(visibleError(err));
@@ -114,7 +126,8 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
     setData(null);
     setNotice('');
     setError('');
-    setBusy(false);
+    setPendingAction(null);
+    setSaveError('');
     setPendingSources(false);
     inFlight.current = false;
     if (!context) return;
@@ -145,29 +158,50 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
     generation.current += 1;
     const issued = ++mutation.current;
     const isCurrent = () => scope.current === context && mutation.current === issued;
-    setBusy(true);
+    setPendingAction(action.action);
     setPendingSources(action.action === 'read' || action.action === 'retry'
       || Boolean((action.action === 'start' || action.action === 'message') && action.message?.includes('://')));
     setError('');
     setNotice('');
+    setSaveError('');
+    const deadline = action.action === 'save' ? requestDeadline(SAVE_TIMEOUT_MS) : null;
     try {
-      const result = await api.post(setupUrl(context), { ...action, revision: state?.revision });
+      const payload = { ...action, revision: state?.revision };
+      const result = deadline
+        ? await api.post(setupUrl(context), payload, { signal: deadline.signal })
+        : await api.post(setupUrl(context), payload);
       if (!isCurrent()) return false;
       setData(result.data);
-      setNotice(result.data.message || '');
+      if (!deadline) setNotice(result.data.message || '');
       return result.data.available;
     } catch (err) {
       if (!isCurrent()) return false;
+      if (deadline) {
+        const timedOut = deadline.signal.aborted;
+        deadline.clear();
+        const verification = requestDeadline(VERIFY_SAVE_TIMEOUT_MS);
+        const observed: SetupResponse | undefined = await refresh(verification.signal).finally(verification.clear);
+        if (!isCurrent()) return false;
+        setError('');
+        // A missing response does not tell us whether the server committed the save.
+        if (observed?.setup?.business_id === context && observed.setup.saved) return true;
+        setSaveError(timedOut
+          ? 'Сервер не подтвердил сохранение. Попробуйте ещё раз.'
+          : visibleError(err));
+        return false;
+      }
       await refresh();
       if (isCurrent()) setError(visibleError(err));
       return false;
     } finally {
+      deadline?.clear();
       if (isCurrent()) {
         inFlight.current = false;
-        setBusy(false);
+        setPendingAction(null);
         setPendingSources(false);
       }
     }
   };
-  return { state, available: data?.available, canEdit: state?.can_edit ?? data?.can_edit ?? false, error, busy, loading, notice, reading, pendingSources, send, refresh };
+  return { state, available: data?.available, canEdit: state?.can_edit ?? data?.can_edit ?? false, error, busy,
+    saving: pendingAction === 'save', saveError, loading, notice, reading, pendingSources, send, refresh };
 }

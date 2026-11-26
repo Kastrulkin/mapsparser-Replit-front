@@ -332,6 +332,39 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   expect(screen.getByText('Услуги').closest('summary')).toHaveFocus();
 });
 
+it.each([false, true])('shows progress and reconciles an unconfirmed save (committed=%s)', async committed => {
+  let saved = false;
+  vi.mocked(api.get).mockImplementation(async () => ({ data: { available: true, setup: { ...setup, saved } } }));
+  vi.mocked(api.post).mockImplementationOnce((_path, _body, options) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener('abort', () => {
+      saved = committed;
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  }));
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Проверить черновик' }));
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить кабинет' }));
+    expect(screen.getByRole('button', { name: 'Сохраняем кабинет…' })).toBeDisabled();
+    expect(screen.getByText('Ждём подтверждения от LocalOS…')).toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    if (committed) {
+      expect(screen.getByText('Кабинет сохранён.')).toHaveAttribute('role', 'status');
+      expect(screen.getByRole('link', { name: 'Открыть кабинет' })).toBeVisible();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByRole('alert')).toHaveTextContent('Сервер не подтвердил сохранение. Попробуйте ещё раз.');
+      expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeEnabled();
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('updates one result message from map reading to photos and keeps an unread card out of the draft', async () => {
   const map = { ...setup.sources[0], photo_candidate_count: 4 };
   const pending = {
