@@ -360,10 +360,15 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
   const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
   const [commandWaiting, setCommandWaiting] = useState(false);
   const [commandAccepted, setCommandAccepted] = useState(false);
-  const setupMessageCount = (initialSetup.state?.revision ?? 0) + Number(initialSetup.pendingSources);
+  const setupState = initialSetup.state;
+  const setupProgress = setupMode ? JSON.stringify([
+    setupState?.revision, initialSetup.pendingSources, setupState?.draft_status, setupState?.photo_report?.status,
+    setupState?.sources.map(source => [source.status, source.website_audit?.status]),
+  ]) : undefined;
   const chatScroll = useChatAutoScroll(
     setupMode ? `setup:${setupBusinessId ?? ''}` : currentBusinessId,
-    setupMode ? setupMessageCount : messages.length + Number(Boolean(pendingChatMessage)),
+    setupMode ? setupState?.activity.length : messages.length + Number(Boolean(pendingChatMessage)),
+    setupProgress,
   );
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [workspaceHeight, setWorkspaceHeight] = useState<number>();
@@ -1093,8 +1098,10 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
           </>}
         </div>
 
-        {chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
-        <div className="shrink-0 space-y-2 border-t border-border bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {!setupMode && chatScroll.readingHistory && <div className="flex shrink-0 justify-center border-t border-border py-1"><Button size="sm" variant="ghost" onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />{chatScroll.hasNewMessages ? 'Новые сообщения · К последним' : 'К последним сообщениям'}</Button></div>}
+        <div className="relative shrink-0 space-y-2 border-t border-border bg-background px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {setupMode && chatScroll.hasNewMessages && <Button size="sm" variant="outline" className="absolute bottom-full right-3 z-10 mb-2 rounded-full bg-background"
+            onClick={chatScroll.scrollToLatest}><ArrowDown aria-hidden="true" />К новым результатам</Button>}
           {!setupMode && currentBusinessId && <div className="grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-1">
             {visible && <OperatorVoiceInput compact key={currentBusinessId} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onSubmit={sendOperatorChatMessage} />}
             <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />

@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Building2, ChevronDown, Download, FileText, Images,
+  ArrowUpRight, Building2, Check, ChevronDown, Download, FileText, Globe, Images,
   ListChecks, Loader2, MapPin, MessageSquare, Search, UserRoundPlus, X, type LucideIcon,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -17,7 +17,10 @@ import { ServiceProposals } from './ServiceProposals';
 const fieldNames: Record<string, string> = {
   name: 'Название', city: 'Город', address: 'Адрес', website: 'Сайт', contact_phone: 'Телефон', contact_email: 'Email',
 };
-const platforms: Record<string, string> = { yandex: 'Яндекс Карты', '2gis': '2ГИС', google: 'Google Maps', telegram: 'Telegram', vk: 'ВКонтакте' };
+const platforms: Record<string, string> = {
+  yandex: 'Яндекс Карты', '2gis': '2ГИС', google: 'Google Maps', telegram: 'Telegram', vk: 'ВКонтакте',
+  whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', youtube: 'YouTube', max: 'MAX',
+};
 const statuses: Record<string, string> = {
   added: 'Добавлен', queued: 'В очереди', running: 'Читаем', ready: 'Прочитан',
   unavailable: 'Не удалось прочитать', link_only: 'Есть ссылка',
@@ -26,17 +29,10 @@ const statuses: Record<string, string> = {
 const companyUrl = (path: string, businessId: string) => path + (path.includes('?') ? '&' : '?') + 'business_id=' + encodeURIComponent(businessId);
 
 function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: () => void; busy: boolean }) {
-  if (audit?.status === 'queued' || audit?.status === 'running') {
-    return <p role="status" className="flex items-center gap-2 text-muted-foreground">
-      <LocalOSChatAvatar />
-      <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />
-      {audit.status === 'queued' ? 'SEO-проверка в очереди' : 'Проверяем сайт для поиска'}
-    </p>;
-  }
+  if (audit?.status === 'queued' || audit?.status === 'running') return null;
   if (audit?.status === 'ready') {
-    const total = audit.pages.reduce((sum, page) => sum + page.findings.length, 0);
-    return <SetupDisclosure title="SEO-аудит сайта" meta={total ? `Правки · ${total}` : 'Замечаний нет'} className="border-t" compact>
-      <p className="text-muted-foreground">Проверено страниц: {audit.pages.length} · {new Date(audit.checked_at).toLocaleDateString('ru-RU')}</p>
+    return <div className="space-y-3 border-t pt-2">
+      <p className="text-xs text-muted-foreground">Проверка от {new Date(audit.checked_at).toLocaleDateString('ru-RU')}</p>
       {audit.pages.map(page => <div key={page.url} className="space-y-1">
         <a href={page.url} target="_blank" rel="noreferrer" className="break-all underline">{page.url}</a>
         {page.findings.length ? <ul className="space-y-2 pb-2">
@@ -47,14 +43,11 @@ function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: (
         </ul> : <p className="text-muted-foreground">По проверенным элементам замечаний нет.</p>}
       </div>)}
       {onCheck && <Button size="sm" variant="outline" disabled={busy} onClick={onCheck}>Обновить SEO-аудит</Button>}
-    </SetupDisclosure>;
+    </div>;
   }
-  return <>
-    {audit?.note && <p className="text-muted-foreground">{audit.note}</p>}
-    {onCheck && <Button size="sm" variant="outline" disabled={busy} onClick={onCheck}>
-      {audit ? 'Повторить SEO-проверку' : 'Провести SEO-аудит сайта'}
-    </Button>}
-  </>;
+  return !audit && onCheck
+    ? <Button size="sm" variant="outline" disabled={busy} onClick={onCheck}>Провести SEO-аудит сайта</Button>
+    : null;
 }
 
 const photoCategories = {
@@ -116,10 +109,8 @@ function PhotoCheck({ report, businessId, send, busy }: {
     }
   };
   const ready = report?.status === 'ready' ? report : null;
-  return <SetupDisclosure title="Фото для карт" icon={Images} compact meta={ready ? `${ready.library_count} в медиатеке` : pending ? 'Проверяем…' : undefined}>
-    <div className="space-y-2 text-sm">
-      {pending && <p role="status" className="text-muted-foreground">Проверяем фото…</p>}
-      {report?.note && <p className="text-muted-foreground">{report.note}</p>}
+  return <div className="space-y-2 text-sm">
+      {ready?.note && <p className="text-muted-foreground">{ready.note}</p>}
       {ready && <>
         <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-md bg-muted/50 px-3 py-2">
           <div className="min-w-0 flex-1 basis-52">
@@ -172,15 +163,14 @@ function PhotoCheck({ report, businessId, send, busy }: {
       <div className="flex flex-wrap items-center gap-1.5">
         <Button asChild size="sm" variant="ghost" className="min-h-10"><Link to={library}>Открыть медиатеку</Link></Button>
         {ready && <Button size="sm" variant="outline" className="min-h-10" onClick={() => void copyReport()}>Скопировать отчёт</Button>}
-        {send && !pending && !ready && <Button size="sm" variant="outline" disabled={busy}
+        {send && !pending && !report && <Button size="sm" variant="outline" disabled={busy}
           onClick={() => void send({ action: 'photo_check' })}>Проверить фото</Button>}
       </div>
       {copyStatus && <p role="status">{copyStatus}</p>}
-    </div>
-  </SetupDisclosure>;
+    </div>;
 }
 
-function SetupDisclosure({ title, icon: Icon, children, count, meta, compact, open, className }: {
+function SetupDisclosure({ title, icon: Icon, children, count, meta, compact, open, className, id, working }: {
   title: string;
   icon?: LucideIcon;
   children: ReactNode;
@@ -189,14 +179,17 @@ function SetupDisclosure({ title, icon: Icon, children, count, meta, compact, op
   compact?: boolean;
   open?: boolean;
   className?: string;
+  id?: string;
+  working?: boolean;
 }) {
-  return <details open={open} className={cn('[&[open]>summary>svg:last-child]:rotate-180', !compact && 'rounded-lg border', className)}>
+  return <details id={id} open={open} className={cn('[&[open]>summary>svg:last-child]:rotate-180', !compact && 'rounded-lg border', className)}>
     <summary className={cn('flex cursor-pointer list-none items-center gap-2.5 rounded-md py-2 text-sm font-medium hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden',
-      Icon ? 'min-h-11 px-3' : 'min-h-10 px-2')}>
-      {Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      Icon ? (id ? 'min-h-10 px-3 py-1.5' : 'min-h-11 px-3') : 'min-h-10 px-2')}>
+      {working ? <Loader2 aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground motion-safe:animate-spin" />
+        : Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />}
       <span className="min-w-0 break-words">{title}</span>
       {count !== undefined && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">{count}</span>}
-      {meta && <span className="ml-auto min-w-0 text-right text-xs font-normal tabular-nums text-muted-foreground">{meta}</span>}
+      {meta && <span role={id ? 'status' : undefined} className="ml-auto min-w-0 text-right text-xs font-normal tabular-nums text-muted-foreground">{meta}</span>}
       <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground', !meta && 'ml-auto')} />
     </summary>
     <div className={cn('space-y-2 pb-3', Icon ? 'px-3' : 'px-2')}>{children}</div>
@@ -299,41 +292,72 @@ function Handoff({ state }: { state: Setup }) {
   </SetupDisclosure>;
 }
 
-function SetupStep({ title, icon: Icon, working = false, children }: {
-  title: string; icon: LucideIcon; working?: boolean; children?: ReactNode;
+function SetupResultRow({ id, title, icon: Icon, summary, working, complete, actions, children }: {
+  id: string; title: string; icon: LucideIcon; summary: string; working?: boolean; complete?: boolean; actions?: ReactNode; children?: ReactNode;
 }) {
-  const Indicator = working ? Loader2 : Icon;
-  return <article className="w-fit max-w-full space-y-2 rounded-2xl border bg-card px-3 py-2.5 text-sm sm:px-4">
-    <h3 role={working ? 'status' : undefined} className="flex items-center gap-2 font-medium">
-      {working && <LocalOSChatAvatar />}
-      <Indicator aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground', working && 'motion-safe:animate-spin')} />
-      {title}
-    </h3>
-    {children}
-  </article>;
+  return <div>
+    {children ? <SetupDisclosure id={id} title={title} icon={complete ? Check : Icon} compact working={working} meta={summary}>
+      {children}
+    </SetupDisclosure> : <div className="flex min-h-10 items-center gap-2.5 px-3 py-1.5 text-sm">
+      {working ? <Loader2 aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground motion-safe:animate-spin" />
+        : <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      <span className="font-medium">{title}</span>
+      <span role="status" className="ml-auto min-w-0 text-right text-xs text-muted-foreground">{summary}</span>
+    </div>}
+    {actions && <div className="space-y-1 px-3 pb-2 text-xs text-muted-foreground">{actions}</div>}
+  </div>;
 }
 
+const progressReplies = new Set([
+  'Ссылки появились в списке источников.',
+  'Ссылки появились в списке источников. Ход чтения виден рядом с чатом.',
+  'Проверьте статус чтения в списке источников.',
+  'Подготовка черновика запущена.',
+  'Чтение добавленных источников запущено.',
+  'Проверка фото запущена.',
+  'SEO-проверка сайта запущена.',
+]);
+
 function SetupChatMessages({ activity, notice }: { activity: Setup['activity']; notice: string }) {
-  const reply = notice === activity.at(-1)?.reply ? '' : notice;
+  const message = notice.replace(/^Подготовка началась\. Данные компании уже в карточке\.\s*/, '');
+  const reply = progressReplies.has(message) || message === activity.at(-1)?.reply ? '' : message;
   if (!activity.length && !reply) return null;
   return <div role="log" aria-label="Сообщения настройки" className="mx-auto max-w-4xl space-y-3">
     {activity.map(item => <div key={item.at} className="flex flex-col gap-2">
       <p className="max-w-[90%] self-end whitespace-pre-wrap break-words rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground">
         <span className="sr-only">Вы. </span>{item.message}
       </p>
-      <p className="max-w-[90%] self-start whitespace-pre-wrap break-words rounded-2xl border bg-card px-3 py-2 text-sm">
+      {item.reply && !progressReplies.has(item.reply) && <p className="max-w-[90%] self-start whitespace-pre-wrap break-words rounded-2xl border bg-card px-3 py-2 text-sm">
         <span className="sr-only">LocalOS. </span>{item.reply}
-      </p>
+      </p>}
     </div>)}
     {reply && <div className="flex"><p className="max-w-[90%] rounded-2xl border bg-card px-3 py-2 text-sm">{reply}</p></div>}
   </div>;
 }
 
-const sourceGroups: { kind: Source['kind']; label: string }[] = [
-  { kind: 'website', label: 'Сайт' }, { kind: 'map', label: 'Карты' }, { kind: 'social', label: 'Соцсети и мессенджеры' },
-];
+const countInRussian = new Intl.PluralRules('ru');
+function counted(count: number, forms: { one: string; few: string; many: string }) {
+  const form = countInRussian.select(count);
+  return count + ' ' + (form === 'one' || form === 'few' ? forms[form] : forms.many);
+}
 
-function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send: (action: Action) => Promise<boolean> }) {
+function sourceName(source: Source) {
+  if (source.kind === 'website') {
+    try { return new URL(source.url).hostname; }
+    catch { return 'Сайт'; }
+  }
+  return platforms[source.provider] || source.provider;
+}
+
+function pending(status?: string) {
+  return status === 'queued' || status === 'running';
+}
+
+function sourceFailed(source: Source) {
+  return source.status === 'unavailable' || source.website_audit?.status === 'unavailable';
+}
+
+function SetupProfile({ state, busy, send }: { state: Setup; busy: boolean; send: (action: Action) => Promise<boolean> }) {
   const profileFields = Object.entries(fieldNames).filter(([key]) => Boolean(state.profile[key]));
   return <>
     {(state.activity_type || profileFields.length > 0) && <dl className="grid gap-x-5 gap-y-2 py-2 text-sm sm:grid-cols-2">
@@ -344,52 +368,63 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
         <dd className="break-words font-medium">{state.profile[key]}</dd>
       </div>)}
     </dl>}
-    {sourceGroups.map(group => {
-      const sources = state.sources.filter(source => source.kind === group.kind);
-      if (!sources.length) return null;
-      return <section key={group.kind} className="border-t pt-3">
-        <h3 className="text-xs font-medium text-muted-foreground">{group.label}</h3>
-        <ul className="divide-y">
-          {sources.map(source => {
-            const name = platforms[source.provider] || (source.kind === 'website' ? 'Сайт' : source.provider);
-            const discoverySource = state.sources.find(item => item.url === source.found_on);
-            return <li key={source.key} className="space-y-1.5 py-1.5 text-sm">
-              <div className="flex items-center gap-1.5">
-                <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                  <a href={source.url} target="_blank" rel="noreferrer" className="min-w-0 break-words font-medium underline underline-offset-4">
-                    {source.competitor ? 'Конкурент · ' : ''}{name}
-                  </a>
-                  <span className="text-xs text-muted-foreground">{statuses[source.status] || source.status}
-                    {source.service_count > 0 && ' · Услуг: ' + source.service_count}
-                    {!!source.photo_candidate_count && ' · Фото: ' + source.photo_candidate_count}
-                    {source.found_on && (discoverySource?.kind === 'map' ? ' · Найдено в карточке' : ' · Найдено на сайте')}
-                  </span>
-                </div>
-                {state.can_edit && <Button size="icon" variant="ghost" className="shrink-0 text-muted-foreground"
-                  aria-label={`Исключить источник «${name}»`} title="Исключить источник" disabled={busy}
-                  onClick={() => void send({ action: 'remove', key: source.key })}><X aria-hidden="true" /></Button>}
-              </div>
-              {source.status === 'ready' && source.note && <p className="text-xs text-muted-foreground">{source.note}</p>}
-              {source.kind === 'website' && source.status === 'ready' && <SiteAudit
-                audit={source.website_audit} busy={busy}
-                onCheck={state.can_edit ? () => void send({ action: 'website_audit', key: source.key }) : undefined}
-              />}
-            </li>;
-          })}
-        </ul>
-      </section>;
-    })}
-    {state.profile_choices.length > 0 && <SetupDisclosure title="Найденные контакты и адрес" count={state.profile_choices.length} icon={ListChecks}>
-      <ul className="divide-y text-sm">{state.profile_choices.map(item => <li key={item.key} className="space-y-1 py-2">
-        <p><strong>{fieldNames[item.field] || item.field}</strong> · {item.text}</p>
-        <p className="text-xs text-muted-foreground">Сейчас · {state.profile[item.field] || 'не заполнено'}</p>
-        <div className="flex flex-wrap items-center gap-2">
-          {item.url && <a className="text-xs underline" href={item.url} target="_blank" rel="noreferrer">Источник</a>}
-          {state.can_edit && item.text !== state.profile[item.field] && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'profile', key: item.key })}>Применить</Button>}
-        </div>
-      </li>)}</ul>
-    </SetupDisclosure>}
+    {state.profile_choices.length > 0 && <ul className="divide-y border-t text-sm">{state.profile_choices.map(item => <li key={item.key} className="space-y-1 py-2">
+      <p><strong>{fieldNames[item.field] || item.field}</strong> · {item.text}</p>
+      <p className="text-xs text-muted-foreground">Сейчас · {state.profile[item.field] || 'не заполнено'}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {item.url && <a className="text-xs underline" href={item.url} target="_blank" rel="noreferrer">Источник</a>}
+        {state.can_edit && item.text !== state.profile[item.field] && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'profile', key: item.key })}>Применить</Button>}
+      </div>
+    </li>)}</ul>}
   </>;
+}
+
+function SetupSources({ sources, state, busy, send }: { sources: Source[]; state: Setup; busy: boolean; send: (action: Action) => Promise<boolean> }) {
+  return <ul className="divide-y">
+    {sources.map(source => {
+      const name = sourceName(source);
+      const discoverySource = state.sources.find(item => item.url === source.found_on);
+      return <li key={source.key} className="space-y-1.5 py-1.5 text-sm">
+        <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <a href={source.url} target="_blank" rel="noreferrer" className="min-w-0 break-words font-medium underline underline-offset-4">
+              {source.competitor ? 'Конкурент · ' : ''}{name}
+            </a>
+            <span className="text-xs text-muted-foreground">{statuses[source.status] || source.status}
+              {source.service_count > 0 && ' · Услуг: ' + source.service_count}
+              {!!source.photo_candidate_count && ' · Фото: ' + source.photo_candidate_count}
+              {source.found_on && (discoverySource?.kind === 'map' ? ' · Найдено в карточке' : ' · Найдено на сайте')}
+            </span>
+          </div>
+          {state.can_edit && <Button size="icon" variant="ghost" className="shrink-0 text-muted-foreground"
+            aria-label={`Исключить источник «${name}»`} title="Исключить источник" disabled={busy}
+            onClick={() => void send({ action: 'remove', key: source.key })}><X aria-hidden="true" /></Button>}
+        </div>
+        {source.status === 'ready' && source.note && <p className="text-xs text-muted-foreground">{source.note}</p>}
+        {source.kind === 'website' && source.status === 'ready' && <SiteAudit
+          audit={source.website_audit} busy={busy}
+          onCheck={state.can_edit ? () => void send({ action: 'website_audit', key: source.key }) : undefined}
+        />}
+      </li>;
+    })}
+  </ul>;
+}
+
+function SourceProblems({ sources, canEdit, busy, send }: {
+  sources: Source[]; canEdit: boolean; busy: boolean; send: (action: Action) => Promise<boolean>;
+}) {
+  const failures = sources.filter(sourceFailed);
+  return failures.map(source => {
+    const auditFailed = source.status !== 'unavailable' && source.website_audit?.status === 'unavailable';
+    const note = auditFailed && source.website_audit?.status === 'unavailable' ? source.website_audit.note : source.note;
+    return <div key={source.key} className="flex flex-wrap items-center gap-x-2">
+      <p>{note || (auditFailed ? 'Не удалось проверить сайт.' : `Не удалось прочитать: ${sourceName(source)}.`)}</p>
+      {canEdit && <Button size="sm" variant="outline" disabled={busy}
+        onClick={() => void send({ action: auditFailed ? 'website_audit' : 'retry', key: source.key })}>
+        {auditFailed ? 'Повторить проверку сайта' : 'Повторить сбор'}
+      </Button>}
+    </div>;
+  });
 }
 
 const REPORT_DOWNLOAD_TIMEOUT_MS = 15_000;
@@ -459,6 +494,8 @@ function SetupReportDownload({ businessId, name }: { businessId: string; name?: 
 
 export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType<typeof useInitialBusinessSetup>; isStaff: boolean; onExit: () => void }) {
   const { state, send, available, loading, canEdit, error, notice, busy, reading, pendingSources } = setup;
+  const resultRef = useRef<HTMLElement>(null);
+  const [reviewing, setReviewing] = useState(false);
   if (loading || (available === undefined && !error)) return <p role="status">Открываем чат…</p>;
   if (available !== true) return <div className="space-y-3"><p role="status">{error || 'Настройка для этой компании недоступна.'}</p>
     {error && <Button variant="outline" onClick={() => void setup.refresh()}>Повторить</Button>}
@@ -466,29 +503,59 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
 
   const gathering = reading || pendingSources;
   const hasProgress = state?.started || state?.sources.length || state?.activity.length || state?.seo_prepared;
-  if (!hasProgress && !gathering) {
-    return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
-  }
-  const sourcesToRead = state?.sources.some(source => source.status === 'added') ?? false;
+  if (!hasProgress && !gathering) return error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null;
+
+  const sources = state?.sources ?? [];
+  const maps = sources.filter(source => source.kind === 'map');
+  const sites = sources.filter(source => source.kind === 'website');
+  const socials = sources.filter(source => source.kind === 'social');
+  const sourcesToRead = sources.some(source => source.status === 'added');
+  const mapsReading = maps.some(source => pending(source.status));
+  const sitesReading = sites.some(source => pending(source.status));
+  const checkingSite = sites.some(source => pending(source.website_audit?.status));
+  const socialsReading = socials.some(source => pending(source.status));
+  const readyMaps = maps.filter(source => source.status === 'ready' && !source.competitor);
+  const mapNames = [...new Set(readyMaps.map(sourceName))].join(', ');
+  const socialNames = [...new Set(socials.map(sourceName))].join(', ');
+  const pages = sites.flatMap(source => source.website_audit?.status === 'ready' ? source.website_audit.pages : []);
+  const fixes = pages.reduce((sum, page) => sum + page.findings.length, 0);
+  const siteFailed = sites.some(sourceFailed);
+
   const needsSeo = !state?.seo_prepared || state.seo_dirty;
-  const preparing = state?.draft_status === 'queued' || state?.draft_status === 'running';
+  const preparing = pending(state?.draft_status) && !gathering && !sourcesToRead;
   const draftFailed = state?.draft_status === 'failed';
   const needsSource = state?.draft_status === 'needs_source';
+  const showServices = state?.seo_prepared || (state?.started && !gathering && !sourcesToRead && !needsSource);
+  const analysisDone = Boolean(showServices && !needsSeo && !state?.draft_status && !gathering && !sourcesToRead);
   const canChange = state?.can_edit ?? canEdit;
-  const completedSources = state?.sources.filter(source => ['ready', 'unavailable', 'link_only'].includes(source.status)) ?? [];
-  const collected = completedSources.filter(source => source.status === 'ready').length;
-  const photosFound = completedSources.reduce((sum, source) => sum + (source.photo_candidate_count ?? 0), 0);
+  const report = state?.photo_report;
+  const checkingPhotos = pending(report?.status);
+  const photosFound = readyMaps.reduce((sum, source) => sum + (source.photo_candidate_count ?? 0), 0);
+  const reviewPhotos = report?.status === 'ready' ? report.review.length : photosFound;
+  const showPhotos = !!report || photosFound > 0 || analysisDone;
   const queryCount = state ? new Set([...state.category_keywords, ...state.services.flatMap(item => item.keywords)]
     .map(keyword => keyword.text.trim().toLowerCase()).filter(Boolean)).size : 0;
-  const sourcesDone = !gathering && !sourcesToRead;
-  const showAnalysis = Boolean(state?.started && sourcesDone && !needsSource);
-  const analysisDone = showAnalysis && !needsSeo && !preparing && !draftFailed;
-  const checkingPhotos = state?.photo_report?.status === 'queued' || state?.photo_report?.status === 'running';
-  const canReview = analysisDone && !checkingPhotos;
-  const saved = Boolean(canReview && state?.saved);
   const contactsToReview = state?.profile_choices.filter(item => item.text !== state.profile[item.field]).length ?? 0;
+  const factsToReview = state?.facts.some(fact => !fact.accepted);
+  const canReview = analysisDone && !checkingPhotos && !checkingSite;
+  const saved = Boolean(state?.saved);
+  const working = gathering || preparing || checkingPhotos || checkingSite;
+  const showGathering = gathering && !mapsReading && !sitesReading && !socialsReading;
+  const hasIssues = !!(needsSource || draftFailed || siteFailed || report?.status === 'unavailable'
+    || sources.some(source => source.status === 'unavailable'));
 
-  return <section className="mx-auto max-w-4xl space-y-3" aria-labelledby="initial-setup-title">
+  const openReview = () => {
+    setReviewing(true);
+    const section = contactsToReview ? 'profile' : state?.services.length ? 'services'
+      : factsToReview ? 'facts' : showPhotos ? 'photos' : sites.length ? 'site' : 'profile';
+    const detail = resultRef.current?.querySelector<HTMLDetailsElement>('#setup-result-' + section);
+    if (detail) {
+      detail.open = true;
+      detail.querySelector('summary')?.focus();
+    }
+  };
+
+  return <section className="mx-auto max-w-3xl space-y-3" aria-labelledby="initial-setup-title">
     <header className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
       <div className="min-w-0">
         <h2 id="initial-setup-title" className="text-sm font-semibold">Первичная настройка компании</h2>
@@ -499,56 +566,82 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
     <SetupChatMessages activity={state?.activity ?? []} notice={notice} />
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
-    {state && (completedSources.length > 0 || state.started && !gathering) && <SetupStep
-      title={completedSources.length ? 'Источники' : 'Данные компании'} icon={Building2}>
-      {collected > 0 && <p>Прочитано · {collected}{photosFound > 0 && ` · Фото для проверки · ${photosFound}`}</p>}
-      {completedSources.filter(source => source.status !== 'ready').map(source => (
-        <div key={source.key} className="flex flex-wrap items-center gap-2">
-          <p className="max-w-prose text-muted-foreground">{source.note || 'Источник пока недоступен.'}</p>
-          {canChange && source.status === 'unavailable' && <Button size="sm" variant="outline" disabled={busy || reading}
-            onClick={() => void send({ action: 'retry', key: source.key })}>Повторить сбор</Button>}
-        </div>
-      ))}
-      <SetupDisclosure title="Данные и источники" compact
-        meta={contactsToReview ? 'Контакты к проверке · ' + contactsToReview : undefined}>
-        <SetupSources state={state} busy={busy} send={send} />
-        <SetupLink businessId={state.business_id} path="/dashboard/profile">Профиль компании</SetupLink>
-      </SetupDisclosure>
-      {sourcesToRead && !gathering && canChange && <Button size="sm" disabled={busy}
-        onClick={() => void send({ action: 'read' })}>Собрать данные</Button>}
-      {needsSource && <p className="text-muted-foreground">Повторите чтение или пришлите другую ссылку. Можно добавить услуги прямо в чат.</p>}
-    </SetupStep>}
-
-    {gathering && <SetupStep title="Собираем данные" icon={Building2} working>
-      {state?.sources.filter(source => source.status === 'queued' || source.status === 'running').map(source => (
-        <p key={source.key} className="text-muted-foreground">{platforms[source.provider] || (source.kind === 'website' ? 'Сайт' : source.provider)}</p>
-      ))}
-    </SetupStep>}
-
-    {showAnalysis && preparing && <SetupStep title="Разбираем услуги и поисковые запросы" icon={ListChecks} working />}
-    {showAnalysis && !preparing && !analysisDone && <SetupStep
-      title={draftFailed ? 'Не удалось подготовить услуги' : 'Подготовим услуги и поисковые запросы'} icon={ListChecks}>
-      {!draftFailed && !state?.activity_type && <p className="text-muted-foreground">Уточните вид деятельности или напишите «Услуга: название».</p>}
-      {canChange && <Button size="sm" disabled={busy} onClick={() => void send({ action: draftFailed ? 'draft_retry' : 'prepare' })}>
-        {draftFailed ? 'Повторить подготовку' : 'Подготовить услуги и SEO'}
-      </Button>}
-    </SetupStep>}
-
-    {state && analysisDone && <>
-      <SetupStep title="Услуги и SEO" icon={ListChecks}>
-        {state.services.length > 0 || queryCount > 0
-          ? <p>Услуги · {state.services.length} / Запросы · {queryCount}</p>
-          : <p className="text-muted-foreground">Услуги не удалось подтвердить. Пришлите прайс или добавьте услугу в чате.</p>}
-        {state.services.length > 0 && <SetupDisclosure title="Услуги и правки" count={state.services.length} compact>
-          <ServiceProposals key={state.business_id} items={state.services} send={canChange ? send : undefined}
-            disabled={busy} error={error} />
-          <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
-        </SetupDisclosure>}
-        {queryCount > 0 && <SetupDisclosure title="Поисковые запросы" compact>
+    <article ref={resultRef} aria-labelledby="setup-result-title" className="w-full min-w-0 rounded-2xl border bg-card px-2.5 py-2 text-sm sm:px-3.5">
+      <header className="flex items-center gap-2.5 px-2.5 pb-2">
+        <LocalOSChatAvatar />
+        <h3 id="setup-result-title" className="min-w-0 font-semibold">
+          {working ? 'Готовлю кабинет' : saved ? 'Кабинет сохранён' : canReview ? 'Черновик готов к проверке'
+            : hasIssues ? 'Нужно уточнить данные' : 'Результаты настройки'}
+        </h3>
+      </header>
+      {showGathering && <p role="status" className="flex items-center gap-2 px-3 py-2 text-muted-foreground">
+        <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Собираю данные…
+      </p>}
+      {state && <div className="divide-y border-t">
+        {maps.length > 0 && <SetupResultRow id="setup-result-maps" title="Карты" icon={MapPin} working={mapsReading}
+          complete={readyMaps.length > 0 && !maps.some(sourceFailed)}
+          summary={mapsReading ? 'Читаю карточки…' : mapNames ? `${mapNames} · прочитано` : (maps.some(sourceFailed)
+            ? 'Карточка недоступна' : 'Карточки добавлены')}
+          actions={maps.some(sourceFailed) && <SourceProblems sources={maps} busy={busy || reading} canEdit={canChange} send={send} />}>
+          <SetupSources sources={maps} state={state} busy={busy} send={send} />
+        </SetupResultRow>}
+        {sites.length > 0 && <SetupResultRow id="setup-result-site" title="Сайт" icon={Globe} working={sitesReading || checkingSite}
+          complete={pages.length > 0 && !siteFailed}
+          summary={sitesReading || checkingSite ? 'Проверяю страницы…'
+            : pages.length > 0 ? [
+              counted(pages.length, { one: 'страница', few: 'страницы', many: 'страниц' }),
+              fixes ? counted(fixes, { one: 'замечание', few: 'замечания', many: 'замечаний' }) : 'без замечаний',
+            ].join(' · ') : siteFailed ? 'Не удалось проверить' : 'Требуется SEO-проверка'}
+          actions={siteFailed && <SourceProblems sources={sites} busy={busy || reading} canEdit={canChange} send={send} />}>
+          <SetupSources sources={sites} state={state} busy={busy} send={send} />
+        </SetupResultRow>}
+        {socials.length > 0 && <SetupResultRow id="setup-result-socials" title="Соцсети" icon={MessageSquare} working={socialsReading}
+          complete={!socials.some(source => source.status === 'added' || sourceFailed(source))}
+          summary={socialsReading ? 'Проверяю ссылки…' : socialNames}
+          actions={socials.some(sourceFailed) && <SourceProblems sources={socials} busy={busy || reading} canEdit={canChange} send={send} />}>
+          <SetupSources sources={socials} state={state} busy={busy} send={send} />
+        </SetupResultRow>}
+        <SetupResultRow id="setup-result-profile" title="Данные компании" icon={Building2}
+          summary={contactsToReview ? 'Есть данные для проверки' : state.profile.address ? 'Профиль и адрес' : 'Профиль'}>
+          <SetupProfile state={state} busy={busy} send={send} />
+          <SetupLink businessId={state.business_id} path="/dashboard/profile">Профиль компании</SetupLink>
+        </SetupResultRow>
+        {showServices && <SetupResultRow id="setup-result-services" title="Услуги" icon={ListChecks} working={preparing}
+          complete={!needsSeo && state.services.length > 0}
+          summary={preparing ? 'Готовлю предложения…' : draftFailed ? 'Не удалось подготовить' : needsSeo ? 'Нужна подготовка'
+            : state.services.length ? counted(state.services.length, { one: 'услуга', few: 'услуги', many: 'услуг' }) + ' с предложениями'
+              : 'Пришлите прайс или добавьте услуги'}
+          actions={!preparing && !gathering && (needsSeo || draftFailed) && canChange
+            ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: draftFailed ? 'draft_retry' : 'prepare' })}>
+                {draftFailed ? 'Повторить подготовку' : 'Подготовить услуги и запросы'}
+              </Button> : undefined}>
+          {state.seo_prepared && state.services.length > 0 ? <>
+            <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
+            <ServiceProposals key={state.business_id} items={state.services} send={canChange ? send : undefined}
+              disabled={busy} error={error} />
+          </> : undefined}
+        </SetupResultRow>}
+        {state.seo_prepared && queryCount > 0 && <SetupResultRow id="setup-result-keywords" title="Поисковые запросы" icon={Search}
+          complete={!needsSeo} summary={counted(queryCount, { one: 'запрос', few: 'запроса', many: 'запросов' })}>
           <SetupLink businessId={state.business_id} path="/dashboard/card?tab=keywords">Семантическое ядро</SetupLink>
           <Keywords state={state} />
-        </SetupDisclosure>}
-        {state.facts.length > 0 && <SetupDisclosure title="Факты для контента" count={state.facts.length} icon={FileText} compact>
+        </SetupResultRow>}
+        {showPhotos && <SetupResultRow id="setup-result-photos" title="Фото для карт" icon={Images} working={checkingPhotos}
+          complete={report?.status === 'ready' && !reviewPhotos && !report.missing.length}
+          summary={checkingPhotos ? photosFound ? `Проверяю ${photosFound} фото…` : 'Проверяю фото…'
+            : report?.status === 'unavailable' ? 'Нужна повторная проверка'
+            : reviewPhotos ? `${reviewPhotos} фото на проверку`
+            : report?.status === 'ready' ? `${report.library_count} фото в медиатеке` : 'Нужна проверка'}
+          actions={report?.status === 'ready' && report.missing.length ? <p>Доснять: {report.missing.map(item => item.label.toLowerCase()).join(', ')}.</p>
+            : report?.status === 'unavailable' ? <>
+              {report.note && <p>{report.note}</p>}
+              {canChange && <Button size="sm" variant="outline" disabled={busy}
+                onClick={() => void send({ action: 'photo_check' })}>Повторить проверку фото</Button>}
+            </> : undefined}>
+          <PhotoCheck key={state.business_id} report={report} businessId={state.business_id} busy={busy} send={canChange ? send : undefined} />
+        </SetupResultRow>}
+        {state.facts.length > 0 && <SetupResultRow id="setup-result-facts" title="Факты для контента" icon={FileText}
+          summary={counted(state.facts.length, { one: 'факт', few: 'факта', many: 'фактов' })}>
           <ul className="divide-y text-sm">{state.facts.map(fact => <li key={fact.key} className="space-y-1 py-2">
             <p>{fact.text}</p><div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <a className="underline" href={fact.url} target="_blank" rel="noreferrer">Источник{fact.observed_at && ' · ' + fact.observed_at.slice(0, 10)}</a>
@@ -557,30 +650,30 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
             </div>
           </li>)}</ul>
           <SetupLink businessId={state.business_id} path="/dashboard/profile?section=knowledge">Факты о компании</SetupLink>
-        </SetupDisclosure>}
-        {state.comparisons.length > 0 && <SetupDisclosure title="Конкуренты" count={state.comparisons.length} icon={MapPin} compact>
+        </SetupResultRow>}
+        {state.comparisons.length > 0 && <SetupResultRow id="setup-result-competitors" title="Конкуренты" icon={Search}
+          summary={counted(state.comparisons.length, { one: 'сравнение', few: 'сравнения', many: 'сравнений' })}>
           <Comparisons rows={state.comparisons} />
           <SetupLink businessId={state.business_id} path="/dashboard/card?tab=competitors">Все конкуренты</SetupLink>
-        </SetupDisclosure>}
-      </SetupStep>
-
-      {checkingPhotos ? <SetupStep title="Проверяем фото…" icon={Images} working /> :
-        <div className="max-w-full rounded-2xl border bg-card px-1">
-          <PhotoCheck key={state.business_id} report={state.photo_report} businessId={state.business_id}
-            busy={busy} send={canChange ? send : undefined} />
-        </div>}
-
-      {canReview && <SetupStep title={saved ? 'Кабинет сохранён' : 'Черновик кабинета готов'} icon={FileText}>
-        {!saved && canChange && <p className="text-muted-foreground">Проверьте контакты, правки услуг и факты перед сохранением.</p>}
-        <div className="flex flex-wrap items-start gap-2">
-          {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
-          {saved ? <Button size="sm" variant="outline" asChild>
-            <Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link>
-          </Button> : canChange && <Button size="sm" disabled={busy}
-            onClick={() => void send({ action: 'save' })}>Сохранить кабинет</Button>}
-        </div>
-      </SetupStep>}
-      {isStaff && saved && <Handoff key={state.business_id} state={state} />}
-    </>}
+        </SetupResultRow>}
+      </div>}
+      {state && (canReview || needsSource || (sourcesToRead && !gathering)) && <footer className="space-y-2 border-t px-2.5 pt-2">
+        {needsSource && !gathering && <p className="text-muted-foreground">Пришлите другую ссылку или добавьте услуги в чат.</p>}
+        {sourcesToRead && !gathering && canChange && <Button size="sm" disabled={busy}
+          onClick={() => void send({ action: 'read' })}>Собрать данные</Button>}
+        {canReview && <>
+          {reviewing && !saved && <p className="text-xs text-muted-foreground">Проверьте данные компании и предложения перед сохранением.</p>}
+          <div className="flex flex-wrap items-start gap-2">
+            {saved ? <Button size="sm" asChild>
+              <Link to={companyUrl('/dashboard/profile', state.business_id)}>Открыть кабинет</Link>
+            </Button> : canChange && (reviewing
+              ? <Button size="sm" disabled={busy} onClick={() => void send({ action: 'save' })}>Сохранить кабинет</Button>
+              : <Button size="sm" onClick={openReview}>Проверить черновик</Button>)}
+            {state.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
+          </div>
+          {isStaff && saved && <Handoff key={state.business_id} state={state} />}
+        </>}
+      </footer>}
+    </article>
   </section>;
 }

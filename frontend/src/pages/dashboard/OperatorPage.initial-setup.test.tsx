@@ -66,7 +66,7 @@ it('routes the existing chat composer to the selected company and opens the same
   expect(within(setupChat).getByText('Вид деятельности сохранён.')).toBeVisible();
   const setupCard = screen.getByRole('region', { name: 'Первичная настройка компании' });
   expect(screen.getAllByText('Вид деятельности сохранён.')).toHaveLength(1);
-  expect(within(setupCard).getByText('Проверьте контакты, правки услуг и факты перед сохранением.')).toBeVisible();
+  expect(within(setupCard).getByRole('button', { name: 'Проверить черновик' })).toBeVisible();
   const queries = screen.getByText('Поисковые запросы');
   expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
   fireEvent.click(queries);
@@ -90,7 +90,7 @@ it('reviews new and existing services in the same list and only shows original d
     return <InitialSetupChat setup={initialSetup} isStaff={false} onExit={() => {}} />;
   }
   render(<MemoryRouter><SetupChat /></MemoryRouter>);
-  fireEvent.click(await screen.findByText('Услуги и правки'));
+  fireEvent.click(await screen.findByText('Услуги'));
 
   const newRow = await screen.findByRole('button', { name: 'Пошив мерча на заказ Новая услуга' });
   expect(screen.queryByText(added.proposed_description)).not.toBeInTheDocument();
@@ -192,17 +192,17 @@ it('refreshes a previously read site and shows the page and proposed SEO fix', a
     <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
   </MemoryRouter>);
   expect(await screen.findByText('Кабинет сохранён')).toBeVisible();
-  expect(screen.getByText('Прочитано · 1')).toBeVisible();
-  expect(screen.getByText('Услуги · 1 / Запросы · 1')).toBeVisible();
-  expect(screen.queryByText('Проверьте контакты, правки услуг и факты перед сохранением.')).not.toBeInTheDocument();
+  expect(screen.getByText('Требуется SEO-проверка')).toBeVisible();
+  expect(screen.getByText('1 услуга с предложениями')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Проверить черновик' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' })).not.toBeVisible();
-  fireEvent.click(screen.getByText('Данные и источники'));
+  fireEvent.click(screen.getByText('Сайт', { selector: 'summary > span' }));
   fireEvent.click(screen.getByRole('button', { name: 'Провести SEO-аудит сайта' }));
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
     action: 'website_audit', key: 'site', revision: 3,
   }));
-  expect(await screen.findByText('SEO-проверка в очереди')).toBeInTheDocument();
-  fireEvent.click(await screen.findByText('SEO-аудит сайта', {}, { timeout: 4000 }));
+  expect(await screen.findByText('Проверяю страницы…')).toBeVisible();
+  expect(await screen.findByText('1 страница · 1 замечание', {}, { timeout: 4000 })).toBeVisible();
   expect(screen.getByRole('link', { name: site })).toBeVisible();
   expect(screen.getByText('Добавьте уникальный title.')).toBeVisible();
 });
@@ -295,7 +295,7 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
     action: 'photo_pick', key: 'candidate', category: 'entrance', revision: 3,
   }));
-  expect(await screen.findByText('Проверяем фото…')).toBeVisible();
+  expect(await screen.findByText('Проверяю фото…')).toBeVisible();
 });
 
 it.each([false, true])('opens a blank chat and starts from the first link (saved empty setup: %s)', async savedEmptySetup => {
@@ -324,12 +324,15 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
     action: 'start', message: map, auto: true, revision: empty?.revision,
   }));
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
-  expect(await screen.findByText('Черновик кабинета готов')).toBeVisible();
+  expect(await screen.findByText('Черновик готов к проверке')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Сохранить кабинет' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Проверить черновик' }));
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
+  expect(screen.getByText('Услуги').closest('summary')).toHaveFocus();
 });
 
-it('adds results below each completed chat step and keeps an unread card out of the draft', async () => {
+it('updates one result message from map reading to photos and keeps an unread card out of the draft', async () => {
   const map = { ...setup.sources[0], photo_candidate_count: 4 };
   const pending = {
     ...setup, sources: [{ ...map, status: 'queued', service_count: 0, photo_candidate_count: 0 }],
@@ -347,28 +350,33 @@ it('adds results below each completed chat step and keeps an unread card out of 
   }
   render(<MemoryRouter><SetupChat /></MemoryRouter>);
   expect(await screen.findByText('Яндекс временно ограничил чтение.')).toBeVisible();
-  expect(screen.queryByText('Услуги и SEO')).not.toBeInTheDocument();
+  const result = screen.getByRole('article', { name: 'Нужно уточнить данные' });
+  expect(within(result).queryByText('Услуги')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Скачать отчёт PDF' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Повторить сбор' }));
-  const collecting = await screen.findByText('Собираем данные');
+  const collecting = await within(result).findByText('Читаю карточки…');
   expect(collecting).toBeVisible();
-  expect(collecting.querySelector('img')).toHaveAttribute('src', expect.stringContaining('logo.png'));
-  expect(collecting.querySelector('svg')).toHaveClass('motion-safe:animate-spin');
-  expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
+  expect(result.querySelector('img')).toHaveAttribute('src', expect.stringContaining('logo.png'));
+  expect(collecting.closest('summary')?.querySelector('svg')).toHaveClass('motion-safe:animate-spin');
+  expect(within(result).queryByText('Проверяю фото…')).not.toBeInTheDocument();
 
   state = { ...pending, sources: [map], draft_status: 'running' };
-  expect(await screen.findByText('Разбираем услуги и поисковые запросы', {}, { timeout: 3500 })).toBeVisible();
-  expect(screen.getByText('Прочитано · 1 · Фото для проверки · 4')).toBeVisible();
-  expect(screen.queryByText('Услуги и правки')).not.toBeInTheDocument();
+  expect(await within(result).findByText('Готовлю предложения…', {}, { timeout: 3500 })).toBeVisible();
+  expect(within(result).getByText('Яндекс Карты · прочитано')).toBeVisible();
+  expect(within(result).getByText('4 фото на проверку')).toBeVisible();
+  expect(within(result).queryByRole('link', { name: 'Каталог услуг' })).not.toBeInTheDocument();
   state = { ...setup, sources: [map], draft_ready: true, photo_report: { status: 'running' } };
-  const photoStep = await screen.findByText('Проверяем фото…', {}, { timeout: 3500 });
+  const photoStep = await within(result).findByText('Проверяю 4 фото…', {}, { timeout: 3500 });
   expect(photoStep).toHaveAttribute('role', 'status');
-  expect(screen.getByText('Услуги · 1 / Запросы · 1')).toBeVisible();
+  expect(within(result).getByText('1 запрос')).toBeVisible();
+  expect(screen.getByText('1 услуга с предложениями')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Скачать отчёт PDF' })).not.toBeInTheDocument();
   state = { ...setup, sources: [map], draft_ready: true, report_ready: true };
   expect(await screen.findByRole('button', { name: 'Скачать отчёт PDF' }, { timeout: 3500 })).toBeVisible();
-  expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'Услуги и SEO' }).querySelector('img')).toBeNull();
+  expect(within(result).queryByText('Проверяю 4 фото…')).not.toBeInTheDocument();
+  expect(screen.getByRole('article', { name: 'Черновик готов к проверке' })).toBe(result);
+  expect(result.querySelectorAll('img')).toHaveLength(1);
+  expect(result.querySelector('.motion-safe\\:animate-spin')).toBeNull();
 }, 12500);
 
 it('shows a single source retry and keeps the provider and cost out of chat', async () => {
@@ -389,7 +397,7 @@ it('shows a single source retry and keeps the provider and cost out of chat', as
   const button = await screen.findByRole('button', { name: 'Повторить сбор' });
   expect(screen.queryByText(/Apify|\$0,02/)).not.toBeInTheDocument();
   fireEvent.click(button);
-  expect(await screen.findByText('Собираем данные')).toBeVisible();
+  expect(await screen.findByText('Читаю карточки…')).toBeVisible();
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   expect(screen.queryByText(/Apify|\$0,02/)).not.toBeInTheDocument();
   expect(api.post).toHaveBeenCalledExactlyOnceWith(endpoint, {
