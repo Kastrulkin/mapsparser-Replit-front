@@ -182,15 +182,17 @@ def read_map(source, snapshot):
         raw = snapshot
         message = 'Использован сохранённый снимок этой карточки.'
     elif provider in ('yandex', '2gis') and map_card_initial_audit.public_url(provider, url):
-        raw = map_card_initial_audit.initial_native_readers()[provider](url)
+        raw = map_card_initial_audit.initial_native_readers(content_only=True)[provider](url)
         message = 'Карточка прочитана.'
     else:
         reason = 'Для Google добавьте подключение или сначала получите снимок точной карточки.' if provider == 'google' else 'Нужна прямая ссылка на карточку компании.'
         return {'status': 'link_only', 'note': reason}
+    if isinstance(raw, dict) and raw.get('error') == 'yandex_rate_limited':
+        return {'status': 'unavailable', 'note': 'Яндекс временно ограничил чтение карточки. Повторите сбор позже.'}
     if not isinstance(raw, dict) or raw.get('error') or raw.get('captcha_required'):
         return {'status': 'unavailable', 'note': 'Площадка не отдала карточку. Проверьте ссылку или повторите чтение позже.'}
     title = clean(raw.get('name') or raw.get('title') or raw.get('title_or_name'), 260)
-    if not title:
+    if not title or title.casefold() == 'untitled':
         return {'status': 'unavailable', 'note': 'Парсер не подтвердил название карточки.'}
     description = clean(raw.get('description') or map_card_initial_audit.record(raw.get('profile')).get('description'), 700)
     profile = [{'field': field, **dated(value, url)} for field, value in (
@@ -205,4 +207,5 @@ def read_map(source, snapshot):
     return {'status': 'ready', 'note': message, 'name': title, 'catalog': catalog_rows(raw, url), 'profile': profile,
             'facts': [dated(description, url)] if description else [],
             'metrics': {'rating': clean(raw.get('rating'), 20), 'reviews': clean(raw.get('reviews_count'), 20)},
-            'observed_at': clean(observed_at, 60), 'photo_candidates': photos}
+            'observed_at': clean(observed_at, 60), 'photo_candidates': photos,
+            'capture_method': 'snapshot' if snapshot else 'live'}

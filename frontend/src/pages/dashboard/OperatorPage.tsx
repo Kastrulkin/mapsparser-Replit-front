@@ -360,7 +360,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
   const [pendingChatPhase, setPendingChatPhase] = useState('Отправляем команду…');
   const [commandWaiting, setCommandWaiting] = useState(false);
   const [commandAccepted, setCommandAccepted] = useState(false);
-  const setupMessageCount = (initialSetup.state?.activity.length ?? 0) + Number(Boolean(initialSetup.notice));
+  const setupMessageCount = (initialSetup.state?.revision ?? 0) + Number(initialSetup.pendingSources);
   const chatScroll = useChatAutoScroll(
     setupMode ? `setup:${setupBusinessId ?? ''}` : currentBusinessId,
     setupMode ? setupMessageCount : messages.length + Number(Boolean(pendingChatMessage)),

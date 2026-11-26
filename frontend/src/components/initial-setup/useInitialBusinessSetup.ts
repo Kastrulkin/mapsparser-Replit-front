@@ -27,6 +27,7 @@ export type Source = {
   found_on?: string;
   competitor: boolean;
   service_count: number;
+  photo_candidate_count?: number;
   website_audit?: WebsiteAudit;
 };
 type Finding = { key: string; text: string; url: string; accepted?: boolean; observed_at?: string };
@@ -57,7 +58,7 @@ export type Setup = {
   activity_type?: string;
   category_keywords: Keyword[];
   photo_report?: PhotoReport | null;
-  draft_status?: 'queued' | 'running' | 'failed' | null;
+  draft_status?: 'queued' | 'running' | 'failed' | 'needs_source' | null;
   draft_ready?: boolean;
   report_ready?: boolean;
   facts: Finding[];
@@ -86,6 +87,7 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
   const [data, setData] = useState<SetupResponse | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pendingSources, setPendingSources] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
   const context = active ? businessId : null;
@@ -113,6 +115,7 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
     setNotice('');
     setError('');
     setBusy(false);
+    setPendingSources(false);
     inFlight.current = false;
     if (!context) return;
     const controller = new AbortController();
@@ -143,6 +146,8 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
     const issued = ++mutation.current;
     const isCurrent = () => scope.current === context && mutation.current === issued;
     setBusy(true);
+    setPendingSources(action.action === 'read' || action.action === 'retry'
+      || Boolean((action.action === 'start' || action.action === 'message') && action.message?.includes('://')));
     setError('');
     setNotice('');
     try {
@@ -160,8 +165,9 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
       if (isCurrent()) {
         inFlight.current = false;
         setBusy(false);
+        setPendingSources(false);
       }
     }
   };
-  return { state, available: data?.available, canEdit: state?.can_edit ?? data?.can_edit ?? false, error, busy, loading, notice, reading, send, refresh };
+  return { state, available: data?.available, canEdit: state?.can_edit ?? data?.can_edit ?? false, error, busy, loading, notice, reading, pendingSources, send, refresh };
 }

@@ -142,11 +142,15 @@ def await_initial_read(cursor, business_id, audit):
     return audit
 
 
-def initial_native_readers():
+def initial_native_readers(*, content_only=False):
     # Reuse the exact bounded readers used by the existing parsing worker.
     # Import only when an actual unsaved native task is claimed.
     def read_yandex(url):
         from worker import _parse_yandex_card_with_playwright_fallback
+        if content_only:
+            return _parse_yandex_card_with_playwright_fallback(
+                url, keep_open_on_captcha=False, timeout_sec=90, headless=True, parse_mode='content_snapshot',
+            )
         return _parse_yandex_card_with_playwright_fallback(url, keep_open_on_captcha=False, timeout_sec=90, force_subprocess=True, headless=True)
 
     def read_2gis(url):

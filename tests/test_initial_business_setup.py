@@ -142,7 +142,7 @@ def test_hamik_verified_registration_resumes_without_a_listing(pilot, monkeypatc
     assert not first['sources']
     state = action(client, HAMIK, 'start')
     monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers',
-                        lambda: pytest.fail('A residential address must not launch a business card parser'))
+                        lambda **_: pytest.fail('A residential address must not launch a business card parser'))
     state = action(client, HAMIK, 'message', state, message='https://yandex.com/maps/house/example/123456')
     assert process_next(conn)['state'] == 'link_only'
     state = client.get(SETUP + HAMIK).get_json()['setup']
@@ -172,7 +172,7 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     state = client.get(SETUP + JINLIAN).get_json()['setup']
     assert state['sources'][0]['service_count'] == 1
     state = action(client, JINLIAN, 'message', state, message='Конкурент: https://yandex.com/maps/org/fixture/789012')
-    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda: {'yandex': lambda url: {
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda **_: {'yandex': lambda url: {
         'title': 'Fixture competitor', 'rating': 4.4, 'reviews_count': 12, 'products': [{'name': 'Soy scoop'}],
     }})
     assert process_next(conn)['state'] == 'ready'
@@ -473,6 +473,48 @@ def test_staff_lead_draft_is_idempotent_and_handoff_requires_review(pilot, monke
     cursor.execute('SELECT relation_role FROM business_company_links WHERE business_id=%s', (business,))
     assert cursor.fetchone()['relation_role'] == 'owner'
 
+def test_blocked_map_leaves_draft_incomplete_and_retry_collects_catalog_and_gallery(pilot, monkeypatch):
+    client, _conn = pilot
+    url = 'https://yandex.com/maps/org/clinic/123456'
+    photo = 'https://avatars.mds.yandex.net/get-altay/12345/a-b/XXXL'
+    responses = iter([
+        {'error': 'yandex_rate_limited'},
+        {'name': 'Clinic', 'products': [{'name': 'Laser consultation'}], 'photos': [photo]},
+    ])
+
+    def readers(*, content_only):
+        assert content_only
+        return {'yandex': lambda value: next(responses)}
+
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', readers)
+    state = action(client, HAMIK, 'start', message=url, auto=True)
+    assert state['sources'][0]['status'] == 'queued'
+    assert process_next_operator_async_job()['status'] == 'failed'
+    assert process_next_operator_async_job()['result']['state'] == 'needs_source'
+    assert process_next_operator_async_job() is None
+    state = client.get(SETUP + HAMIK).get_json()['setup']
+    assert state['draft_status'] == 'needs_source'
+    assert not state['draft_ready'] and not state['report_ready']
+    assert 'временно ограничил' in state['sources'][0]['note']
+    assert client.get(SETUP + HAMIK + '/report').status_code == 409
+
+    state = action(client, HAMIK, 'retry', state, key=state['sources'][0]['key'])
+    assert state['draft_status'] == 'queued'
+    for _ in range(3):
+        assert process_next_operator_async_job()['status'] == 'completed'
+    state = client.get(SETUP + HAMIK).get_json()['setup']
+    assert state['report_ready']
+    assert state['sources'][0]['photo_candidate_count'] == 1
+    assert state['services'][0]['original'] == 'Laser consultation'
+    assert state['photo_report']['review'][0]['image_url'] == photo
+
+
+def test_placeholder_map_title_does_not_confirm_a_card():
+    source = {'provider': 'yandex', 'url': 'https://yandex.com/maps/org/clinic/123456'}
+    result = initial_setup_sources.read_map(source, {'name': 'Untitled'})
+    assert result['status'] == 'unavailable'
+
+
 def test_website_audit_can_use_pinned_node_on_existing_images(monkeypatch, tmp_path):
     from types import SimpleNamespace
 
@@ -515,7 +557,7 @@ def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, 
     monkeypatch.setenv('BROWSER_COOKIE_AUTH_ENABLED', 'true')
     monkeypatch.setenv('BROWSER_COOKIE_AUTH_SECURE', 'false')
     monkeypatch.setenv('LOCALOS_INITIAL_SETUP_BUSINESS_IDS', 'different-pilot-company')
-    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda: {})
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda **_: {})
     monkeypatch.setattr(setup._SetupWordstatSearch, 'lookup', lambda _search, _name: [])
     cursor = conn.cursor()
     cursor.execute("UPDATE businesses SET owner_id='staff' WHERE id=%s", (business,))

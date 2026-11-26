@@ -563,7 +563,8 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             from services.initial_business_setup import process_draft
             result = process_draft(claimed)
             status = "cancelled" if result.get("state") == "obsolete" else "completed"
-            stage, progress = "Черновик кабинета подготовлен", 100
+            stage = "Нужен источник данных" if result.get("state") == "needs_source" else "Черновик кабинета подготовлен"
+            progress = 100
         elif kind == "initial_setup_photos":
             from services.initial_business_setup import process_photos
             result = process_photos(claimed)

@@ -340,6 +340,13 @@ def queue_draft(cursor, row, actor_id, *, retry=False):
     tracker.update(id=job['id'], attempt=attempt, scope=scope)
 
 
+def _draft_needs_source(data, sources):
+    own = [source for source in sources if not source.get('competitor')]
+    return bool(data.get('auto_draft') and own
+                and all(source['status'] in ('unavailable', 'link_only') for source in own)
+                and not any(data.get(key) for key in ('services', 'declared_services', 'activity_type', 'category_keywords')))
+
+
 def process_draft(claimed):
     from database_manager import DatabaseManager
     from services.business_permissions import load_actor, require_permission
@@ -368,7 +375,8 @@ def process_draft(claimed):
         # Keep the last approved catalog and knowledge intact. Automatic runs use saved search data.
         if not row['data'].get('seo_prepared') or row['data'].get('seo_dirty'):
             prepare_seo(cursor, row, profile, live_wordstat=False)
-        if row['data'].get('photo_report_scope') != _photo_scope(row):
+        blocked = _draft_needs_source(row['data'], sources)
+        if not blocked and row['data'].get('photo_report_scope') != _photo_scope(row):
             try:
                 _queue_photos(cursor, row, actor_id)
             except Conflict:
@@ -376,7 +384,7 @@ def process_draft(claimed):
         tracker.pop('id')
         persist(cursor, row)
         db.conn.commit()
-        return {'state': 'ready'}
+        return {'state': 'needs_source' if blocked else 'ready'}
     finally:
         db.rollback_and_close()
 
@@ -448,7 +456,7 @@ def process_photos(claimed):
         # Older company records may have counts but no gallery URLs. Reuse the native readers
         # for the missing gallery, outside the transaction and without any paid fallback.
         refresh = [card for card in cards if not card['photo_candidates'] and card['provider'] in ('yandex', '2gis')
-                   and card['status'] in ('ready', 'unavailable', 'link_only')][:2]
+                   and card['status'] == 'ready' and card.get('capture_method') != 'live'][:2]
         for card in refresh:
             try:
                 card['photo_candidates'] = read_map(card, None).get('photo_candidates', [])
@@ -689,7 +697,8 @@ def status(cursor, row, profile, can_edit):
             audit_state = jobs.get(audit_job)
             visible['website_audit'] = ({'status': audit_state} if audit_state in ('queued', 'running') else
                                         audit_unavailable('SEO-проверка была прервана. Можно повторить.'))
-        visible.update(key=key, service_count=len(item.get('catalog', [])))
+        visible.update(key=key, service_count=len(item.get('catalog', [])),
+                       photo_candidate_count=len(item.get('photo_candidates', [])))
         sources.append(visible)
     photo_report = data.get('photo_report')
     if photo_job:
@@ -702,7 +711,9 @@ def status(cursor, row, profile, can_edit):
     draft_status = jobs.get(draft_job)
     if draft_job and draft_status not in ('queued', 'running'):
         draft_status = 'failed'
-    ready = bool(data.get('seo_prepared') and not data.get('seo_dirty') and not draft_job
+    if not draft_job and _draft_needs_source(data, sources):
+        draft_status = 'needs_source'
+    ready = bool(data.get('seo_prepared') and not data.get('seo_dirty') and not draft_status
                  and not any(item['status'] in ('added', 'queued', 'running') for item in sources))
     report_ready = ready and (photo_report or {}).get('status') not in ('queued', 'running')
     return {'business_id': row['business_id'], 'revision': row['revision'], 'origin': row['origin'], 'can_edit': can_edit,

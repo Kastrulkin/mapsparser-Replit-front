@@ -65,7 +65,7 @@ it('routes the existing chat composer to the selected company and opens the same
   const setupChat = await screen.findByRole('log', { name: 'Сообщения настройки' });
   expect(within(setupChat).getByText('Вид деятельности сохранён.')).toBeVisible();
   const setupCard = screen.getByRole('region', { name: 'Первичная настройка компании' });
-  expect(within(setupCard).queryByText('Вид деятельности сохранён.')).not.toBeInTheDocument();
+  expect(screen.getAllByText('Вид деятельности сохранён.')).toHaveLength(1);
   expect(within(setupCard).getByText('Проверьте контакты, правки услуг и факты перед сохранением.')).toBeVisible();
   const queries = screen.getByText('Поисковые запросы');
   expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
@@ -324,6 +324,44 @@ it('starts from the first link in an empty setup and exposes the PDF when the dr
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
 });
+
+it('adds results below each completed chat step and keeps an unread card out of the draft', async () => {
+  const map = { ...setup.sources[0], photo_candidate_count: 4 };
+  const pending = {
+    ...setup, sources: [{ ...map, status: 'queued', service_count: 0, photo_candidate_count: 0 }],
+    services: [], seo_prepared: false, draft_status: 'queued',
+  };
+  const limited = {
+    ...pending, sources: [{ ...pending.sources[0], status: 'unavailable', note: 'Яндекс временно ограничил чтение.' }],
+    draft_status: 'needs_source',
+  };
+  let state: object = limited;
+  vi.mocked(api.get).mockImplementation(async () => ({ data: { available: true, setup: state } }));
+  vi.mocked(api.post).mockResolvedValue({ data: { available: true, setup: pending } });
+  function SetupChat() {
+    return <InitialSetupChat setup={useInitialBusinessSetup(businessId, true)} isStaff={false} onExit={() => {}} />;
+  }
+  render(<MemoryRouter><SetupChat /></MemoryRouter>);
+  expect(await screen.findByText('Яндекс временно ограничил чтение.')).toBeVisible();
+  expect(screen.queryByText('Услуги и SEO')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Скачать отчёт PDF' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Повторить сбор' }));
+  expect(await screen.findByText('Собираем данные')).toBeVisible();
+  expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
+
+  state = { ...pending, sources: [map], draft_status: 'running' };
+  expect(await screen.findByText('Разбираем услуги и поисковые запросы', {}, { timeout: 3500 })).toBeVisible();
+  expect(screen.getByText('Прочитано · 1 · Фото для проверки · 4')).toBeVisible();
+  expect(screen.queryByText('Услуги и правки')).not.toBeInTheDocument();
+  state = { ...setup, sources: [map], draft_ready: true, photo_report: { status: 'running' } };
+  const photoStep = await screen.findByText('Проверяем фото…', {}, { timeout: 3500 });
+  expect(photoStep).toHaveAttribute('role', 'status');
+  expect(screen.getByText('Услуги · 1 / Запросы · 1')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Скачать отчёт PDF' })).not.toBeInTheDocument();
+  state = { ...setup, sources: [map], draft_ready: true, report_ready: true };
+  expect(await screen.findByRole('button', { name: 'Скачать отчёт PDF' }, { timeout: 3500 })).toBeVisible();
+  expect(screen.queryByText('Проверяем фото…')).not.toBeInTheDocument();
+}, 12500);
 
 it('releases a stalled PDF request and downloads the report on retry', async () => {
   vi.mocked(api.get).mockResolvedValue({
