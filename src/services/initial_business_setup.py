@@ -254,7 +254,7 @@ def snapshot(cursor, business_id, source):
 def _previous_apify_launch(cursor, claimed):
     cursor.execute("""SELECT 1 FROM operator_async_jobs
         WHERE business_id=%s AND kind=%s AND id<>%s
-          AND (payload_json ? 'apify_started' OR idempotency_key LIKE 'initial-setup-apify:%%')
+          AND (jsonb_exists(payload_json, 'apify_started') OR starts_with(idempotency_key, 'initial-setup-apify:'))
         LIMIT 1""", (claimed['business_id'], JOB_KIND, claimed['id']))
     return bool(cursor.fetchone())
 
@@ -263,7 +263,8 @@ def _read_with_apify(db, claimed, source, source_key):
     # Reuse the existing single capped Apify launch. Reserve the paid POST under
     # the source job lease before sending it, including when Apify never replies.
     def record_run(value):
-        with db.conn.cursor() as cursor:
+        cursor = db.conn.cursor()
+        try:
             if value is None:
                 cursor.execute('SELECT id FROM businesses WHERE id=%s FOR UPDATE', (claimed['business_id'],))
                 if not cursor.fetchone() or _previous_apify_launch(cursor, claimed):
@@ -275,10 +276,12 @@ def _read_with_apify(db, claimed, source, source_key):
             cursor.execute("""UPDATE operator_async_jobs j SET payload_json=j.payload_json || %s
                 FROM initial_business_setups s WHERE j.id=%s AND j.lease_token=%s AND j.status='running'
                   AND s.business_id=j.business_id AND s.data->'sources'->%s->>'job_id'=j.id::text
-                  AND (%s OR NOT (j.payload_json ? 'apify_started')) RETURNING j.id""",
+                  AND (%s OR NOT jsonb_exists(j.payload_json, 'apify_started')) RETURNING j.id""",
                 (Json(changes), claimed['id'], claimed['lease_token'], source_key, value is not None))
             if not cursor.fetchone():
                 raise Conflict('Запуск Apify уже использован или источник изменился.')
+        finally:
+            cursor.close()
         db.conn.commit()
 
     raw, url, _ = map_card_initial_audit.read_apify(

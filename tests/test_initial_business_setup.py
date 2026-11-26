@@ -36,7 +36,7 @@ def pilot(monkeypatch):
     monkeypatch.setenv('APIFY_TOKEN', '')
     monkeypatch.delenv('LOCALOS_INITIAL_SETUP_BUSINESS_IDS', raising=False)
     monkeypatch.delenv('LOCALOS_INITIAL_SETUP_LEAD_IDS', raising=False)
-    monkeypatch.setattr(database_manager, 'get_db_connection', connect)
+    monkeypatch.setattr(database_manager, 'get_db_connection', lambda: database_manager.DBConnectionWrapper(connect()))
     monkeypatch.setattr(initial_business_setup_api, 'require_auth_from_request', lambda: {
         'user_id': request.headers.get('X-Pilot-Actor', 'owner'),
         'session_kind': request.headers.get('X-Pilot-Session', 'standard'),
@@ -573,6 +573,7 @@ def test_primary_setup_uses_one_capped_fallback_after_native_failure(pilot, monk
     paid_on_request = {'action': 'read_apify', 'revision': queued['revision'], 'key': queued['sources'][0]['key']}
     assert client.post(path, json=paid_on_request, headers={'X-Pilot-Actor': 'staff'}).status_code == 400
     result = process_next_operator_async_job()
+    assert 'error' not in result, result
     assert result['result']['state'] == ('ready' if provider_returns_card else 'unavailable')
     assert process_next_operator_async_job()['result']['state'] == ('ready' if provider_returns_card else 'needs_source')
     if provider_returns_card:
