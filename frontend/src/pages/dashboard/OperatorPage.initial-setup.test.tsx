@@ -67,7 +67,7 @@ it('routes the existing chat composer to the selected company and opens the same
   expect(screen.getByText('Семантическое ядро', { selector: 'a' })).not.toBeVisible();
   fireEvent.click(queries);
   expect(screen.getByRole('link', { name: 'Семантическое ядро' })).toHaveAttribute('href', '/dashboard/card?tab=keywords&business_id=' + businessId);
-  fireEvent.click(screen.getByText('Vegan ice cream', { selector: 'summary' }));
+  fireEvent.click(screen.getByText('Vegan ice cream', { selector: 'summary > span' }));
   expect(screen.getByText('Vegan ice cream Bangkok')).toBeVisible();
 });
 
@@ -195,7 +195,7 @@ it('refreshes a previously read site and shows the page and proposed SEO fix', a
     action: 'website_audit', key: 'site', revision: 3,
   }));
   expect(await screen.findByText('SEO-проверка в очереди')).toBeInTheDocument();
-  fireEvent.click(await screen.findByText('SEO-аудит сайта · Рекомендаций: 1', {}, { timeout: 4000 }));
+  fireEvent.click(await screen.findByText('SEO-аудит сайта', {}, { timeout: 4000 }));
   expect(screen.getByRole('link', { name: site })).toBeVisible();
   expect(screen.getByText('Добавьте уникальный title.')).toBeVisible();
 });
@@ -259,11 +259,9 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   fireEvent.click(await screen.findByText('Фото для карт'));
   expect(screen.getByText('Интерьер', { selector: 'li' })).toBeVisible();
   expect(screen.getByText('Доснять')).toBeVisible();
-  expect(screen.getByText('Снимите дверь крупным планом.')).not.toBeVisible();
-  fireEvent.click(screen.getByText('Вход и ориентиры', { selector: 'summary' }));
   expect(screen.getByText('Снимите дверь крупным планом.')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Открыть медиатеку' })).toHaveAttribute('href', '/dashboard/content?tab=media&business_id=' + businessId);
-  fireEvent.click(screen.getByText(/Подборка с карт/, { selector: 'summary' }));
+  fireEvent.click(screen.getByText('Подборка с карт'));
   expect(screen.getByRole('link', { name: 'Фасад' })).toHaveAttribute('href', image);
   expect(screen.getByText('Обложка · Фасад')).toBeVisible();
   const sampled = screen.getByText('2 в выборке', { exact: false });
@@ -284,7 +282,7 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   } finally {
     vi.unstubAllGlobals();
   }
-  fireEvent.click(screen.getByText(/Уточнить фото/, { selector: 'summary' }));
+  fireEvent.click(screen.getByText('Уточнить фото'));
   fireEvent.change(screen.getByRole('combobox', { name: 'Что показано на фото' }), { target: { value: 'entrance' } });
   fireEvent.click(screen.getByRole('button', { name: 'Добавить в подборку' }));
   await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {

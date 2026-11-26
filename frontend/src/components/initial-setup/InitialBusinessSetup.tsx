@@ -30,8 +30,7 @@ function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: (
   }
   if (audit?.status === 'ready') {
     const total = audit.pages.reduce((sum, page) => sum + page.findings.length, 0);
-    return <details className="space-y-2 border-t pt-2">
-      <summary className="cursor-pointer font-medium">SEO-аудит сайта · {total ? `Рекомендаций: ${total}` : 'Замечаний нет'}</summary>
+    return <SetupDisclosure title="SEO-аудит сайта" meta={total ? `Правки · ${total}` : 'Замечаний нет'} className="border-t" compact>
       <p className="text-muted-foreground">Проверено страниц: {audit.pages.length} · {new Date(audit.checked_at).toLocaleDateString('ru-RU')}</p>
       {audit.pages.map(page => <div key={page.url} className="space-y-1">
         <a href={page.url} target="_blank" rel="noreferrer" className="break-all underline">{page.url}</a>
@@ -43,7 +42,7 @@ function SiteAudit({ audit, onCheck, busy }: { audit?: WebsiteAudit; onCheck?: (
         </ul> : <p className="text-muted-foreground">По проверенным элементам замечаний нет.</p>}
       </div>)}
       {onCheck && <Button size="sm" variant="outline" disabled={busy} onClick={onCheck}>Обновить SEO-аудит</Button>}
-    </details>;
+    </SetupDisclosure>;
   }
   return <>
     {audit?.note && <p className="text-muted-foreground">{audit.note}</p>}
@@ -126,41 +125,44 @@ function PhotoCheck({ report, businessId, send, busy }: {
           </div>
           <div className="min-w-0 flex-1 basis-40">
             <h3 className="font-medium">Доснять</h3>
-            {ready.missing.length > 0 ? <details>
-              <summary className="min-h-10 cursor-pointer py-2 text-sm text-muted-foreground">{ready.missing.map(item => item.label).join(', ')}</summary>
-              <ul className="space-y-1 pb-1 pl-3 text-xs text-muted-foreground">
-                {ready.missing.map(item => <li key={item.label}>{item.tip}</li>)}
-              </ul>
-            </details> : <p className="mt-1 text-muted-foreground">По чек-листу всё есть</p>}
+            {ready.missing.length === 0 && <p className="mt-1 text-muted-foreground">По чек-листу всё есть</p>}
+            {ready.missing.length === 1 && <p className="mt-1 text-muted-foreground">{ready.missing[0].tip}</p>}
+            {ready.missing.length > 1 && <>
+              <p className="mt-1 text-muted-foreground">{ready.missing.map(item => item.label).join(', ')}</p>
+              <SetupDisclosure title="Как снять" compact>
+                <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                  {ready.missing.map(item => <li key={item.label}>{item.tip}</li>)}
+                </ul>
+              </SetupDisclosure>
+            </>}
           </div>
         </div>
-        {ready.shortlist.length > 0 && <details className="border-b">
-          <summary className="min-h-10 cursor-pointer py-2 font-medium">Подборка с карт · <span className="tabular-nums">{ready.shortlist.length}</span></summary>
-          <ul className="space-y-1 pb-2 pl-3">
-            {ready.shortlist.map(photo => <li key={photo.key} className="flex flex-wrap items-baseline gap-x-2">
-              <a className="underline" href={photo.image_url} target="_blank" rel="noreferrer">{photo.label}</a>
-              <a className="text-xs text-muted-foreground underline" href={photo.source_url} target="_blank" rel="noreferrer">Карточка-источник</a>
-            </li>)}
-          </ul>
-          {ready.cover && <p className="pb-2 pl-3 text-xs text-muted-foreground">Обложка · {ready.cover}</p>}
-        </details>}
-        {ready.review.length > 0 && <details className="border-b">
-          <summary className="min-h-10 cursor-pointer py-2 font-medium">Уточнить фото · <span className="tabular-nums">{ready.review.length}</span></summary>
-          <ul>{ready.review.map(item => <PhotoChoice key={item.key} item={item} send={send} busy={busy} />)}</ul>
-        </details>}
-        {(ready.sources.length > 0 || ready.rejected > 0 || send) && <details className="border-b">
-          <summary className="min-h-10 cursor-pointer py-2 font-medium">Проверка площадок</summary>
-          <div className="space-y-2 pb-2 pl-3 text-xs text-muted-foreground">
-            {ready.sources.length > 0 && <ul className="space-y-1">
-              {ready.sources.map(source => <li key={source.url}>
-                <a className="underline" href={source.url} target="_blank" rel="noreferrer">{platforms[source.provider] || source.provider}</a>
-                {' · '}{source.status === 'sample' ? `${source.count} в выборке` : 'Галерея не подтверждена'}
+        {(ready.shortlist.length > 0 || ready.review.length > 0 || ready.sources.length > 0 || ready.rejected > 0 || send) && <div className="divide-y border-b">
+          {ready.shortlist.length > 0 && <SetupDisclosure title="Подборка с карт" count={ready.shortlist.length} compact>
+            <ul className="space-y-1">
+              {ready.shortlist.map(photo => <li key={photo.key} className="flex flex-wrap items-baseline gap-x-2">
+                <a className="underline" href={photo.image_url} target="_blank" rel="noreferrer">{photo.label}</a>
+                <a className="text-xs text-muted-foreground underline" href={photo.source_url} target="_blank" rel="noreferrer">Карточка-источник</a>
               </li>)}
-            </ul>}
-            {ready.rejected > 0 && <p>Исключено при проверке · {ready.rejected}</p>}
-            {send && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'photo_check' })}>Обновить проверку</Button>}
-          </div>
-        </details>}
+            </ul>
+            {ready.cover && <p className="text-xs text-muted-foreground">Обложка · {ready.cover}</p>}
+          </SetupDisclosure>}
+          {ready.review.length > 0 && <SetupDisclosure title="Уточнить фото" count={ready.review.length} compact>
+            <ul>{ready.review.map(item => <PhotoChoice key={item.key} item={item} send={send} busy={busy} />)}</ul>
+          </SetupDisclosure>}
+          {(ready.sources.length > 0 || ready.rejected > 0 || send) && <SetupDisclosure title="Проверка площадок" compact>
+            <div className="space-y-2 text-xs text-muted-foreground">
+              {ready.sources.length > 0 && <ul className="space-y-1">
+                {ready.sources.map(source => <li key={source.url}>
+                  <a className="underline" href={source.url} target="_blank" rel="noreferrer">{platforms[source.provider] || source.provider}</a>
+                  {' · '}{source.status === 'sample' ? `${source.count} в выборке` : 'Галерея не подтверждена'}
+                </li>)}
+              </ul>}
+              {ready.rejected > 0 && <p>Исключено при проверке · {ready.rejected}</p>}
+              {send && <Button size="sm" variant="outline" disabled={busy} onClick={() => void send({ action: 'photo_check' })}>Обновить проверку</Button>}
+            </div>
+          </SetupDisclosure>}
+        </div>}
       </>}
       <div className="flex flex-wrap items-center gap-1.5">
         <Button asChild size="sm" variant="ghost" className="min-h-10"><Link to={library}>Открыть медиатеку</Link></Button>
@@ -173,24 +175,26 @@ function PhotoCheck({ report, businessId, send, busy }: {
   </SetupDisclosure>;
 }
 
-function SetupDisclosure({ title, icon: Icon, children, count, meta, compact, open }: {
+function SetupDisclosure({ title, icon: Icon, children, count, meta, compact, open, className }: {
   title: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   children: ReactNode;
   count?: number;
   meta?: string;
   compact?: boolean;
   open?: boolean;
+  className?: string;
 }) {
-  return <details open={open} className={cn('group/setup', !compact && 'rounded-lg border')}>
-    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-      <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+  return <details open={open} className={cn('[&[open]>summary>svg:last-child]:rotate-180', !compact && 'rounded-lg border', className)}>
+    <summary className={cn('flex cursor-pointer list-none items-center gap-2.5 rounded-md py-2 text-sm font-medium hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden',
+      Icon ? 'min-h-11 px-3' : 'min-h-10 px-2')}>
+      {Icon && <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />}
       <span className="min-w-0 break-words">{title}</span>
       {count !== undefined && <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">{count}</span>}
       {meta && <span className="ml-auto min-w-0 text-right text-xs font-normal tabular-nums text-muted-foreground">{meta}</span>}
-      <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground group-open/setup:rotate-180', !meta && 'ml-auto')} />
+      <ChevronDown aria-hidden="true" className={cn('h-4 w-4 shrink-0 text-muted-foreground', !meta && 'ml-auto')} />
     </summary>
-    <div className="space-y-2 px-3 pb-3">{children}</div>
+    <div className={cn('space-y-2 pb-3', Icon ? 'px-3' : 'px-2')}>{children}</div>
   </details>;
 }
 
@@ -207,8 +211,7 @@ function Keywords({ state }: { state: Setup }) {
   ];
   if (!groups.length) return <p className="text-xs text-muted-foreground">Запросов пока нет.</p>;
   return <div className="divide-y border-y">
-    {groups.map(item => <details key={item.key} className="px-2">
-      <summary className="min-h-10 cursor-pointer py-2 text-sm font-medium">{item.original}</summary>
+    {groups.map(item => <SetupDisclosure key={item.key} title={item.original} compact>
       <dl className="space-y-2 pb-2 pl-3 text-sm">
         {item.keywords.map(keyword => <div key={keyword.text} className="flex flex-wrap justify-between gap-x-2 gap-y-1">
           <dt>{keyword.text}</dt>
@@ -217,14 +220,13 @@ function Keywords({ state }: { state: Setup }) {
           </dd>
         </div>)}
       </dl>
-    </details>)}
+    </SetupDisclosure>)}
   </div>;
 }
 
 function Comparisons({ rows }: { rows: Comparison[] }) {
-  return <div className="space-y-3">{rows.map(row => <details key={row.url} className="rounded-lg border p-3">
-    <summary className="cursor-pointer font-medium">{row.name} · {platforms[row.platform] || row.platform}</summary>
-    <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+  return <div className="space-y-3">{rows.map(row => <SetupDisclosure key={row.url} title={row.name} meta={platforms[row.platform] || row.platform}>
+    <div className="grid gap-3 text-sm sm:grid-cols-2">
       <div><h4 className="font-medium">Ваша компания</h4>
         {row.ours ? <p>Оценка {row.ours.rating || '—'} · Отзывы {row.ours.reviews || '—'}</p> : <p>Нужен снимок вашей карточки на той же площадке.</p>}
         {row.our_checked_at && <p className="text-muted-foreground">Снимок от {row.our_checked_at.slice(0, 10)}</p>}
@@ -236,7 +238,7 @@ function Comparisons({ rows }: { rows: Comparison[] }) {
       </div>
     </div>
     <a className="mt-2 inline-block text-sm underline" href={row.url} rel="noreferrer" target="_blank">Открыть источник</a>
-  </details>)}</div>;
+  </SetupDisclosure>)}</div>;
 }
 
 export function InitialSetupMenuResult({ businessId, section }: { businessId: string | null | undefined; section: 'competitors' | 'profile' }) {
@@ -373,15 +375,14 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
         </div>
       </li>)}</ul>
     </SetupDisclosure>}
-    {(state.can_edit || state.activity.length > 0) && <details className="border-t text-xs">
-      <summary className="flex min-h-10 cursor-pointer items-center gap-2 text-muted-foreground">Подсказки и последние сообщения</summary>
+    {(state.can_edit || state.activity.length > 0) && <SetupDisclosure title="Подсказки и последние сообщения" className="border-t text-xs" compact>
       {state.can_edit && <ul className="space-y-1 text-muted-foreground">
         {['Конкурент: ссылка на карту', 'Вид деятельности: …', 'Услуга: название | описание', 'Телефон: …', 'Почта: …'].map(example => <li key={example}>{example}</li>)}
       </ul>}
       {state.activity.slice(-2).map((item, index) => <div key={item.at + index} className="mt-2 break-words rounded-md bg-muted/50 p-2">
         <p className="text-muted-foreground">{item.message}</p><p>{item.reply}</p>
       </div>)}
-    </details>}
+    </SetupDisclosure>}
   </>;
 }
 
