@@ -180,7 +180,7 @@ def read_map(source, snapshot, *, capture_method=None):
     provider, url = source['provider'], source['url']
     if snapshot:
         raw = snapshot
-        message = ('Карточка прочитана через Apify.' if capture_method == 'apify'
+        message = ('Карточка прочитана.' if capture_method == 'apify'
                    else 'Использован сохранённый снимок этой карточки.')
     elif provider in ('yandex', '2gis') and map_card_initial_audit.public_url(provider, url):
         raw = map_card_initial_audit.initial_native_readers(content_only=True)[provider](url)

@@ -1,6 +1,7 @@
 """Resumable setup for a single LocalOS business, with approved internal writes."""
 import hashlib
 import json
+import logging
 import os
 import re
 import uuid
@@ -20,6 +21,9 @@ from wordstat_config import config
 from services import initial_setup_photos, map_card_initial_audit
 from services.initial_setup_sources import clean, dated, read_map, read_social, read_website, source_url
 from services.website_seo_audit import unavailable as audit_unavailable
+
+
+logger = logging.getLogger(__name__)
 
 
 JOB_KIND = 'initial_setup_source'
@@ -159,7 +163,7 @@ def register_source(row, value, *, competitor=False, found_on=None):
     return key
 
 
-def queue_source(cursor, row, actor_id, key, retry=False, *, audit_only=False, apify_key=None):
+def queue_source(cursor, row, actor_id, key, retry=False, *, audit_only=False):
     from services.operator_async_jobs import create_operator_async_job
     item = row['data']['sources'][key]
     tracker = item
@@ -177,30 +181,23 @@ def queue_source(cursor, row, actor_id, key, retry=False, *, audit_only=False, a
         return
     attempt = int(tracker.get('attempt') or 0) + 1
     native_attempts = attempt - int(bool(item.get('apify_job_id')))
-    if not audit_only and not apify_key and native_attempts > 3:
+    if not audit_only and native_attempts > 3:
         raise ValueError('Три попытки чтения уже выполнены. Проверьте источник отдельно.')
     job_scope = 'website-seo' if audit_only else 'initial-setup'
     job = create_operator_async_job(
         cursor, user_id=actor_id, action_id=None, business_id=row['business_id'], kind=JOB_KIND,
-        payload={'source_key': key, 'attempt': attempt, 'audit_only': audit_only,
-                 **({'apify_max_charge_usd': str(SETUP_APIFY_CAP)} if apify_key else {})},
-        idempotency_key=apify_key or f'{job_scope}:{row["business_id"]}:{key}:{attempt}',
+        payload={'source_key': key, 'attempt': attempt, 'audit_only': audit_only},
+        idempotency_key=f'{job_scope}:{row["business_id"]}:{key}:{attempt}',
         stage='Ожидает SEO-проверки' if audit_only else 'Ожидает чтения', max_attempts=1,
     )
     tracker.update(attempt=attempt, job_id=job['id'])
     if not audit_only:
         item.update(status='queued', note='')
-    if apify_key:
-        item['apify_job_id'] = job['id']
 
 
-def apify_fallback_key(business_id, source):
-    if source['kind'] != 'map' or source['provider'] != 'yandex' or source.get('competitor'):
-        return None
-    url = map_card_initial_audit.public_url('yandex', source['url'])
-    if not url:
-        return None
-    return f'initial-setup-apify:{business_id}:{map_card_initial_audit.entity_key("yandex", url)}'
+def _is_own_yandex_card(source):
+    return (source['kind'] == 'map' and source['provider'] == 'yandex' and not source.get('competitor')
+            and bool(map_card_initial_audit.public_url('yandex', source['url'])))
 
 
 def queue_added(cursor, row, actor_id):
@@ -254,11 +251,23 @@ def snapshot(cursor, business_id, source):
     return None
 
 
+def _previous_apify_launch(cursor, claimed):
+    cursor.execute("""SELECT 1 FROM operator_async_jobs
+        WHERE business_id=%s AND kind=%s AND id<>%s
+          AND (payload_json ? 'apify_started' OR idempotency_key LIKE 'initial-setup-apify:%%')
+        LIMIT 1""", (claimed['business_id'], JOB_KIND, claimed['id']))
+    return bool(cursor.fetchone())
+
+
 def _read_with_apify(db, claimed, source, source_key):
     # Reuse the existing single capped Apify launch. Reserve the paid POST under
     # the source job lease before sending it, including when Apify never replies.
     def record_run(value):
         with db.conn.cursor() as cursor:
+            if value is None:
+                cursor.execute('SELECT id FROM businesses WHERE id=%s FOR UPDATE', (claimed['business_id'],))
+                if not cursor.fetchone() or _previous_apify_launch(cursor, claimed):
+                    raise Conflict('Резервное чтение для этой компании уже запускалось.')
             changes = (
                 {'apify_started': True} if value is None else
                 {'apify_run_id': value} if isinstance(value, str) else value
@@ -295,7 +304,7 @@ def process_source(claimed):
     payload = claimed['payload_json']
     key = payload['source_key']
     audit_only = payload.get('audit_only', False)
-    use_apify = payload.get('apify_max_charge_usd') == str(SETUP_APIFY_CAP)
+    approved_apify = payload.get('apify_max_charge_usd') == str(SETUP_APIFY_CAP)
     db = DatabaseManager()
     try:
         cursor = db.conn.cursor()
@@ -308,13 +317,13 @@ def process_source(claimed):
         tracker = item.get('website_audit_job', {}) if audit_only else item
         if tracker.get('job_id') != str(claimed['id']) or tracker.get('attempt') != payload['attempt']:
             return {'state': 'obsolete'}
-        if use_apify and (not actor.get('is_superadmin') or not apify_fallback_key(business_id, item)
-                          or item.get('apify_job_id') != str(claimed['id'])):
+        if approved_apify and (not actor.get('is_superadmin') or not _is_own_yandex_card(item)
+                               or item.get('apify_job_id') != str(claimed['id'])):
             return {'state': 'obsolete'}
         item_snapshot = snapshot(cursor, business_id, item) if item['kind'] == 'map' else None
         db.conn.rollback()
         try:
-            if use_apify and not item_snapshot:
+            if approved_apify and not item_snapshot:
                 result = _read_with_apify(db, claimed, item, key)
             elif item['kind'] == 'website':
                 result = read_website(item['url'])
@@ -334,12 +343,18 @@ def process_source(claimed):
                     finally:
                         db.conn.rollback()
                 result = read_map(item, item_snapshot)
-        except map_card_initial_audit.AuditReadError as exc:
-            result = {'status': 'unavailable', 'note': str(exc)}
         except Exception:
-            result = {'status': 'unavailable', 'note': ('Не удалось прочитать через Apify. Платный повтор не запущен.'
-                if use_apify else 'Не удалось прочитать источник. Попробуйте ещё раз позже.')}
+            result = {'status': 'unavailable', 'note': 'Не удалось прочитать источник. Попробуйте ещё раз позже.'}
         db.conn.rollback()
+        if not approved_apify and not item_snapshot and result['status'] == 'unavailable' and _is_own_yandex_card(item):
+            used = _previous_apify_launch(cursor, claimed)
+            db.conn.rollback()
+            if not used:
+                try:
+                    result = _read_with_apify(db, claimed, item, key)
+                except Exception as exc:
+                    db.conn.rollback()
+                    logger.info('Initial setup map fallback stopped for job %s (%s)', claimed['id'], type(exc).__name__)
         row = load(cursor, business_id, lock=True)
         actor = load_actor(cursor, actor_id)
         require_permission(cursor, business_id, actor, 'business.settings.write')
@@ -724,7 +739,7 @@ def _service_review_items(cursor, row):
                  or item['original'].casefold() in map_services) for item in proposals]
 
 
-def status(cursor, row, profile, can_edit, *, can_approve_apify=False):
+def status(cursor, row, profile, can_edit):
     data = row['data']
     items = data.get('sources', {})
     ids = [item['job_id'] for item in items.values() if item.get('job_id') and item['status'] == 'queued']
@@ -744,19 +759,18 @@ def status(cursor, row, profile, can_edit, *, can_approve_apify=False):
     sources = []
     for key, item in items.items():
         visible = {k: v for k, v in item.items() if k not in (
-            'profile', 'facts', 'links', 'catalog', 'job_id', 'photo_candidates', 'website_audit_job', 'apify_job_id',
+            'profile', 'facts', 'links', 'catalog', 'job_id', 'photo_candidates', 'website_audit_job',
+            'apify_job_id', 'capture_method',
         )}
+        if 'apify' in (visible.get('note') or '').lower():
+            visible['note'] = ('Карточка прочитана.' if item['status'] == 'ready'
+                               else 'Не удалось прочитать источник. Попробуйте ещё раз позже.')
         if item['status'] == 'queued':
             state = jobs.get(item.get('job_id'))
-            paid = bool(item.get('apify_job_id') and item['apify_job_id'] == item.get('job_id'))
             if not state or state in ('failed', 'cancelled', 'completed'):
-                visible.update(status='unavailable', note=(
-                    'Чтение через Apify прервано. Платный повтор не запущен.' if paid else 'Чтение прервано. Можно повторить.'
-                ))
+                visible.update(status='unavailable', note='Чтение прервано. Можно повторить.')
             elif state == 'running':
                 visible['status'] = 'running'
-            if paid and visible['status'] in ('queued', 'running'):
-                visible['reading_with_apify'] = True
         audit_job = item.get('website_audit_job', {}).get('job_id')
         if audit_job:
             audit_state = jobs.get(audit_job)
@@ -765,16 +779,6 @@ def status(cursor, row, profile, can_edit, *, can_approve_apify=False):
         visible.update(key=key, service_count=len(item.get('catalog', [])),
                        photo_candidate_count=len(item.get('photo_candidates', [])))
         sources.append(visible)
-    if can_edit and can_approve_apify:
-        candidates = {paid_key: source for source in sources if source['status'] == 'unavailable'
-                      and (paid_key := apify_fallback_key(row['business_id'], source))}
-        if candidates:
-            cursor.execute("""SELECT idempotency_key FROM operator_async_jobs WHERE business_id=%s
-                AND kind=%s AND idempotency_key=ANY(%s)""", (row['business_id'], JOB_KIND, list(candidates)))
-            used = {item['idempotency_key'] for item in cursor.fetchall()}
-            for paid_key, source in candidates.items():
-                if paid_key not in used:
-                    source['apify_max_charge_usd'] = str(SETUP_APIFY_CAP)
     photo_report = data.get('photo_report')
     if photo_job:
         job_state = jobs.get(photo_job)
@@ -1019,20 +1023,6 @@ def operate(cursor, row, actor, profile, payload):
         if row['data'].get('auto_draft'):
             queue_draft(cursor, row, actor_id)
         return 'Проверьте статус чтения в списке источников.'
-    if action == 'read_apify':
-        if not actor.get('is_superadmin'):
-            raise PermissionError('Подтвердить расходы может администратор LocalOS.')
-        if payload.get('approved_max_charge_usd') != str(SETUP_APIFY_CAP):
-            raise ValueError('Подтвердите один запуск Apify с указанным лимитом.')
-        key = payload.get('key')
-        visible = status(cursor, row, profile, True, can_approve_apify=True)
-        source = next((item for item in visible['sources'] if item['key'] == key), None)
-        if not source or not source.get('apify_max_charge_usd'):
-            raise Conflict('Apify доступен после неудачного чтения и только один раз для этой карточки.')
-        row['data']['sources'][key]['status'] = 'unavailable'
-        queue_source(cursor, row, actor_id, key, retry=True, apify_key=apify_fallback_key(row['business_id'], source))
-        queue_draft(cursor, row, actor_id)
-        return 'Чтение через Apify запущено.'
     if action == 'remove':
         key = payload.get('key')
         item = row['data'].get('sources', {}).pop(key, None)

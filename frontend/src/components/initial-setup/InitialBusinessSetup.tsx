@@ -8,10 +8,6 @@ import { getApiEndpoint } from '@/config/api';
 import { browserBearerToken, browserCookieAuthEnabled } from '@/lib/browserSessionFetch';
 import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
 import { Link } from 'react-router-dom';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LocalOSChatAvatar } from '@/components/operator/LocalOSChatAvatar';
@@ -507,32 +503,13 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
     {state && (completedSources.length > 0 || state.started && !gathering) && <SetupStep
       title={completedSources.length ? 'Источники' : 'Данные компании'} icon={Building2}>
       {collected > 0 && <p>Прочитано · {collected}{photosFound > 0 && ` · Фото для проверки · ${photosFound}`}</p>}
-      {completedSources.filter(source => source.status !== 'ready').map(source => {
-        const cap = source.apify_max_charge_usd;
-        const displayCap = cap?.replace('.', ',');
-        return <div key={source.key} className="flex flex-wrap items-center gap-2">
+      {completedSources.filter(source => source.status !== 'ready').map(source => (
+        <div key={source.key} className="flex flex-wrap items-center gap-2">
           <p className="max-w-prose text-muted-foreground">{source.note || 'Источник пока недоступен.'}</p>
-          {canChange && cap && <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="sm" disabled={busy || gathering}>Прочитать через Apify · до ${displayCap}</Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Прочитать карточку через Apify?</AlertDialogTitle>
-                <AlertDialogDescription>Один платный запуск для этой карточки на Яндекс Картах. Лимит расходов ${displayCap}.</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void send({ action: 'read_apify', key: source.key, approved_max_charge_usd: cap })}>
-                  Запустить Apify
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>}
-          {canChange && source.status === 'unavailable' && <Button size="sm" variant={cap ? 'ghost' : 'outline'} disabled={busy || gathering}
+          {canChange && source.status === 'unavailable' && <Button size="sm" variant="outline" disabled={busy || reading}
             onClick={() => void send({ action: 'retry', key: source.key })}>Повторить сбор</Button>}
-        </div>;
-      })}
+        </div>
+      ))}
       <SetupDisclosure title="Данные и источники" compact
         meta={contactsToReview ? 'Контакты к проверке · ' + contactsToReview : undefined}>
         <SetupSources state={state} busy={busy} send={send} />
@@ -543,7 +520,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
       {needsSource && <p className="text-muted-foreground">Повторите чтение или пришлите другую ссылку. Можно добавить услуги прямо в чат.</p>}
     </SetupStep>}
 
-    {gathering && <SetupStep title={state?.sources.some(source => source.reading_with_apify) ? 'Читаем карточку через Apify' : 'Собираем данные'} icon={Building2} working>
+    {gathering && <SetupStep title="Собираем данные" icon={Building2} working>
       {state?.sources.filter(source => source.status === 'queued' || source.status === 'running').map(source => (
         <p key={source.key} className="text-muted-foreground">{platforms[source.provider] || (source.kind === 'website' ? 'Сайт' : source.provider)}</p>
       ))}
