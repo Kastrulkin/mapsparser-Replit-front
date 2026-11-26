@@ -297,3 +297,30 @@ it('shows the linked shortlist and offers to label an unclassified photo', async
   }));
   expect(await screen.findByText('Проверяем фото…')).toBeVisible();
 });
+
+it('starts from the first link in an empty setup and exposes the PDF when the draft is ready', async () => {
+  vi.mocked(api.get).mockImplementation(async path => ({
+    data: path === endpoint ? { available: true, can_edit: true, setup: null } : { messages: [], conversation: null },
+  }));
+  vi.mocked(api.post).mockResolvedValue({
+    data: { available: true, setup: { ...setup, draft_ready: true, report_ready: true } },
+  });
+  function Context() {
+    return <Outlet context={{ currentBusinessId: businessId, currentBusiness: { id: businessId, name: setup.profile.name } }} />;
+  }
+  render(<MemoryRouter initialEntries={['/dashboard/operator?setup=1&business_id=' + businessId]}>
+    <LanguageProvider><Routes><Route element={<Context />}><Route path="/dashboard/operator" element={<OperatorPage />} /></Route></Routes></LanguageProvider>
+  </MemoryRouter>);
+  await screen.findByRole('heading', { name: 'Первичная настройка компании' });
+  const input = screen.getByRole('textbox', { name: 'Сообщение для первичной настройки' });
+  expect(input).toBeEnabled();
+  const map = 'https://yandex.com/maps/org/fixture/123456';
+  fireEvent.change(input, { target: { value: map } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(api.post).toHaveBeenLastCalledWith(endpoint, {
+    action: 'start', message: map, auto: true, revision: undefined,
+  }));
+  expect(await screen.findByText('Черновик кабинета готов')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
+});

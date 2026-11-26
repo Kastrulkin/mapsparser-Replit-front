@@ -22,6 +22,7 @@ from services.website_seo_audit import unavailable as audit_unavailable
 
 
 JOB_KIND = 'initial_setup_source'
+DRAFT_JOB_KIND = 'initial_setup_draft'
 CURRENT_FIELDS = ('name', 'address', 'city', 'country', 'business_type', 'website', 'contact_phone', 'contact_email')
 MAX_SOURCES = 18
 MAX_ANALYZED_SERVICES = 120
@@ -47,11 +48,22 @@ def allowed(business_id):
     return enabled() and (not cohort or business_id in cohort)
 
 
+def owner_setup_available(cursor, business_id, user_id):
+    if not user_id:
+        return False
+    cursor.execute("""SELECT 1 FROM initial_business_setups s JOIN businesses b ON b.id=s.business_id
+        WHERE s.business_id=%s AND b.owner_id=%s AND b.is_active IS NOT FALSE
+          AND s.data->>'handoff_owner_id'=%s AND s.data->>'saved'='true'""",
+        (business_id, user_id, user_id))
+    return bool(cursor.fetchone())
+
+
 def actor_allowed(cursor, business_id, actor):
-    """Keep owner rollout bounded while letting staff activate a selected business."""
+    """Allow the pilot, staff, and the confirmed recipient of a prepared cabinet."""
     if not enabled() or not installed(cursor):
         return False
-    return allowed(business_id) or bool(actor.get('is_superadmin'))
+    return allowed(business_id) or bool(actor.get('is_superadmin')) or owner_setup_available(
+        cursor, business_id, actor.get('user_id'))
 
 
 def runtime_allowed(cursor, business_id):
@@ -305,6 +317,70 @@ def process_source(claimed):
         db.rollback_and_close()
 
 
+def queue_draft(cursor, row, actor_id, *, retry=False):
+    """Prepare the persisted draft after the source jobs reach a terminal state."""
+    from services.operator_async_jobs import create_operator_async_job
+
+    data = row['data']
+    data['auto_draft'] = True
+    tracker = data.setdefault('draft_job', {})
+    scope = fingerprint(data.get('activity_type'), data.get('declared_services'), [
+        (key, source.get('attempt')) for key, source in sorted(data.get('sources', {}).items())
+    ])
+    if tracker.get('scope') == scope and not retry:
+        if tracker.get('id') or (data.get('seo_prepared') and not data.get('seo_dirty')):
+            return
+    attempt = int(tracker.get('attempt') or 0) + 1
+    job = create_operator_async_job(
+        cursor, user_id=actor_id, action_id=None, business_id=row['business_id'],
+        kind=DRAFT_JOB_KIND, payload={'scope': scope},
+        idempotency_key=f'initial-setup-draft:{row["business_id"]}:{attempt}',
+        stage='Ожидает подготовки черновика', max_attempts=2,
+    )
+    tracker.update(id=job['id'], attempt=attempt, scope=scope)
+
+
+def process_draft(claimed):
+    from database_manager import DatabaseManager
+    from services.business_permissions import load_actor, require_permission
+
+    business_id = claimed['business_id']
+    actor_id = claimed['user_id']
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        if not runtime_allowed(cursor, business_id):
+            return {'state': 'obsolete'}
+        require_permission(cursor, business_id, load_actor(cursor, actor_id), 'business.settings.write')
+        profile = read_business(cursor, business_id, lock=True)
+        row = load(cursor, business_id, lock=True)
+        tracker = row.get('data', {}).get('draft_job', {})
+        if not profile or tracker.get('id') != str(claimed['id']):
+            return {'state': 'obsolete'}
+        cursor.execute("SELECT 1 FROM operator_async_jobs WHERE id=%s AND lease_token=%s AND status='running' FOR UPDATE",
+                       (claimed['id'], claimed['lease_token']))
+        if not cursor.fetchone():
+            return {'state': 'obsolete'}
+        sources = status(cursor, row, profile, True)['sources']
+        for item in sources:
+            if item['status'] == 'unavailable':
+                row['data']['sources'][item['key']].update(status='unavailable', note=item.get('note', ''))
+        # Keep the last approved catalog and knowledge intact. Automatic runs use saved search data.
+        if not row['data'].get('seo_prepared') or row['data'].get('seo_dirty'):
+            prepare_seo(cursor, row, profile, live_wordstat=False)
+        if row['data'].get('photo_report_scope') != _photo_scope(row):
+            try:
+                _queue_photos(cursor, row, actor_id)
+            except Conflict:
+                pass  # The existing check can finish under its own lease.
+        tracker.pop('id')
+        persist(cursor, row)
+        db.conn.commit()
+        return {'state': 'ready'}
+    finally:
+        db.rollback_and_close()
+
+
 def _photo_sources(row):
     return {key: source for key, source in row['data'].get('sources', {}).items()
             if source['kind'] == 'map' and not source.get('competitor')}
@@ -406,8 +482,8 @@ def process_photos(claimed):
 
 
 class _SetupWordstatSearch:
-    def __init__(self):
-        self.client = WordstatClient.from_config(config) if config.is_configured() else None
+    def __init__(self, live=True):
+        self.client = WordstatClient.from_config(config) if live and config.is_configured() else None
         if self.client and config.oauth_token:
             self.client.set_access_token(config.oauth_token)
         self.results = {}
@@ -484,7 +560,7 @@ def _local_topics(name, city, source):
     return topics
 
 
-def prepare_seo(cursor, row, profile):
+def prepare_seo(cursor, row, profile, *, live_wordstat=True):
     cursor.execute('''SELECT DISTINCT ON (LOWER(BTRIM(name)))
         id,name,description,category,optimized_name,optimized_description,keywords FROM userservices
         WHERE business_id=%s AND is_active IS NOT FALSE
@@ -505,7 +581,7 @@ def prepare_seo(cursor, row, profile):
     if not category and profile.get('business_type'):
         cursor.execute('SELECT label FROM businesstypes WHERE type_key=%s LIMIT 1', (profile['business_type'],))
         category = (cursor.fetchone() or {}).get('label')
-    search = _SetupWordstatSearch()
+    search = _SetupWordstatSearch(live=live_wordstat)
     previous_by_key = {item['key']: item for item in row['data'].get('services', [])}
     proposals = []
     for service in list(services.values())[:MAX_ANALYZED_SERVICES]:
@@ -587,6 +663,9 @@ def status(cursor, row, profile, can_edit):
     ids = [item['job_id'] for item in items.values() if item.get('job_id') and item['status'] == 'queued']
     ids.extend(track['job_id'] for item in items.values()
                if (track := item.get('website_audit_job')) and track.get('job_id'))
+    draft_job = data.get('draft_job', {}).get('id')
+    if draft_job:
+        ids.append(draft_job)
     photo_job = data.get('photo_job', {}).get('id')
     if photo_job:
         ids.append(photo_job)
@@ -620,13 +699,19 @@ def status(cursor, row, profile, can_edit):
         }
     elif photo_report and ('shortlist' not in photo_report or data.get('photo_report_scope') != _photo_scope(row)):
         photo_report = {'status': 'unavailable', 'note': 'Обновите отчёт по фото, чтобы получить актуальную подборку.'}
+    draft_status = jobs.get(draft_job)
+    if draft_job and draft_status not in ('queued', 'running'):
+        draft_status = 'failed'
+    ready = bool(data.get('seo_prepared') and not data.get('seo_dirty') and not draft_job
+                 and not any(item['status'] in ('added', 'queued', 'running') for item in sources))
+    report_ready = ready and (photo_report or {}).get('status') not in ('queued', 'running')
     return {'business_id': row['business_id'], 'revision': row['revision'], 'origin': row['origin'], 'can_edit': can_edit,
             'provisional': row['provisional'], 'profile': {k: profile.get(k) for k in CURRENT_FIELDS},
             'sources': sources, 'services': _service_review_items(cursor, row), 'seo_dirty': bool(data.get('seo_dirty')),
             'seo_prepared': bool(data.get('seo_prepared')), 'saved': bool(data.get('saved')),
             'started': bool(data.get('started')), 'activity_type': data.get('activity_type'),
             'category_keywords': data.get('category_keywords', []),
-             'photo_report': photo_report,
+            'photo_report': photo_report, 'draft_status': draft_status, 'draft_ready': ready, 'report_ready': report_ready,
             'facts': [{'key': key, **value, 'accepted': key in data.get('accepted_facts', [])}
                       for key, value in source_findings(row, 'facts').items()],
             'profile_choices': [{'key': key, **value} for key, value in source_findings(row, 'profile').items()],
@@ -791,13 +876,29 @@ def message(cursor, row, actor, profile, payload):
     return reply
 
 
+def intake_message(cursor, row, actor, profile, payload):
+    reply = message(cursor, row, actor, profile, payload)
+    if payload.get('auto') is True and re.search(r'https?://', payload.get('message', '')):
+        queue_added(cursor, row, actor['user_id'])
+        queue_draft(cursor, row, actor['user_id'])
+    elif row['data'].get('auto_draft') and row['data'].get('seo_dirty'):
+        queue_draft(cursor, row, actor['user_id'], retry=not row['data'].get('draft_job', {}).get('id'))
+    return reply
+
+
 def operate(cursor, row, actor, profile, payload):
     action = payload.get('action')
     actor_id = actor['user_id']
     if action == 'message':
-        return message(cursor, row, actor, profile, payload)
+        return intake_message(cursor, row, actor, profile, payload)
+    if action == 'draft_retry':
+        queue_added(cursor, row, actor_id)
+        queue_draft(cursor, row, actor_id, retry=True)
+        return 'Подготовка черновика запущена.'
     if action == 'read':
         queue_added(cursor, row, actor_id)
+        if row['data'].get('auto_draft'):
+            queue_draft(cursor, row, actor_id)
         return 'Чтение добавленных источников запущено.'
     if action == 'photo_check':
         _queue_photos(cursor, row, actor_id)
@@ -825,6 +926,8 @@ def operate(cursor, row, actor, profile, payload):
             if not job or job['status'] not in ('queued', 'running'):
                 item['status'] = 'unavailable'
         queue_source(cursor, row, actor_id, key, retry=True)
+        if row['data'].get('auto_draft'):
+            queue_draft(cursor, row, actor_id)
         return 'Проверьте статус чтения в списке источников.'
     if action == 'remove':
         key = payload.get('key')
@@ -834,8 +937,13 @@ def operate(cursor, row, actor, profile, payload):
             if not item.get('competitor'):
                 row['data']['seo_dirty'] = True
                 row['data']['saved'] = False
+        if row['data'].get('auto_draft'):
+            queue_draft(cursor, row, actor_id)
         return 'Источник исключён из подготовки.'
     if action == 'prepare':
+        if row['data'].get('auto_draft'):
+            queue_draft(cursor, row, actor_id, retry=True)
+            return 'Подготовка черновика запущена.'
         sources = status(cursor, row, profile, True)['sources']
         if any(source['status'] in ('added', 'queued', 'running') for source in sources):
             raise Conflict('Дождитесь чтения источников перед разбором услуг.')
@@ -851,15 +959,15 @@ def operate(cursor, row, actor, profile, payload):
         if not choice:
             raise Conflict('Источник изменился. Проверьте значения ещё раз.')
         _update_profile(cursor, row, actor_id, {choice['field']: choice['text']})
+        if row['data'].get('auto_draft') and row['data'].get('seo_dirty'):
+            queue_draft(cursor, row, actor_id)
         return 'Выбранное значение сохранено в профиле.'
     if action == 'service':
         return _apply_service(cursor, row, actor_id, profile, payload)
     if action == 'fact':
         return _save_fact(cursor, row, actor, payload)
     if action == 'save':
-        sources = status(cursor, row, profile, True)['sources']
-        if (not row['data'].get('seo_prepared') or row['data'].get('seo_dirty')
-                or any(source['status'] in ('added', 'queued', 'running') for source in sources)):
+        if not status(cursor, row, profile, True)['draft_ready']:
             raise Conflict('Сначала завершите разбор услуг.')
         return _save_sources(cursor, row, actor, profile)
     raise ValueError('Выберите действие настройки.')
@@ -894,7 +1002,7 @@ def start_from_operator(cursor, business_id, user_id, source_message, actor_cont
         row = init(cursor, business_id, 'staff' if actor.get('is_superadmin') else 'owner')
     seed_profile_sources(cursor, row, profile)
     row['data']['started'] = True
-    reply = message(cursor, row, actor, profile, {'message': source_message})
+    reply = intake_message(cursor, row, actor, profile, {'message': source_message, 'auto': True})
     persist(cursor, row)
     queued = any(item.get('status') == 'queued' for item in row['data'].get('sources', {}).values())
     return {
@@ -991,7 +1099,7 @@ def prepare_owner(cursor, business_id, actor_id, email, revision):
     profile = read_business(cursor, business_id, lock=True)
     row = load(cursor, business_id, lock=True)
     if (not profile or not row or row['revision'] != revision
-            or not row['data'].get('saved') or row['data'].get('seo_dirty')
+            or not row['data'].get('saved') or row['data'].get('seo_dirty') or row['data'].get('draft_job', {}).get('id')
             or any(source['status'] in ('added', 'queued') for source in row['data'].get('sources', {}).values())):
         raise Conflict('Сначала проверьте и сохраните данные кабинета.')
     cursor.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', ('initial-setup-owner:' + email,))
@@ -1019,6 +1127,8 @@ def prepare_owner(cursor, business_id, actor_id, email, revision):
         cursor.execute("UPDATE business_company_links SET relation_role='owner' WHERE business_id=%s AND relation_role='operator'", (business_id,))
         cursor.execute('UPDATE initial_business_setups SET provisional=FALSE,revision=revision+1 WHERE business_id=%s',
                        (business_id,))
+    row['data']['handoff_owner_id'] = str(owner_id)
+    persist(cursor, row)
     if password_set:
         return {'email': email, 'existing_account': True, 'login_path': '/dashboard/operator?business_id=' + business_id + '&setup=1'}
     from services.prepared_cabinet import TOKEN_PREFIX, _digest

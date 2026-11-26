@@ -305,6 +305,12 @@ def claim_next_operator_async_job(cursor: Any, *, background: bool = False, back
           AND (%s OR kind NOT IN ('disk_import_scan','disk_import_file'))
           AND (NOT %s OR kind IN ('disk_import_scan','disk_import_file'))
           AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+          AND (kind <> 'initial_setup_draft' OR NOT EXISTS (
+            SELECT 1 FROM operator_async_jobs source_job
+            WHERE source_job.business_id = operator_async_jobs.business_id
+              AND source_job.kind = 'initial_setup_source'
+              AND source_job.status IN ('queued', 'running')
+          ))
         ORDER BY CASE WHEN kind IN ('disk_import_scan','disk_import_file') THEN
           COALESCE((SELECT MAX(previous.updated_at) FROM operator_async_jobs previous
             WHERE previous.business_id=operator_async_jobs.business_id
@@ -553,6 +559,11 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             result = process_source(claimed)
             status = "failed" if result.get("state") == "unavailable" else "completed"
             stage, progress = "Чтение источника проверено", 100
+        elif kind == "initial_setup_draft":
+            from services.initial_business_setup import process_draft
+            result = process_draft(claimed)
+            status = "cancelled" if result.get("state") == "obsolete" else "completed"
+            stage, progress = "Черновик кабинета подготовлен", 100
         elif kind == "initial_setup_photos":
             from services.initial_business_setup import process_photos
             result = process_photos(claimed)

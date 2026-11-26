@@ -2,7 +2,7 @@
 import logging
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from core.auth_helpers import require_auth_from_request
 from database_manager import DatabaseManager
@@ -79,7 +79,7 @@ def business_setup(business_id):
             row['data']['started'] = True
             message = 'Подготовка началась. Данные компании уже в карточке.'
             if data.get('message'):
-                message += ' ' + setup.message(cursor, row, actor, profile, data)
+                message += ' ' + setup.intake_message(cursor, row, actor, profile, data)
         elif not row:
             return reply({'error': 'Сначала начните первичную настройку.'}, 409)
         else:
@@ -102,6 +102,35 @@ def business_setup(business_id):
         return reply({'error': 'Не удалось сохранить настройку. Повторите позже.'}, 503)
     finally:
         db.rollback_and_close()
+
+
+@initial_setup_bp.get('/<business_id>/report')
+def download_setup_report(business_id):
+    from services.initial_setup_report import render_report
+
+    actor = require_auth_from_request()
+    if not actor or actor.get('session_kind') == 'demo':
+        return reply({'error': 'Требуется вход.'}, 401)
+    db = DatabaseManager()
+    try:
+        cursor = db.conn.cursor()
+        if not setup.actor_allowed(cursor, business_id, actor):
+            return reply({'error': 'Отчёт недоступен.'}, 404)
+        if not roles_allow(actor_roles(cursor, business_id, actor), 'business.read'):
+            return reply({'error': 'Нет доступа к отчёту.'}, 403)
+        row = setup.load(cursor, business_id)
+        profile = setup.read_business(cursor, business_id)
+        if not row or not profile:
+            return reply({'error': 'Отчёт ещё не подготовлен.'}, 409)
+        state = setup.status(cursor, row, profile, False)
+    finally:
+        db.rollback_and_close()
+    if not state['report_ready']:
+        return reply({'error': 'Подождите, пока подготовится отчёт.'}, 409)
+    response = send_file(render_report(state), mimetype='application/pdf', as_attachment=True,
+                         download_name='localos-initial-setup.pdf')
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 @initial_setup_bp.route('/lead/<lead_id>', methods=['POST'])

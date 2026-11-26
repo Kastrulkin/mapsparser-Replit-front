@@ -587,8 +587,12 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
     const platformScope = controlScope?.kind === 'platform';
     if ((!currentBusinessId && !platformScope) || !text || chatSendInFlightRef.current) return;
     if (setupMode && !source) {
-      const ok = await initialSetup.send(initialSetup.state ? { action: 'message', message: text } : { action: 'start' });
-      if (ok && initialSetup.state) setChatMessage('');
+      const ok = await initialSetup.send({
+        action: initialSetup.state?.started ? 'message' : 'start',
+        message: text,
+        ...(/https?:\/\//i.test(text) ? { auto: true } : {}),
+      });
+      if (ok) setChatMessage('');
       return;
     }
     if (initialSetupEnabled && currentBusinessId && !source && /^(?:начать|начни|открой|продолжи)\s+(?:первичн\S*\s+)?настройк\S*(?:\s+компани\S*)?[.!]?$/i.test(text)) {
@@ -1090,7 +1094,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
           <div className="flex min-w-0 items-end gap-2">
             <textarea
               ref={chatInputRef}
-              disabled={demoMode || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
+              disabled={demoMode || (setupMode && (initialSetup.available !== true || !initialSetup.canEdit || initialSetup.busy))}
               aria-describedby={demoMode ? 'operator-demo-readonly' : undefined}
               rows={1}
               aria-label={setupMode ? 'Сообщение для первичной настройки' : toolbar.input}
@@ -1114,7 +1118,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
                       className="btn-iridescent h-12 w-12 p-0 sm:w-auto sm:px-4"
                       aria-label={copy.send}
                       onClick={() => void sendOperatorChatMessage()}
-                      disabled={demoMode || panelHistoryLoading || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim() || (setupMode && (!initialSetup.state || !initialSetup.canEdit || initialSetup.busy))}
+                      disabled={demoMode || panelHistoryLoading || chatLoading || (!currentBusinessId && controlScope?.kind !== 'platform') || !chatMessage.trim() || (setupMode && (initialSetup.available !== true || !initialSetup.canEdit || initialSetup.busy))}
                     >
                       {chatLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                       <span className="hidden sm:inline">{copy.send}</span>

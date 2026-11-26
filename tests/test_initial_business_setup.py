@@ -12,7 +12,7 @@ import database_manager
 from api import initial_business_setup_api
 from services import initial_business_setup as setup
 from services import initial_setup_sources
-from services.operator_async_jobs import claim_next_operator_async_job
+from services.operator_async_jobs import claim_next_operator_async_job, process_next_operator_async_job
 
 SETUP = '/api/operator/initial-setup/'
 HAMIK = 'pilot-hamik'
@@ -45,6 +45,12 @@ def pilot(monkeypatch):
         DROP SCHEMA public CASCADE;
         CREATE SCHEMA public;
         CREATE TABLE users(id text PRIMARY KEY, email text, is_active boolean, is_superadmin boolean, password_hash text, created_at timestamptz DEFAULT now());
+        ALTER TABLE users ADD COLUMN name text, ADD COLUMN phone text, ADD COLUMN updated_at timestamptz,
+            ADD COLUMN is_verified boolean, ADD COLUMN verification_token text, ADD COLUMN personal_data_consent_at timestamptz,
+            ADD COLUMN personal_data_consent_version text, ADD COLUMN privacy_accepted_at timestamptz,
+            ADD COLUMN terms_accepted_at timestamptz, ADD COLUMN consent_ip text, ADD COLUMN consent_user_agent text;
+        CREATE TABLE usersessions(id text, user_id text, token text, expires_at timestamptz, ip_address text,
+            user_agent text, created_at timestamptz, session_kind text, scope_business_id text);
         CREATE TABLE businesses(id text PRIMARY KEY, owner_id text, name text, address text, city text, country text,
             business_type text, website text, phone text, email text, is_active boolean DEFAULT true, network_id text,
             entity_group text DEFAULT 'client', moderation_status text, updated_at timestamptz DEFAULT now());
@@ -67,6 +73,10 @@ def pilot(monkeypatch):
             category text, updated_at timestamptz DEFAULT now(), created_at timestamptz DEFAULT now(), UNIQUE (business_id, keyword));
         CREATE TABLE seonegativekeywords(id text PRIMARY KEY, business_id text, phrase text, scope text,
             category text, is_active boolean, created_at timestamptz DEFAULT now());
+        CREATE TABLE photo_assets (id text PRIMARY KEY, business_id text, source text, original_url text, storage_key text,
+            versions_json jsonb, metadata_json jsonb, content_hash text, analysis_status text,
+            category text, quality_score int, created_by text, last_used_at timestamptz,
+            created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());
         CREATE TABLE operatoractions(id text PRIMARY KEY);
         CREATE TABLE prospectingleads(id text PRIMARY KEY, business_id text, name text, address text, city text,
             country_code text, category text, phone text, email text, source_url text);
@@ -195,6 +205,7 @@ def test_jinlian_preserves_sources_original_and_owner_scope(pilot, monkeypatch):
     assert client.post(SETUP + JINLIAN + '/owner', json={'email': 'pilot-owner@example.com', 'revision': state['revision']},
                        headers={'X-Pilot-Actor': 'staff'}).get_json()['existing_account']
     site = 'https://example.com/'
+    state = client.get(SETUP + JINLIAN).get_json()['setup']
     state = action(client, JINLIAN, 'message', state, message=site)
     monkeypatch.setattr(setup, 'read_website', lambda url: {
         'status': 'ready', 'facts': [initial_setup_sources.dated('Vegan ice cream wholesale in Bangkok', url)],
@@ -484,3 +495,106 @@ def test_website_audit_can_use_pinned_node_on_existing_images(monkeypatch, tmp_p
     report = website_seo_audit.audit_pages([page])
     assert report['status'] == 'ready'
     assert report['engine'] == 'SEOmator'
+
+
+@pytest.mark.parametrize('business, name, link, service', [
+    (HAMIK, 'Хамик', 'https://yandex.com/maps/house/example/4338', None),
+    (JINLIAN, 'Jinlian Vegan Ice Cream', 'https://yandex.com/maps/org/jinlian/123456/', 'Coconut scoop'),
+])
+def test_link_to_private_report_and_owner_session(pilot, monkeypatch, tmp_path, business, name, link, service):
+    import main
+    import auth_system
+    from urllib.parse import parse_qs, urlsplit
+    from services import initial_setup_photos
+
+    client, conn = pilot
+    dsn = os.environ['INITIAL_SETUP_TEST_DSN']
+    new_connection = lambda: psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    monkeypatch.setattr(main, 'get_db_connection', new_connection)
+    monkeypatch.setattr(auth_system, 'get_db_connection', new_connection)
+    monkeypatch.setenv('BROWSER_COOKIE_AUTH_ENABLED', 'true')
+    monkeypatch.setenv('BROWSER_COOKIE_AUTH_SECURE', 'false')
+    monkeypatch.setenv('LOCALOS_INITIAL_SETUP_BUSINESS_IDS', 'different-pilot-company')
+    monkeypatch.setattr(initial_setup_sources.map_card_initial_audit, 'initial_native_readers', lambda: {})
+    monkeypatch.setattr(setup._SetupWordstatSearch, 'lookup', lambda _search, _name: [])
+    cursor = conn.cursor()
+    cursor.execute("UPDATE businesses SET owner_id='staff' WHERE id=%s", (business,))
+    stored = setup.init(cursor, business, 'staff', provisional=True)
+    stored['data']['activity_type'] = 'Посуточная аренда квартиры' if business == HAMIK else 'Wholesale vegan ice cream in Phuket'
+    setup.persist(cursor, stored)
+    if business == JINLIAN:
+        cursor.execute("UPDATE businesses SET city='Phuket' WHERE id=%s", (business,))
+    conn.commit()
+
+    def read(actor='staff'):
+        return client.get(SETUP + business, headers={'X-Pilot-Actor': actor}).get_json()['setup']
+
+    def send(action_name, state=None, **values):
+        response = client.post(SETUP + business, headers={'X-Pilot-Actor': 'staff'}, json={
+            'action': action_name, 'revision': (state or {}).get('revision'), **values
+        })
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()['setup']
+
+    state = send('start', message=link, auto=True)
+    assert state['draft_status'] == 'queued'
+    assert not state['report_ready']
+    staff = {'X-Pilot-Actor': 'staff'}
+    assert client.get(SETUP + business + '/report', headers=staff).status_code == 409
+    jobs = []
+    for _ in range(7):
+        job = process_next_operator_async_job()
+        if not job:
+            break
+        jobs.append(job['kind'])
+        assert job['status'] == 'completed', job
+    assert jobs == [setup.JOB_KIND, setup.DRAFT_JOB_KIND, initial_setup_photos.JOB_KIND]
+    state = read()
+    assert state['draft_ready'] and state['report_ready']
+    assert not state['saved']
+    assert state['profile']['name'] == name
+    assert (state['sources'][0]['status'] == 'link_only') is (business == HAMIK)
+    if service:
+        assert any(item['original'] == service for item in state['services'])
+    else:
+        assert not state['services']
+
+    pdf = client.get(SETUP + business + '/report', headers=staff)
+    assert pdf.status_code == 200, pdf.get_data(as_text=True)[:120] if pdf.status_code != 200 else ''
+    assert pdf.data.startswith(b'%PDF-')
+    assert pdf.headers['Cache-Control'] == 'private, no-store'
+    (tmp_path / (business + '.pdf')).write_bytes(pdf.data)
+    cursor.execute('SELECT name, optimized_name FROM userservices WHERE business_id=%s AND is_active IS NOT FALSE', (business,))
+    existing = cursor.fetchall()
+    assert all(row['optimized_name'] is None for row in existing)
+    assert len(existing) == (1 if service else 0)
+    cursor.execute('SELECT owner_id FROM businesses WHERE id=%s', (business,))
+    assert cursor.fetchone()['owner_id'] == 'staff'
+
+    email = business + '@example.com'
+    invite_route = SETUP + business + '/owner'
+    assert client.post(invite_route, headers=staff, json={'email': email, 'revision': state['revision']}).status_code == 409
+    state = send('save', state)
+    invitation = client.post(invite_route, headers=staff, json={'email': email, 'revision': state['revision']})
+    assert invitation.status_code == 200, invitation.get_json()
+    invitation_parts = urlsplit(invitation.get_json()['invite_url'])
+    assert invitation_parts.path == '/set-password'
+    assert not invitation_parts.query
+    details = parse_qs(invitation_parts.fragment)
+    activation = {'email': email, 'token': details['token'][0], 'password': 'Test-only-activation-771', 'personal_data_consent': True}
+    with main.app.test_client() as owner:
+        activated = owner.post('/api/auth/set-password', json=activation)
+        assert activated.status_code == 200, activated.get_json()
+        assert activated.get_json()['initial_setup'] is True
+        assert activated.get_json()['business_id'] == business
+        assert 'token' not in activated.get_json()
+        cookie = owner.get_cookie('localos_session')
+        assert cookie and cookie.http_only and auth_system.verify_session(cookie.value)
+        session_actor = auth_system.verify_session(cookie.value)
+        assert not session_actor['is_superadmin']
+        owner_id = session_actor['user_id']
+        assert read(owner_id)['saved']
+        assert client.get(SETUP + business + '/report', headers={'X-Pilot-Actor': owner_id}).status_code == 200
+        other = HAMIK if business == JINLIAN else JINLIAN
+        assert client.get(SETUP + other + '/report', headers={'X-Pilot-Actor': owner_id}).status_code in (403, 404)
+        assert owner.post('/api/auth/set-password', json=activation).status_code == 400

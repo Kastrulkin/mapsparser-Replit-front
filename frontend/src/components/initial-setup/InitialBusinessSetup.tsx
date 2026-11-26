@@ -1,9 +1,10 @@
 import {
-  ArrowUpRight, Building2, Check, ChevronDown, FileText, Images,
+  ArrowUpRight, Building2, Check, ChevronDown, Download, FileText, Images,
   ListChecks, Loader2, MapPin, MessageSquare, Search, UserRoundPlus, X, type LucideIcon,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { newAuth } from '@/lib/auth_new';
 import { setupUrl, useInitialBusinessSetup, visibleError, type Action, type Comparison, type Invite, type PhotoReport, type Setup, type Source, type WebsiteAudit } from './useInitialBusinessSetup';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -423,6 +424,35 @@ function SetupSources({ state, busy, send }: { state: Setup; busy: boolean; send
   </>;
 }
 
+function SetupReportDownload({ businessId, name }: { businessId: string; name?: string | null }) {
+  const [downloading, setDownloading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return <div className="space-y-1">
+    <Button size="sm" variant="outline" disabled={downloading} onClick={async () => {
+      setDownloading(true);
+      setFailed(false);
+      try {
+        const token = newAuth.getToken();
+        const response = await fetch('/api' + setupUrl(businessId) + '/report', {
+          cache: 'no-store', headers: token ? { Authorization: 'Bearer ' + token } : {},
+        });
+        if (!response.ok || !response.headers.get('content-type')?.startsWith('application/pdf')) throw new Error('PDF unavailable');
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `LocalOS - ${name?.replace(/[\\/:*?"<>|]/g, '_') || 'первичная настройка'}.pdf`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {
+        setFailed(true);
+      } finally {
+        setDownloading(false);
+      }
+    }}><Download aria-hidden="true" />{downloading ? 'Готовим файл…' : 'Скачать отчёт PDF'}</Button>
+    {failed && <p role="alert" className="text-xs text-destructive">Не удалось скачать отчёт. Попробуйте ещё раз.</p>}
+  </div>;
+}
+
 export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType<typeof useInitialBusinessSetup>; isStaff: boolean; onExit: () => void }) {
   const { state, send, available, loading, canEdit, error, notice, busy, reading } = setup;
   if (loading || (available === undefined && !error)) return <p role="status">Открываем настройку…</p>;
@@ -432,15 +462,18 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
 
   const sourcesToRead = state?.sources.some(source => source.status === 'added') ?? false;
   const needsSeo = !state?.seo_prepared || state.seo_dirty;
-  const saved = Boolean(state?.saved && !needsSeo && !reading && !sourcesToRead);
-  const stage = !state?.started ? 0 : reading || sourcesToRead ? 1 : needsSeo ? 2 : 3;
+  const preparing = state?.draft_status === 'queued' || state?.draft_status === 'running';
+  const draftFailed = state?.draft_status === 'failed';
+  const saved = Boolean(state?.saved && !needsSeo && !reading && !sourcesToRead && !preparing && !draftFailed);
+  const stage = !state?.started ? 0 : reading || sourcesToRead ? 1 : needsSeo || preparing || draftFailed ? 2 : 3;
   const canChange = state?.can_edit ?? canEdit;
   const hint = stage === 2 && !state?.activity_type
     ? 'Уточните вид деятельности в чате. Пример: «Вид деятельности: студия массажа».'
     : setupStages[stage].hint;
   let nextAction: { title: string; action: string } | undefined;
-  if (canChange && !reading) {
+  if (canChange && !reading && !preparing) {
     if (!state?.started) nextAction = { title: 'Начать настройку', action: 'start' };
+    else if (draftFailed) nextAction = { title: 'Повторить подготовку', action: 'draft_retry' };
     else if (sourcesToRead) nextAction = { title: 'Собрать данные', action: 'read' };
     else if (needsSeo) nextAction = { title: 'Подготовить услуги и SEO', action: 'prepare' };
     else if (!state.saved) nextAction = { title: 'Сохранить кабинет', action: 'save' };
@@ -463,11 +496,17 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
         <SetupProgress stage={stage} saved={saved} state={state} />
       </header>
       <div className="space-y-3 p-3 sm:p-4">
-        {(nextAction || reading || saved) && <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {(nextAction || reading || preparing || saved || state?.report_ready) && <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {reading && <span role="status" className="inline-flex items-center gap-2 text-sm">
             <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Собираем данные
           </span>}
-          {!saved && canChange && <p className="min-w-0 flex-1 basis-40 text-sm text-muted-foreground">{hint}</p>}
+          {!reading && preparing && <span role="status" className="inline-flex items-center gap-2 text-sm">
+            <Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />Готовим черновик
+          </span>}
+          {state?.draft_ready && !saved && <p className="font-medium text-sm">Черновик кабинета готов</p>}
+          {state?.draft_ready && !state.report_ready && <p className="text-xs text-muted-foreground">Проверяем фото для отчёта</p>}
+          {state?.report_ready && <SetupReportDownload key={state.business_id} businessId={state.business_id} name={state.profile.name} />}
+          {!saved && canChange && !preparing && !state?.draft_ready && <p className="min-w-0 flex-1 basis-40 text-sm text-muted-foreground">{hint}</p>}
           {nextAction && <Button size="sm" className="ml-auto whitespace-normal" disabled={busy}
             onClick={() => void send({ action: nextAction.action })}>{busy && <Loader2 aria-hidden="true" className="mr-1.5 h-4 w-4 motion-safe:animate-spin" />}{nextAction.title}</Button>}
           {saved && state && <Button size="sm" variant="outline" className="ml-auto" asChild>
@@ -486,7 +525,7 @@ export function InitialSetupChat({ setup, isStaff, onExit }: { setup: ReturnType
           <div className="divide-y rounded-lg border">
             {state.services.length > 0 && <SetupDisclosure title="Услуги и правки" count={state.services.length} icon={ListChecks} compact>
               <ServiceProposals key={state.business_id} items={state.services} send={state.can_edit ? send : undefined}
-                disabled={busy || state.seo_dirty} error={error} />
+                disabled={busy || state.seo_dirty || preparing} error={error} />
               <SetupLink businessId={state.business_id} path="/dashboard/card?tab=services">Каталог услуг</SetupLink>
             </SetupDisclosure>}
             {showKeywords && <SetupDisclosure title="Поисковые запросы" icon={Search} compact>

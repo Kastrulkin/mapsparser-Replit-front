@@ -57,13 +57,16 @@ export type Setup = {
   activity_type?: string;
   category_keywords: Keyword[];
   photo_report?: PhotoReport | null;
+  draft_status?: 'queued' | 'running' | 'failed' | null;
+  draft_ready?: boolean;
+  report_ready?: boolean;
   facts: Finding[];
   profile_choices: (Finding & { field: string })[];
   comparisons: Comparison[];
   activity: { message: string; reply: string; at: string }[];
 };
 type SetupResponse = { available: boolean; can_edit?: boolean; setup?: Setup | null; message?: string };
-export type Action = { action: string; key?: string; message?: string; name?: string; description?: string; text?: string; category?: string };
+export type Action = { action: string; key?: string; message?: string; name?: string; description?: string; text?: string; category?: string; auto?: boolean };
 export type Invite = { email: string; invite_url?: string; login_path?: string; existing_account: boolean };
 
 export const setupUrl = (id: string) => '/operator/initial-setup/' + encodeURIComponent(id);
@@ -122,7 +125,7 @@ export function useInitialBusinessSetup(businessId: string | null, active: boole
 
   const state = context && data?.setup?.business_id === context ? data.setup : null;
   const reading = state?.sources.some(source => source.status === 'queued' || source.status === 'running') ?? false;
-  const polling = reading || state?.photo_report?.status === 'queued' || state?.photo_report?.status === 'running'
+  const polling = reading || state?.draft_status === 'queued' || state?.draft_status === 'running' || state?.photo_report?.status === 'queued' || state?.photo_report?.status === 'running'
     || state?.sources.some(source => source.website_audit?.status === 'queued' || source.website_audit?.status === 'running');
   useEffect(() => {
     if (!context || !polling || busy) return;
