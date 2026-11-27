@@ -229,9 +229,13 @@ def read_map(source, snapshot, *, capture_method=None):
         return {'status': 'unavailable', 'note': 'Парсер не подтвердил название карточки.'}
     description = clean(raw.get('description') or map_card_initial_audit.record(raw.get('profile')).get('description'), 700)
     website = clean(raw.get('website') or raw.get('site') or raw.get('websiteUri'), 500)
+    from services.company_registry_service import resolve_company_coordinates
+    latitude, longitude = resolve_company_coordinates(raw)
+    postal = map_card_initial_audit.record(raw.get('postalAddress'))
     profile = [{'field': field, **dated(value, url)} for field, value in (
         ('contact_phone', clean(raw.get('phone') or map_card_initial_audit.record(raw.get('phoneNumbers')).get('primaryPhone'), 100)),
         ('address', clean(raw.get('address'))),
+        ('city', clean(raw.get('city') or raw.get('locality') or postal.get('locality'), 120)),
         ('website', website),
     ) if value]
     observed_at = raw.get('updated_at') or raw.get('created_at')
@@ -239,6 +243,7 @@ def read_map(source, snapshot, *, capture_method=None):
         observed_at = observed_at.isoformat()
     photos = initial_setup_photos.candidates(provider, raw) if not source.get('competitor') else []
     return {'status': 'ready', 'note': message, 'name': title, 'catalog': catalog_rows(raw, url), 'profile': profile,
+            'latitude': latitude, 'longitude': longitude,
             'links': _map_source_links(source, raw, website),
             'facts': [dated(description, url)] if description else [],
             'metrics': {'rating': clean(raw.get('rating'), 20), 'reviews': clean(raw.get('reviews_count'), 20)},

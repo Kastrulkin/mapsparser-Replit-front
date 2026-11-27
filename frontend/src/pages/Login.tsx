@@ -187,7 +187,7 @@ const Login = () => {
       return;
     }
 
-    if (!registerForm.business_name || !registerForm.business_address || !registerForm.business_city) {
+    if (!registerForm.business_name.trim()) {
       setError(copy.businessRequired);
       setLoading(false);
       return;
@@ -573,7 +573,6 @@ const Login = () => {
                       id="register-business-address"
                       autoComplete="street-address"
                       type="text"
-                      required
                       value={registerForm.business_address}
                       onChange={(e) => setRegisterForm({ ...registerForm, business_address: e.target.value })}
                       placeholder={copy.addressPlaceholder}
@@ -589,7 +588,6 @@ const Login = () => {
                         id="register-business-city"
                       autoComplete="address-level2"
                         type="text"
-                        required
                         value={registerForm.business_city}
                         onChange={(e) => setRegisterForm({ ...registerForm, business_city: e.target.value })}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"

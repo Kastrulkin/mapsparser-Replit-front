@@ -5470,7 +5470,7 @@ def _content_generation_v2_prompt(
     )
 
 
-def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None, *, additional_variants: bool = False, expected_draft_text: str | None = None, request_id: str = "") -> dict[str, Any]:
+def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | None = None, *, additional_variants: bool = False, expected_draft_text: str | None = None, request_id: str = "", expected_item_version: str | None = None) -> dict[str, Any]:
     normalized_language = _normalize_content_plan_language(language)
     if type(additional_variants) is not bool:
         raise ValueError("Неверный режим генерации")
@@ -5486,7 +5486,7 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             SELECT i.id, i.plan_id, i.business_id, i.theme, i.goal, i.content_type, i.source_kind, i.source_ref,
                    i.seo_keyword, i.seo_views, i.service_id, i.transaction_id, i.location_scope,
                    i.usernews_id, i.draft_text, i.status, i.metadata_json,
-                   p.business_id AS root_business_id, p.plan_status
+                   p.business_id AS root_business_id, p.plan_status, i.updated_at::text AS item_version
             FROM contentplanitems i
             JOIN contentplans p ON p.id = i.plan_id
             WHERE i.id = %s
@@ -5505,6 +5505,8 @@ def generate_draft_for_plan_item(user_id: str, item_id: str, language: str | Non
             cursor.execute("SELECT COALESCE(is_superadmin, FALSE) FROM users WHERE id = %s", (user_id,))
             if not bool(_row_get(cursor.fetchone(), "coalesce", 0, False)):
                 raise PermissionError("Нет доступа к элементу плана")
+        if expected_item_version and item['item_version'] != expected_item_version:
+            raise ContentPlanItemConflict("Текст уже изменился. Проверьте актуальную версию.")
         if additional_variants:
             if not str(item.get("draft_text") or "").strip():
                 raise ValueError("Сначала создайте или сохраните основной текст")

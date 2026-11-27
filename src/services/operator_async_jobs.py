@@ -569,6 +569,10 @@ def process_next_operator_async_job(*, background: bool = False, background_only
             from services.initial_business_setup import process_photos
             result = process_photos(claimed)
             status, stage, progress = "completed", "Проверка фото завершена", 100
+        elif kind == 'initial_setup_opportunities':
+            from services.initial_setup_opportunities import process
+            result = process(claimed)
+            status, stage, progress = 'completed', 'Подборки проверены', 100
         elif kind == "content_plan_generate" and payload.get('setup_content') is True:
             from services.setup_content_journey import generate_for_review
             result = generate_for_review(claimed)
@@ -595,6 +599,7 @@ def process_next_operator_async_job(*, background: bool = False, background_only
                 user_id,
                 str(payload.get("item_id") or ""),
                 str(payload.get("language") or "ru"),
+                **({'expected_item_version':payload['version']} if payload.get('setup_content') is True else {}),
             )
             status, stage, progress = "completed", "Текст публикации готов", 100
         else:

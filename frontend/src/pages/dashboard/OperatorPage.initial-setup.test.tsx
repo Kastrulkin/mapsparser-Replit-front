@@ -11,6 +11,7 @@ import { OperatorPage } from './OperatorPage';
 vi.mock('@/services/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
 beforeEach(() => {
+  vi.resetAllMocks();
   vi.stubEnv('VITE_LOCALOS_INITIAL_SETUP_ENABLED', 'true');
   localStorage.setItem('language', 'ru');
 });
@@ -301,7 +302,7 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   const input = await screen.findByRole('textbox', { name: 'Сообщение для первичной настройки' });
   await waitFor(() => expect(input).toBeEnabled());
   expect(screen.getByTestId('operator-message-list')).toBeEmptyDOMElement();
-  expect(input).toHaveAccessibleDescription('Пришлите ссылку на карточку компании. Соберём данные и предложим правки.');
+  expect(input).toHaveAccessibleDescription('Пришлите ссылку на карты. Можно также добавить сайт и соцсети.');
   const map = 'https://yandex.com/maps/org/fixture/123456';
   fireEvent.change(input, { target: { value: map } });
   fireEvent.keyDown(input, { key: 'Enter' });
@@ -310,7 +311,7 @@ it.each([false, true])('opens a blank chat and starts from the first link (saved
   }));
   expect(await screen.findByRole('heading', { name: 'Первичная настройка компании' })).toBeVisible();
   expect(await screen.findByText('Черновик готов к проверке')).toBeVisible();
-  expect(screen.queryByText('Пришлите ссылку на карточку компании. Соберём данные и предложим правки.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Пришлите ссылку на карты. Можно также добавить сайт и соцсети.')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Скачать отчёт PDF' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Сохранить кабинет' })).toBeVisible();
 });
@@ -390,10 +391,10 @@ it('reads the real next step and can review a plan before enabling monthly draft
   fireEvent.click(guide.getByText(plan.title));
   expect(guide.getByText(plan.topics[0])).toBeVisible();
   fireEvent.click(guide.getByRole('button', { name: 'Утвердить темы' }));
-  expect(await guide.findByText('Готовить план раз в месяц')).toBeVisible();
+  expect(await guide.findByText('Подготовить следующий план автоматически')).toBeVisible();
   expect(api.post).toHaveBeenLastCalledWith(stepsEndpoint, { action: 'approve', plan_id: plan.id, version: plan.version });
-  fireEvent.click(guide.getByRole('button', { name: 'Включить раз в месяц' }));
-  expect(await guide.findByText('Ежемесячный контент-план включён')).toBeVisible();
+  fireEvent.click(guide.getByRole('button', { name: 'Включить после завершения плана' }));
+  expect(await guide.findByText('Подготовка следующего плана включена')).toBeVisible();
 });
 
 it.each([

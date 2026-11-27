@@ -580,8 +580,8 @@ def register_with_business():
         if not personal_data_consent:
             return jsonify({"error": "Необходимо согласие на обработку персональных данных"}), 400
         
-        if not business_name or not business_address or not business_city:
-            return jsonify({"error": "Название бизнеса, адрес и город обязательны"}), 400
+        if not business_name:
+            return jsonify({"error": "Укажите название бизнеса"}), 400
 
         if _looks_like_url(business_address):
             return jsonify({"error": "Поле «Адрес» не должно содержать ссылку на карту"}), 400
@@ -620,7 +620,7 @@ def register_with_business():
         user_id = result['id']
         
         # Определяем часовой пояс по адресу (асинхронно, не блокируем регистрацию)
-        timezone_result = get_timezone_from_address(business_address, business_city)
+        timezone_result = get_timezone_from_address(business_address, business_city) if business_address or business_city else {}
         
         # Создаём бизнес
         db = DatabaseManager()
@@ -637,7 +637,6 @@ def register_with_business():
                     country=business_country,
                     owner_id=user_id,
                     moderation_status='pending',
-                    business_type='beauty_salon'
                 )
             
             # Обновляем часовой пояс и координаты, если они определены
@@ -663,6 +662,10 @@ def register_with_business():
                     SET {', '.join(update_fields)}
                     WHERE id = %s
                 """, update_values)
+
+            if not claimed_business and not journey_token:
+                from services.initial_business_setup import begin_new_cabinet
+                begin_new_cabinet(cursor, business_id, 'registration')
 
             if journey_token:
                 reserve_journey(

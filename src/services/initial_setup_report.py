@@ -183,6 +183,18 @@ def render_report(state):
                 if values:
                     paragraph(f'{label} · оценка {values.get("rating") or "—"} · отзывы {values.get("reviews") or "—"}', small)
 
+    opportunities = state.get('opportunities') or {}
+    if opportunities.get('status') == 'ready':
+        paragraph('Продвижение рядом', heading)
+        if opportunities.get('suggested_categories'):
+            paragraph('Для совместных акций подойдут ' + ', '.join(opportunities['suggested_categories']) + '.')
+        for item in opportunities.get('partners', []):
+            rich(_link(item['name'], item.get('url')) + ' · ' + _text(f'{item["distance_m"]} м'), small)
+        for creator in opportunities.get('creators', []):
+            rich(_link(creator['name'], creator.get('url')), small)
+        if not opportunities.get('creators') and opportunities.get('city'):
+            paragraph(f"Подходящих блогеров в городе {opportunities['city']} пока нет.", small)
+
     if services or state['category_keywords']:
         story.append(Spacer(1, 6))
         paragraph('Приложение. Услуги и поисковые запросы', heading)

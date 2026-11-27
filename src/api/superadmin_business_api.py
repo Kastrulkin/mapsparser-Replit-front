@@ -374,6 +374,8 @@ def create_business():
 
         try:
             business_id = db.create_business(name, description, industry, owner_id)
+            from services.initial_business_setup import begin_new_cabinet
+            begin_new_cabinet(db.conn.cursor(), business_id, 'staff')
             db.conn.commit()
             db.close()
             return jsonify({"success": True, "business_id": business_id, "owner_id": owner_id})

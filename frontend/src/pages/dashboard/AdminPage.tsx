@@ -1152,7 +1152,7 @@ export const AdminPage: React.FC = () => {
     toast({ title: 'Бизнес создан' });
     void loadUsers(false);
     await dashboard?.reloadBusinesses();
-    if (canSetUpBusiness(businessId)) openInitialSetup(businessId);
+    if (initialSetupAccess) openInitialSetup(businessId);
   };
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();

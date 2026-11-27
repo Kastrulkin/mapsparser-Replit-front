@@ -34,6 +34,8 @@ def pilot(monkeypatch):
 
     monkeypatch.setenv('LOCALOS_INITIAL_SETUP_ENABLED', '1')
     monkeypatch.setenv('APIFY_TOKEN', '')
+    from services import initial_setup_opportunities
+    monkeypatch.setattr(initial_setup_opportunities, 'queue', lambda *args, **kwargs: None)
     monkeypatch.delenv('LOCALOS_INITIAL_SETUP_BUSINESS_IDS', raising=False)
     monkeypatch.delenv('LOCALOS_INITIAL_SETUP_LEAD_IDS', raising=False)
     monkeypatch.setattr(database_manager, 'get_db_connection', lambda: database_manager.DBConnectionWrapper(connect()))
@@ -589,7 +591,7 @@ def test_saved_setup_progress_and_monthly_content_use_the_existing_queue(pilot, 
         CREATE TABLE contentplans(id text PRIMARY KEY, business_id text, title text, plan_status text,
             scope_type text, period_start date, period_end date, generated_plan_json jsonb, created_at timestamptz DEFAULT now());
         CREATE TABLE contentplanitems(id text PRIMARY KEY, business_id text, plan_id text, theme text, goal text,
-            scheduled_for date, draft_text text, status text);
+            scheduled_for date, draft_text text, status text, updated_at timestamptz DEFAULT NOW());
         CREATE TABLE social_posts(business_id text, content_plan_item_id text, status text, base_text text, platform_text text);
         CREATE TABLE externalbusinessaccounts(business_id text, source text, external_id text, is_active boolean, last_error text);
     """)
@@ -644,7 +646,9 @@ def test_saved_setup_progress_and_monthly_content_use_the_existing_queue(pilot, 
         assert response.status_code == 200, response.get_json()
         return response.get_json()
 
-    assert read()['fact_count'] == 1 and read()['step'] == 'plan'
+    assert read()['fact_count'] == 1 and read()['step'] == 'facts'
+    assert client.post(endpoint, json={'action':'generate'}).status_code == 409
+    assert post('confirm_facts', version=read()['facts_version'])['step'] == 'plan'
     assert post('generate')['step'] == 'generating'
     assert post('generate')['job']['id'] == read()['job']['id']
     assert process_next_operator_async_job()['status'] == 'waiting_for_review'
@@ -667,8 +671,10 @@ def test_saved_setup_progress_and_monthly_content_use_the_existing_queue(pilot, 
     blueprint = {'id': settings['id'], 'business_id': HAMIK}
     from services.agent_trigger_runtime import dispatch_due_scheduled_agent_blueprints
 
-    due = datetime.fromisoformat(settings['first_month']).replace(tzinfo=timezone.utc) + timedelta(days=8, hours=8)
-    assert journey.scheduled_dispatch(cursor, blueprint, due - timedelta(days=35)) is None
+    due = datetime.now(timezone.utc) + timedelta(days=30)
+    assert journey.scheduled_dispatch(cursor, blueprint, due) is None
+    cursor.execute("UPDATE social_posts SET status='published' WHERE content_plan_item_id=%s", (ready['id'],))
+    conn.commit()
     dispatched = dispatch_due_scheduled_agent_blueprints(cursor, now=due)
     assert dispatched['dispatched_count'] == 1 and dispatched['dispatched'][0]['blueprint_id'] == settings['id']
     assert journey.scheduled_dispatch(cursor, blueprint, due + timedelta(days=1)) is None

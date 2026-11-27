@@ -1112,7 +1112,7 @@ export function OperatorWorkspace({ context, panel = false, visible = true, onCo
             <OperatorWorkdayInput compact key={`inputs:${currentBusinessId}`} businessId={currentBusinessId} channel="web" conversationId={conversationId} disabled={demoMode || chatLoading || historyLoading} onConversation={setConversationId} />
           </div>}
           {demoMode && <p id="operator-demo-readonly" role="note" className="text-sm text-muted-foreground">{demoNotice}</p>}
-          {showSetupHint && <p id="operator-setup-hint" className="text-sm text-muted-foreground">Пришлите ссылку на карточку компании. Соберём данные и предложим правки.</p>}
+          {showSetupHint && <p id="operator-setup-hint" className="text-sm text-muted-foreground">Пришлите ссылку на карты. Можно также добавить сайт и соцсети.</p>}
           <div className="flex min-w-0 items-end gap-2">
             <textarea
               ref={chatInputRef}

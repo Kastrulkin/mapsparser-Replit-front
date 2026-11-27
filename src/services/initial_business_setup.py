@@ -61,7 +61,7 @@ def owner_setup_available(cursor, business_id, user_id):
         return False
     cursor.execute("""SELECT 1 FROM initial_business_setups s JOIN businesses b ON b.id=s.business_id
         WHERE s.business_id=%s AND b.owner_id=%s AND b.is_active IS NOT FALSE
-          AND s.data->>'handoff_owner_id'=%s""",
+          AND (s.data->>'handoff_owner_id'=%s OR s.origin IN ('registration','staff'))""",
         (business_id, user_id, user_id))
     return bool(cursor.fetchone())
 
@@ -95,6 +95,8 @@ def fingerprint(*fields):
 
 def read_business(cursor, business_id, lock=False):
     cursor.execute("""SELECT b.id,b.owner_id,b.name,b.address,b.city,to_jsonb(b)->>'country' AS country,to_jsonb(b)->>'business_type' AS business_type,
+        to_jsonb(b)->>'geo_lat' AS geo_lat, to_jsonb(b)->>'geo_lon' AS geo_lon,
+        to_jsonb(b)->>'latitude' AS latitude, to_jsonb(b)->>'longitude' AS longitude,
         COALESCE(NULLIF(to_jsonb(b)->>'website',''), NULLIF(to_jsonb(b)->>'site',''),'') AS website,
         COALESCE(NULLIF(p.contact_phone,''), NULLIF(to_jsonb(b)->>'phone',''),'') AS contact_phone,
         COALESCE(NULLIF(p.contact_email,''), NULLIF(to_jsonb(b)->>'email',''),'') AS contact_email
@@ -122,9 +124,16 @@ def verified_registration_business(cursor, user_id):
         WHERE b.owner_id=%s AND b.is_active IS NOT FALSE AND s.origin='registration' AND NOT s.provisional
         ORDER BY s.updated_at DESC LIMIT 2""", (user_id,))
     candidates = cursor.fetchall()
-    if len(candidates) == 1 and allowed(str(candidates[0]['id'])):
+    if len(candidates) == 1:
         return str(candidates[0]['id'])
     return None
+
+
+def begin_new_cabinet(cursor, business_id, origin):
+    if enabled() and installed(cursor):
+        init(cursor, business_id, origin)
+        return True
+    return False
 
 
 def persist(cursor, row):
@@ -763,7 +772,7 @@ def _profile_fill_values(row, profile):
     found = {}
     for item in source_findings(row, 'profile').values():
         field = item.get('field')
-        if field not in ('address', 'contact_phone', 'contact_email') or profile.get(field):
+        if field not in ('address', 'city', 'contact_phone', 'contact_email') or profile.get(field):
             continue
         text = clean(item['text'])
         if not text:
@@ -994,9 +1003,16 @@ def _save_cabinet(cursor, row, actor, profile):
     patch = _profile_fill_values(row, profile)
     if not profile.get('website') and len(website) == 1:
         patch['website'] = website[0]
+    if city := patch.pop('city', None):
+        # For a new profile the confirmed source fills an empty city. Existing
+        # profile edits still go through the normal settings and timezone flow.
+        cursor.execute("UPDATE businesses SET city=%s,updated_at=NOW() WHERE id=%s AND COALESCE(BTRIM(city),'')=''",
+                       (city,business_id))
     if patch:
         _update_profile(cursor, row, actor['user_id'], patch, invalidate_seo=False)
     row['data']['saved'] = True
+    from services.initial_setup_opportunities import queue
+    queue(cursor,row,read_business(cursor,business_id),actor['user_id'])
     return 'Данные сохранены. Кабинет и подготовленные разделы доступны через меню.'
 
 
